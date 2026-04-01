@@ -308,31 +308,35 @@ function stopAudio() {
 function initControls() {
   const root = document.documentElement;
 
-  // Recuperar preferencias guardadas
-  const savedTheme = localStorage.getItem('alerta-theme') || 'semi';
+  const savedTheme = localStorage.getItem('alerta-theme') || '';
   const savedSize  = localStorage.getItem('alerta-size')  || 'md';
-  root.setAttribute('data-theme', savedTheme === 'dark' ? 'dark' : '');
+  root.setAttribute('data-theme', savedTheme);
   root.setAttribute('data-size', savedSize);
   updateCtrlBtns();
 
+  // Modo más oscuro (toggle)
   document.getElementById('ctrl-dark')?.addEventListener('click', () => {
-    const now = root.getAttribute('data-theme');
-    const next = now === 'dark' ? '' : 'dark';
-    root.setAttribute('data-theme', next);
-    localStorage.setItem('alerta-theme', next === 'dark' ? 'dark' : 'semi');
+    const isDark = root.getAttribute('data-theme') === 'dark';
+    root.setAttribute('data-theme', isDark ? '' : 'dark');
+    localStorage.setItem('alerta-theme', isDark ? '' : 'dark');
     updateCtrlBtns();
     play('click');
   });
 
+  // Tamaño fuente — ciclan entre sm → md → lg
   document.getElementById('ctrl-sm')?.addEventListener('click', () => {
-    root.setAttribute('data-size', 'sm');
-    localStorage.setItem('alerta-size', 'sm');
+    const cur = root.getAttribute('data-size') || 'md';
+    const next = cur === 'md' ? 'sm' : 'md';
+    root.setAttribute('data-size', next);
+    localStorage.setItem('alerta-size', next);
     updateCtrlBtns();
     play('click');
   });
   document.getElementById('ctrl-lg')?.addEventListener('click', () => {
-    root.setAttribute('data-size', 'lg');
-    localStorage.setItem('alerta-size', 'lg');
+    const cur = root.getAttribute('data-size') || 'md';
+    const next = cur === 'md' ? 'lg' : 'md';
+    root.setAttribute('data-size', next);
+    localStorage.setItem('alerta-size', next);
     updateCtrlBtns();
     play('click');
   });
@@ -351,18 +355,24 @@ function updateCtrlBtns() {
 function initDiscount() {
   const mes = new Date().getMonth() + 1;
   const map = {
-    4: { pct: '75%', desc: 'Regístrate en abril — el mayor descuento.' },
-    5: { pct: '50%', desc: 'Regístrate en mayo.' },
+    4: { pct: '75%', desc: 'Inscríbete en abril — el mayor descuento de por vida.' },
+    5: { pct: '50%', desc: 'Inscríbete en mayo — aún buen descuento.' },
     6: { pct: '25%', desc: 'Últimos Pioneros con descuento.' },
   };
-  const info = map[mes] || { pct: '—', desc: 'Período de Pioneros cerrado.' };
-  const pctEl = document.getElementById('disc-pct');
+  // Antes de abril: apuntar a abril. Después de junio: mostrar que aún pueden registrarse.
+  const info = map[mes] || (mes < 4
+    ? { pct: '75%', desc: 'Lanzamos en abril — regístrate ahora y asegura el mayor descuento.' }
+    : { pct: '★',  desc: 'Los Pioneros registrados conservan su descuento de por vida.' });
+
+  const pctEl  = document.getElementById('disc-pct');
   const descEl = document.getElementById('disc-desc');
-  if (pctEl) pctEl.textContent = info.pct;
+  if (pctEl)  pctEl.textContent  = info.pct;
   if (descEl) descEl.textContent = info.desc;
+
+  const activo = mes >= 4 && mes <= 6 ? mes : 4; // resalta abril si aún no llegó
   ['abr','may','jun'].forEach((m, i) => {
     const el = document.getElementById(`dm-${m}`);
-    if (el && mes === i + 4) el.classList.add('active');
+    if (el && activo === i + 4) el.classList.add('active');
   });
 }
 
@@ -427,12 +437,14 @@ if (SR) {
   };
 
   recog.onend = () => {
-    if (activeCampo) {
-      const ta = document.getElementById(activeCampo);
-      if (ta) ta._base = ta.value;
-      if (activeCampo === 'dolor' && ta && ta.value.trim().length > 20) debounceIA();
-    }
+    // Guardamos el campo ANTES de que detenerMic lo limpie
+    const campo = activeCampo;
     detenerMic();
+    if (campo) {
+      const ta = document.getElementById(campo);
+      if (ta) ta._base = ta.value;
+      if (campo === 'dolor' && ta && ta.value.trim().length > 20) debounceIA();
+    }
   };
   recog.onerror = () => detenerMic();
 }
