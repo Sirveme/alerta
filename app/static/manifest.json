@@ -1,0 +1,37 @@
+{
+  "name": "alerta.pe — Alertas para Contadores",
+  "short_name": "alerta.pe",
+  "description": "Alertas inteligentes sobre pagos digitales para contadores públicos.",
+  "start_url": "/pioneros",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0c1b33",
+  "background_color": "#0c1b33",
+  "lang": "es-PE",
+  "icons": [
+    {
+      "src": "/static/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity", "business"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Ser Pionero",
+      "short_name": "Pioneros",
+      "description": "Regístrate como pionero de alerta.pe",
+      "url": "/pioneros",
+      "icons": [{ "src": "/static/img/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

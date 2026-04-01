@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="" data-size="md">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Pioneros — alerta.pe</title>
+  <meta name="description" content="Sé Pionero de alerta.pe: alertas inteligentes sobre pagos digitales para contadores. Descuento de por vida para los primeros.">
+  <meta name="theme-color" content="#0e1526">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="alerta.pe">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🔔</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/pioneros_index.css">
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────────── -->
+<nav class="nav">
+  <a href="/" class="nav-logo">🔔 alerta<span>.pe</span></a>
+  <div class="nav-controls">
+    <button class="ctrl-btn" id="ctrl-sm" title="Fuente pequeña">A−</button>
+    <button class="ctrl-btn" id="ctrl-lg" title="Fuente grande">A+</button>
+    <button class="ctrl-btn" id="ctrl-dark" title="Modo más oscuro">🌑</button>
+  </div>
+</nav>
+
+<!-- ── AUDIO INTRO ───────────────────────────────────────────── -->
+<section class="audio-hero">
+  <div class="audio-inner">
+    <div class="audio-photo-wrap">
+      <img
+        src="/static/img/duilio.webp"
+        alt="Duilio Restuccia"
+        class="audio-photo"
+        onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 80 80\'><rect width=\'80\' height=\'80\' rx=\'40\' fill=\'%230c1428\'/><text x=\'40\' y=\'50\' text-anchor=\'middle\' font-size=\'32\'>👤</text></svg>'"
+      >
+    </div>
+    <div class="audio-text">
+      <div class="audio-eyebrow">🎧 Ponte los audífonos</div>
+      <div class="audio-title">Escucha<br>este mensaje</div>
+      <button class="btn-play" id="btn-play">
+        ▶ REPRODUCIR
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ── HERO ─────────────────────────────────────────────────── -->
+<section class="hero-text">
+  <div class="hero-eyebrow">📲 Para Contadores Públicos Certificados</div>
+  <h1 class="hero-h1">¿Sigues verificando<br>pagos <em>a mano</em>?</h1>
+  <p class="hero-lead">Estamos construyendo la herramienta que te alerta en tiempo real. Queremos tu opinión antes de lanzarla — y los primeros tienen descuento de por vida.</p>
+</section>
+
+<!-- ── PHONE MOCKUP ──────────────────────────────────────────── -->
+<section class="phone-section">
+  <div class="phone-label">📱 así llegarán las alertas a tu celular</div>
+
+  <div class="phone">
+    <div class="phone-screen">
+      <div class="phone-stars"></div>
+
+      <!-- Status bar -->
+      <div class="phone-status">
+        <div class="phone-time" id="phone-time">00:00</div>
+        <div class="phone-sys">
+          <!-- Signal -->
+          <svg viewBox="0 0 17 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="6" width="3" height="6" rx="1" fill="rgba(255,255,255,.8)"/>
+            <rect x="4.5" y="4" width="3" height="8" rx="1" fill="rgba(255,255,255,.8)"/>
+            <rect x="9" y="2" width="3" height="10" rx="1" fill="rgba(255,255,255,.8)"/>
+            <rect x="13.5" y="0" width="3" height="12" rx="1" fill="rgba(255,255,255,.4)"/>
+          </svg>
+          <!-- WiFi -->
+          <svg viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 10a1 1 0 110-2 1 1 0 010 2z" fill="rgba(255,255,255,.8)"/>
+            <path d="M5 7.5C6.2 6.3 9.8 6.3 11 7.5" stroke="rgba(255,255,255,.8)" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M2.5 5C5 2.6 11 2.6 13.5 5" stroke="rgba(255,255,255,.6)" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M0 2.5C3.2.2 12.8.2 16 2.5" stroke="rgba(255,255,255,.3)" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <!-- Battery -->
+          <svg viewBox="0 0 25 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="1" width="21" height="10" rx="3" stroke="rgba(255,255,255,.65)" stroke-width="1"/>
+            <rect x="1.5" y="2.5" width="15" height="7" rx="2" fill="rgba(255,255,255,.8)"/>
+            <path d="M22 4.5v3a1.5 1.5 0 000-3z" fill="rgba(255,255,255,.4)"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Notch -->
+      <div class="phone-notch">
+        <div class="phone-speaker"></div>
+        <div class="phone-cam"></div>
+      </div>
+
+      <!-- Lock screen -->
+      <div class="phone-lock">
+        <div class="phone-lock-clock" id="phone-lock-clock">00:00</div>
+        <div class="phone-lock-date" id="phone-lock-date">Lun, 1 ene</div>
+      </div>
+
+      <!-- Notificaciones — JS las inyecta aquí -->
+      <div class="phone-notifs" id="phone-notifs"></div>
+
+    </div><!-- /phone-screen -->
+  </div><!-- /phone -->
+</section>
+
+<!-- ── DESCUENTO ─────────────────────────────────────────────── -->
+<div class="discount-strip">
+  <div class="disc-big">
+    <div class="disc-pct" id="disc-pct">—</div>
+  </div>
+  <div class="disc-info">
+    <div class="disc-sub">Descuento de por vida</div>
+    <div class="disc-desc" id="disc-desc"></div>
+  </div>
+  <div class="disc-months">
+    <div class="dm" id="dm-abr"><span class="dm-pct">75%</span><span class="dm-mes">Abr</span></div>
+    <div class="dm" id="dm-may"><span class="dm-pct">50%</span><span class="dm-mes">May</span></div>
+    <div class="dm" id="dm-jun"><span class="dm-pct">25%</span><span class="dm-mes">Jun</span></div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ── DOLORES ───────────────────────────────────────────────── -->
+<section class="section">
+  <div class="s-label">El problema</div>
+  <h2 class="s-title">Lo que vive un CPC cada día</h2>
+  <div class="pains" style="margin-top:1.2rem;">
+    <div class="pain">
+      <span class="pain-icon">📱</span>
+      <div class="pain-text"><strong>Yape y Plin no generan comprobante.</strong>Tu cliente dice que pagó, pero no puedes cruzarlo con la factura sin buscar manualmente.</div>
+    </div>
+    <div class="pain">
+      <span class="pain-icon">📧</span>
+      <div class="pain-text"><strong>Correos mezclados con spam.</strong>Las notificaciones de pago llegan con publicidad y alertas irrelevantes. Encontrar una toma 10 minutos.</div>
+    </div>
+    <div class="pain">
+      <span class="pain-icon">🔄</span>
+      <div class="pain-text"><strong>Manual, repetitivo, propenso a error.</strong>Copiar montos, buscar en estado de cuenta, confirmar con el cliente… cada mes, con cada cliente.</div>
+    </div>
+    <div class="pain">
+      <span class="pain-icon">😰</span>
+      <div class="pain-text"><strong>Te enteras tarde de alertas SUNAT.</strong>Una Resolución de Cobranza puede llegar sin que nadie la vea a tiempo.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── FORMULARIO ────────────────────────────────────────────── -->
+<section class="section">
+  <div class="form-card">
+    <div class="form-card-title">Cuéntanos tu experiencia</div>
+    <p class="form-card-sub">Tu opinión construye la herramienta. Escribe o activa el 🎤 para dictar.</p>
+
+    <form id="form-pionero" novalidate>
+
+      <!-- Nombre -->
+      <div class="fg">
+        <label class="flabel" for="nombre">Apellidos y Nombres <span class="req">*</span></label>
+        <input type="text" class="finput" id="nombre" placeholder="CPC Pérez García, Juan" required autocomplete="name">
+      </div>
+
+      <!-- WhatsApp -->
+      <div class="fg">
+        <label class="flabel" for="whatsapp">WhatsApp <span class="req">*</span></label>
+        <input type="tel" class="finput" id="whatsapp" placeholder="+51 967 317 946" required autocomplete="tel" inputmode="tel">
+      </div>
+
+      <!-- Región -->
+      <div class="fg">
+        <label class="flabel" for="region">Ciudad / Región <span class="req">*</span></label>
+        <select class="fselect" id="region" required>
+          <option value="">Selecciona tu región</option>
+          <option>Amazonas</option><option>Áncash</option><option>Apurímac</option>
+          <option>Arequipa</option><option>Ayacucho</option><option>Cajamarca</option>
+          <option>Callao</option><option>Cusco</option><option>Huancavelica</option>
+          <option>Huánuco</option><option>Ica</option><option>Junín</option>
+          <option>La Libertad</option><option>Lambayeque</option><option>Lima</option>
+          <option selected>Loreto</option><option>Madre de Dios</option><option>Moquegua</option>
+          <option>Pasco</option><option>Piura</option><option>Puno</option>
+          <option>San Martín</option><option>Tacna</option><option>Tumbes</option>
+          <option>Ucayali</option>
+        </select>
+      </div>
+
+      <!-- Foto -->
+      <div class="fg">
+        <label class="flabel">Tu foto <span class="opt">(opcional — galería de Pioneros)</span></label>
+        <div class="photo-area" id="photo-area">
+          <input type="file" id="foto-input" accept="image/*" onchange="handlePhoto(this)">
+          <div class="photo-area-icon">📷</div>
+          <div class="photo-area-text"><strong>Toca para subir tu foto</strong><br>JPG, PNG — máx. 5 MB</div>
+        </div>
+        <div class="photo-preview-wrap" id="photo-preview-wrap">
+          <img src="" alt="Tu foto" class="photo-preview" id="photo-preview">
+          <button type="button" class="photo-remove" onclick="removePhoto()">✕ Quitar foto</button>
+        </div>
+      </div>
+
+      <!-- Dolor principal -->
+      <div class="fg">
+        <label class="flabel" for="dolor">¿Cuál es tu mayor dolor con la verificación de pagos digitales? <span class="req">*</span></label>
+        <div class="ftextarea-wrap">
+          <textarea class="ftextarea" id="dolor" rows="4"
+            placeholder="Ej: Mis clientes me mandan capturas de Yape pero nunca sé si llegó el pago..." required></textarea>
+          <button type="button" class="mic-btn" id="mic-dolor" onclick="toggleMic('dolor')" title="Dictar">🎤</button>
+        </div>
+        <div class="voice-hint">🎤 Toca para dictar en lugar de escribir</div>
+        <div class="ai-box" id="ai-box-dolor"></div>
+      </div>
+
+      <!-- Proceso actual -->
+      <div class="fg">
+        <label class="flabel" for="proceso">¿Cómo verificas los pagos hoy?</label>
+        <div class="ftextarea-wrap">
+          <textarea class="ftextarea" id="proceso" rows="3"
+            placeholder="Ej: Reviso el correo del banco y comparo con mi Excel de cuentas por cobrar..."></textarea>
+          <button type="button" class="mic-btn" id="mic-proceso" onclick="toggleMic('proceso')" title="Dictar">🎤</button>
+        </div>
+      </div>
+
+      <!-- Sugerencia -->
+      <div class="fg">
+        <label class="flabel" for="sugerencia">¿Qué te haría falta para verificar más rápido y sin errores?</label>
+        <div class="ftextarea-wrap">
+          <textarea class="ftextarea" id="sugerencia" rows="3"
+            placeholder="Ej: Una alerta al celular en el momento exacto que entra el pago..."></textarea>
+          <button type="button" class="mic-btn" id="mic-sugerencia" onclick="toggleMic('sugerencia')" title="Dictar">🎤</button>
+        </div>
+      </div>
+
+      <!-- Privacidad -->
+      <label class="check-group">
+        <input type="checkbox" id="cb-anonimo">
+        <label for="cb-anonimo"><strong>Mantener mi opinión anónima.</strong> Se publica sin tu nombre completo.</label>
+      </label>
+
+      <label class="check-group" id="wrap-autoriza-foto" style="display:none;">
+        <input type="checkbox" id="cb-autoriza-foto">
+        <label for="cb-autoriza-foto"><strong>Autorizo publicar mi foto</strong> junto a mi opinión en la galería de Pioneros.</label>
+      </label>
+
+      <button type="submit" class="btn-submit" id="btn-enviar">
+        🚀 Quiero ser Pionero — Enviar mi opinión
+      </button>
+
+    </form>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── GALERÍA DE PIONEROS ───────────────────────────────────── -->
+<section class="section">
+  <div class="gallery-header">
+    <h2 class="s-title" style="margin:0;">Lo que dicen los CPC</h2>
+    <span class="gallery-badge" id="gallery-badge">0 Pioneros</span>
+  </div>
+  <div class="gallery-list" id="gallery-list">
+    <div class="gallery-empty">
+      <div class="gallery-empty-icon">💬</div>
+      <p>Sé el primero en compartir tu experiencia.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── QUIÉN ESTÁ DETRÁS + CCPL ─────────────────────────────── -->
+<section class="section founder-wrap">
+  <div class="s-label">Quién está detrás</div>
+  <div class="founder-card">
+    <img
+      src="/static/img/duilio.webp"
+      alt="Duilio Restuccia"
+      class="founder-photo"
+      onerror="this.style.display='none'"
+    >
+    <div>
+      <div class="founder-name">Duilio Restuccia Eslava</div>
+      <div class="founder-role">Ing. Economista · Fundador, Peru Sistemas Pro E.I.R.L.</div>
+      <div class="founder-cred">🏛 Asesor Tecnológico — Colegio de Contadores de Loreto</div>
+      <p class="founder-bio">
+        Llevo más de 3 años construyendo software para contadores y negocios en la Amazonía peruana —
+        Facturalo.pro, QueVendi.pro, Metraes.com, ColegiosPro.
+        Conozco el dolor de verificar pagos a mano porque lo veo cada día en mis clientes.
+        <strong>alerta.pe</strong> nace de escuchar a CPC como tú.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="footer-logo">🔔 alerta.pe</div>
+  <div style="margin-bottom:.4rem;">
+    <a href="https://perusistemas.pro">Peru Sistemas Pro E.I.R.L.</a> · RUC 20615446565
+  </div>
+  <div>Iquitos, Loreto, Perú · <a href="https://duilio.store">duilio.store</a></div>
+</footer>
+
+<!-- ── STICKY INSTALL ────────────────────────────────────────── -->
+<div class="sticky-install">
+  <button class="sticky-btn" id="sticky-btn">
+    📲 TOCA AQUÍ — Instala alerta.pe gratis
+  </button>
+</div>
+
+<!-- ── MODAL INSTALL ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-install">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">¿Por qué instalar alerta.pe?</div>
+    <p class="modal-sub">Es una PWA — se instala como app sin pasar por ninguna tienda, sin costo.</p>
+
+    <div class="install-reasons">
+      <div class="install-reason">
+        <div class="install-reason-icon">🔔</div>
+        <div class="install-reason-text">
+          <strong>Alertas aunque no estés en la app</strong>
+          <span>Recibe Push Notifications de pagos en tiempo real.</span>
+        </div>
+      </div>
+      <div class="install-reason">
+        <div class="install-reason-icon">📵</div>
+        <div class="install-reason-text">
+          <strong>Funciona con conexión limitada</strong>
+          <span>Diseñada para la realidad de Iquitos y la Amazonía.</span>
+        </div>
+      </div>
+      <div class="install-reason">
+        <div class="install-reason-icon">⚡</div>
+        <div class="install-reason-text">
+          <strong>Acceso directo desde tu pantalla</strong>
+          <span>Un toque y estás dentro — sin buscar en el navegador.</span>
+        </div>
+      </div>
+      <div class="install-reason">
+        <div class="install-reason-icon">🔒</div>
+        <div class="install-reason-text">
+          <strong>Sin datos de tarjeta</strong>
+          <span>No es de ninguna tienda. Sin suscripciones automáticas.</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-install-now" id="btn-install-now">
+      ⬇ Instalar alerta.pe — es gratis
+    </button>
+    <button class="btn-close-modal" id="modal-close">Ahora no</button>
+  </div>
+</div>
+
+<!-- ── TOAST ─────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<!-- ── JS ───────────────────────────────────────────────────── -->
+<script src="/static/js/pioneros_index.js"></script>
+</body>
+</html>
