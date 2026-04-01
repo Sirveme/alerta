@@ -37,14 +37,17 @@
 }
 
 :root[data-theme="dark"] {
-  --bg-base:   #07101f;
-  --bg-mid:    #0b1729;
-  --bg-raised: #10203a;
+  --bg-base:   #060e1c;
+  --bg-mid:    #081422;
+  --bg-raised: #0c1c30;
+  --bg-glass:  rgba(255,255,255,.04);
+  --text-1:    #eef2ff;
 }
 
-:root[data-size="sm"] { --fz: 14px; }
-:root[data-size="md"] { --fz: 16px; }
-:root[data-size="lg"] { --fz: 18px; }
+/* Font size — afecta rem de toda la página */
+:root[data-size="sm"] { font-size: 14px; }
+:root[data-size="md"] { font-size: 16px; }
+:root[data-size="lg"] { font-size: 19px; }
 
 /* ── RESET ─────────────────────────────────────────────────── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
