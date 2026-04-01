@@ -3,553 +3,167 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>alerta.pe — Alertas inteligentes para contadores</title>
-  <meta name="description" content="La herramienta que alerta a contadores en tiempo real sobre pagos Yape, Plin y transferencias bancarias. Clasificación automática. Cruce con facturas SUNAT.">
-  <meta name="theme-color" content="#0c1b33">
+  <title>alerta.pe — Inteligencia financiera para contadores</title>
+  <meta name="description" content="No más notificaciones sueltas. alerta.pe consolida pagos Yape, Plin y bancos en un dashboard inteligente para contadores peruanos.">
+  <meta name="theme-color" content="#080f1e">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="alerta.pe">
   <link rel="manifest" href="/static/manifest.json">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🔔</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🔔</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-  <style>
-    :root {
-      --navy:       #0c1b33;
-      --navy-mid:   #142040;
-      --navy-light: #1d2e55;
-      --gold:       #d4a012;
-      --gold-lt:    #f0c94a;
-      --gold-pale:  rgba(212,160,18,.12);
-      --red:        #e53e3e;
-      --red-pale:   rgba(229,62,62,.12);
-      --blue:       #3b82f6;
-      --blue-pale:  rgba(59,130,246,.12);
-      --green:      #22c55e;
-      --green-pale: rgba(34,197,94,.12);
-      --white:      #ffffff;
-      --g50:        #f8f9fa;
-      --g100:       #e9ecef;
-      --g200:       #dee2e6;
-      --g400:       #adb5bd;
-      --g600:       #6c757d;
-      --g800:       #343a40;
-      --radius:     14px;
-      --radius-sm:  8px;
-      --shadow:     0 4px 24px rgba(12,27,51,.10);
-      --shadow-lg:  0 12px 48px rgba(12,27,51,.18);
-      --font-serif: 'DM Serif Display', Georgia, serif;
-      --font-sans:  'DM Sans', system-ui, sans-serif;
-    }
-
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-
-    body {
-      font-family: var(--font-sans);
-      background: var(--g50);
-      color: var(--g800);
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-      -webkit-tap-highlight-color: transparent;
-      max-width: 480px;
-      margin: 0 auto;
-    }
-
-    /* ── NAV ───────────────────────────────────────────── */
-    .nav {
-      background: var(--navy);
-      padding: env(safe-area-inset-top, 0) 1.2rem 0;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: calc(56px + env(safe-area-inset-top, 0));
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .nav-logo {
-      font-family: var(--font-serif);
-      font-size: 1.3rem;
-      color: var(--white);
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .nav-logo span { color: var(--gold-lt); }
-    .nav-cta {
-      background: var(--gold);
-      color: var(--navy);
-      font-family: var(--font-sans);
-      font-size: .8rem;
-      font-weight: 700;
-      padding: 8px 16px;
-      border-radius: 100px;
-      text-decoration: none;
-      transition: background .2s;
-    }
-    .nav-cta:hover { background: var(--gold-lt); }
-
-    /* ── HERO ──────────────────────────────────────────── */
-    .hero {
-      background: linear-gradient(155deg, var(--navy) 55%, var(--navy-light));
-      color: var(--white);
-      padding: 2.8rem 1.4rem 2.2rem;
-      position: relative;
-      overflow: hidden;
-    }
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -60%;
-      right: -40%;
-      width: 480px; height: 480px;
-      background: radial-gradient(circle, rgba(212,160,18,.07) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    .hero::after {
-      content: '';
-      position: absolute;
-      bottom: -30%;
-      left: -20%;
-      width: 300px; height: 300px;
-      background: radial-gradient(circle, rgba(59,130,246,.05) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .hero-eyebrow {
-      font-size: .72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--gold-lt);
-      margin-bottom: .8rem;
-      opacity: 0;
-      animation: fadeUp .5s ease .1s forwards;
-    }
-
-    .hero h1 {
-      font-family: var(--font-serif);
-      font-size: clamp(1.9rem, 7vw, 2.5rem);
-      font-weight: 400;
-      line-height: 1.15;
-      margin-bottom: 1rem;
-      opacity: 0;
-      animation: fadeUp .5s ease .2s forwards;
-    }
-    .hero h1 em { font-style: normal; color: var(--gold-lt); }
-
-    .hero-lead {
-      font-size: .97rem;
-      color: rgba(255,255,255,.68);
-      margin-bottom: 2rem;
-      opacity: 0;
-      animation: fadeUp .5s ease .3s forwards;
-    }
-
-    .hero-btns {
-      display: flex;
-      flex-direction: column;
-      gap: .8rem;
-      opacity: 0;
-      animation: fadeUp .5s ease .4s forwards;
-    }
-    .btn-primary {
-      display: block;
-      text-align: center;
-      padding: 15px;
-      background: var(--gold);
-      color: var(--navy);
-      font-family: var(--font-sans);
-      font-size: .97rem;
-      font-weight: 700;
-      border-radius: var(--radius-sm);
-      text-decoration: none;
-      transition: background .2s, transform .15s;
-    }
-    .btn-primary:hover { background: var(--gold-lt); transform: translateY(-1px); }
-    .btn-ghost {
-      display: block;
-      text-align: center;
-      padding: 13px;
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.18);
-      color: rgba(255,255,255,.8);
-      font-family: var(--font-sans);
-      font-size: .88rem;
-      font-weight: 500;
-      border-radius: var(--radius-sm);
-      text-decoration: none;
-    }
-
-    /* ── LIVE ALERTS DEMO ──────────────────────────────── */
-    .demo-section {
-      background: var(--navy-mid);
-      padding: 1.6rem 1.4rem;
-      border-bottom: 1px solid rgba(255,255,255,.06);
-    }
-    .demo-label {
-      font-size: .7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--g400);
-      margin-bottom: 1rem;
-    }
-    .demo-alerts { display: flex; flex-direction: column; gap: 10px; }
-
-    .demo-alert {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 12px 14px;
-      border-radius: var(--radius-sm);
-      font-size: .83rem;
-      border-left: 3px solid;
-      position: relative;
-    }
-    .demo-alert.urgent { background: var(--red-pale);  border-color: var(--red); }
-    .demo-alert.warn   { background: var(--gold-pale); border-color: var(--gold); }
-    .demo-alert.info   { background: var(--blue-pale); border-color: var(--blue); }
-
-    .demo-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-      margin-top: 4px;
-    }
-    .urgent .demo-dot { background: var(--red); animation: blink 1s infinite; }
-    .warn   .demo-dot { background: var(--gold); }
-    .info   .demo-dot { background: var(--blue); }
-
-    .demo-type {
-      font-size: .68rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      display: block;
-      margin-bottom: 2px;
-    }
-    .urgent .demo-type { color: var(--red); }
-    .warn   .demo-type { color: var(--gold-lt); }
-    .info   .demo-type { color: var(--blue); }
-
-    .demo-alert p { color: rgba(255,255,255,.78); line-height: 1.35; }
-
-    .demo-time {
-      position: absolute;
-      top: 10px; right: 12px;
-      font-size: .66rem;
-      color: rgba(255,255,255,.3);
-    }
-
-    /* ── CÓMO FUNCIONA ─────────────────────────────────── */
-    .section { padding: 2rem 1.4rem; }
-    .section + .section { padding-top: 0; }
-
-    .section-title {
-      font-family: var(--font-serif);
-      font-size: 1.3rem;
-      color: var(--navy);
-      margin-bottom: .4rem;
-    }
-    .section-sub {
-      font-size: .85rem;
-      color: var(--g600);
-      margin-bottom: 1.4rem;
-    }
-
-    .steps { display: flex; flex-direction: column; gap: 1px; }
-    .step {
-      display: flex;
-      gap: 1rem;
-      padding: 1.1rem 1.1rem 1.1rem 0;
-      position: relative;
-    }
-    .step:not(:last-child)::after {
-      content: '';
-      position: absolute;
-      left: 20px;
-      top: 52px;
-      bottom: -1px;
-      width: 2px;
-      background: var(--g100);
-    }
-    .step-num {
-      width: 40px; height: 40px;
-      background: var(--navy);
-      color: var(--gold-lt);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: var(--font-serif);
-      font-size: 1rem;
-      flex-shrink: 0;
-      position: relative;
-      z-index: 1;
-    }
-    .step-body {}
-    .step-title { font-weight: 700; color: var(--navy); font-size: .92rem; margin-bottom: 3px; }
-    .step-desc  { font-size: .83rem; color: var(--g600); line-height: 1.45; }
-
-    /* ── FEATURES ──────────────────────────────────────── */
-    .features { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .feat {
-      background: var(--white);
-      border-radius: var(--radius-sm);
-      padding: 1rem;
-      box-shadow: var(--shadow);
-      border: 1px solid var(--g100);
-    }
-    .feat-icon { font-size: 1.5rem; margin-bottom: .5rem; }
-    .feat-title { font-weight: 700; color: var(--navy); font-size: .85rem; margin-bottom: 4px; }
-    .feat-desc  { font-size: .78rem; color: var(--g600); line-height: 1.4; }
-
-    /* ── PRICING ───────────────────────────────────────── */
-    .pricing-cards { display: flex; flex-direction: column; gap: 12px; }
-    .pricing-card {
-      background: var(--white);
-      border-radius: var(--radius);
-      padding: 1.3rem;
-      border: 2px solid var(--g100);
-      box-shadow: var(--shadow);
-      position: relative;
-    }
-    .pricing-card.highlight {
-      border-color: var(--gold);
-      background: var(--navy);
-      color: var(--white);
-    }
-    .pricing-badge {
-      position: absolute;
-      top: -12px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--gold);
-      color: var(--navy);
-      font-size: .72rem;
-      font-weight: 700;
-      padding: 4px 14px;
-      border-radius: 100px;
-      white-space: nowrap;
-    }
-    .pricing-plan { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--g400); margin-bottom: 4px; }
-    .pricing-card.highlight .pricing-plan { color: var(--gold-lt); }
-    .pricing-price {
-      font-family: var(--font-serif);
-      font-size: 2rem;
-      color: var(--navy);
-      line-height: 1;
-      margin-bottom: 2px;
-    }
-    .pricing-card.highlight .pricing-price { color: var(--gold-lt); }
-    .pricing-period { font-size: .75rem; color: var(--g400); margin-bottom: 1rem; }
-    .pricing-card.highlight .pricing-period { color: rgba(255,255,255,.45); }
-    .pricing-features { list-style: none; margin-bottom: 1.2rem; }
-    .pricing-features li {
-      font-size: .82rem;
-      color: var(--g600);
-      padding: 4px 0;
-      display: flex;
-      align-items: flex-start;
-      gap: 7px;
-    }
-    .pricing-card.highlight .pricing-features li { color: rgba(255,255,255,.65); }
-    .pricing-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
-    .btn-plan {
-      display: block;
-      text-align: center;
-      padding: 11px;
-      background: var(--navy);
-      color: var(--white);
-      border-radius: var(--radius-sm);
-      font-family: var(--font-sans);
-      font-size: .85rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: background .2s;
-    }
-    .pricing-card.highlight .btn-plan { background: var(--gold); color: var(--navy); }
-    .btn-plan:hover { opacity: .9; }
-
-    /* ── PIONEER STRIP ─────────────────────────────────── */
-    .pioneer-strip {
-      background: linear-gradient(135deg, var(--navy), var(--navy-light));
-      padding: 2rem 1.4rem;
-      text-align: center;
-      color: var(--white);
-    }
-    .pioneer-strip h2 {
-      font-family: var(--font-serif);
-      font-size: 1.4rem;
-      margin-bottom: .6rem;
-    }
-    .pioneer-strip p { font-size: .87rem; color: rgba(255,255,255,.6); margin-bottom: 1.4rem; }
-    .pioneer-months {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      margin-bottom: 1.4rem;
-    }
-    .pm {
-      text-align: center;
-      background: rgba(255,255,255,.06);
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: var(--radius-sm);
-      padding: .7rem .9rem;
-      min-width: 76px;
-    }
-    .pm.current { border-color: rgba(212,160,18,.5); background: var(--gold-pale); }
-    .pm-pct { font-family: var(--font-serif); font-size: 1.4rem; color: var(--g400); }
-    .pm.current .pm-pct { color: var(--gold-lt); }
-    .pm-mes { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--g600); }
-    .pm.current .pm-mes { color: var(--gold-lt); }
-
-    /* ── ECOSYSTEM ─────────────────────────────────────── */
-    .ecosystem { background: var(--white); padding: 1.6rem 1.4rem; }
-    .ecosystem-title {
-      font-family: var(--font-serif);
-      font-size: 1rem;
-      color: var(--navy);
-      margin-bottom: 1rem;
-    }
-    .eco-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-    .eco-pill {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 7px 14px;
-      border-radius: 100px;
-      font-size: .78rem;
-      font-weight: 600;
-      border: 1px solid var(--g200);
-      background: var(--g50);
-      color: var(--g800);
-      text-decoration: none;
-    }
-    .eco-pill:hover { border-color: var(--gold); }
-    .eco-pill.active { background: var(--navy); color: var(--gold-lt); border-color: var(--navy); }
-
-    /* ── FOOTER ────────────────────────────────────────── */
-    .footer {
-      background: var(--navy);
-      padding: 2rem 1.4rem;
-      color: rgba(255,255,255,.4);
-      font-size: .78rem;
-      padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0));
-    }
-    .footer-brand {
-      font-family: var(--font-serif);
-      font-size: 1.2rem;
-      color: var(--white);
-      margin-bottom: .4rem;
-    }
-    .footer-brand span { color: var(--gold-lt); }
-    .footer-links { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .footer-links a { color: rgba(255,255,255,.5); text-decoration: none; font-size: .78rem; }
-    .footer-links a:hover { color: var(--gold-lt); }
-    .footer-copy { border-top: 1px solid rgba(255,255,255,.06); padding-top: 1rem; }
-
-    /* ── DIVIDER ───────────────────────────────────────── */
-    .divider { height: 1px; background: var(--g100); }
-
-    /* ── ANIMATIONS ────────────────────────────────────── */
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(14px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes blink {
-      0%, 100% { opacity: 1; } 50% { opacity: .3; }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/main_index.css">
 </head>
 <body>
 
-<!-- NAV -->
+<!-- ── NAV ──────────────────────────────────────────────────── -->
 <nav class="nav">
-  <a href="/" class="nav-logo">🔔 alerta<span>.pe</span></a>
-  <a href="/pioneros" class="nav-cta">Ser Pionero</a>
+  <a href="/" class="nav-logo">🔔 alerta<em>.pe</em></a>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button id="btn-install-nav" style="display:none;align-items:center;gap:6px;background:rgba(217,30,24,.15);border:1px solid rgba(217,30,24,.4);color:#f87171;font-size:.76rem;font-weight:700;padding:6px 12px;border-radius:100px;cursor:pointer;font-family:var(--sans);">⬇ Instalar</button>
+    <a href="/pioneros" class="nav-cta">Ser Pionero</a>
+  </div>
 </nav>
 
-<!-- HERO -->
+<!-- ── HERO ─────────────────────────────────────────────────── -->
 <section class="hero">
-  <div class="hero-eyebrow">Para Contadores Públicos Certificados</div>
-  <h1>El contador que <em>sabe primero</em> sirve mejor</h1>
-  <p class="hero-lead">Alertas inteligentes sobre pagos Yape, Plin y transferencias. En tiempo real. Sin revisar correos. Sin Excel.</p>
+  <div class="hero-chip">🔴 En construcción — sé Pionero</div>
+  <h1>De la notificación<br>al <em>control</em> <span>total</span></h1>
+  <p class="hero-lead">
+    Yape, Plin y tus bancos ya te notifican. El problema es que nadie convierte eso en inteligencia contable.<br>
+    <strong>alerta.pe lo hace.</strong>
+  </p>
   <div class="hero-btns">
-    <a href="/pioneros" class="btn-primary">🚀 Quiero ser Pionero — 75% dcto. de por vida</a>
+    <a href="/pioneros" class="btn-red">🚀 Quiero ser Pionero — 75% dcto. de por vida</a>
     <a href="#como-funciona" class="btn-ghost">¿Cómo funciona? →</a>
   </div>
 </section>
 
-<!-- DEMO DE ALERTAS EN VIVO -->
-<div class="demo-section">
-  <div class="demo-label">📡 Alertas en tiempo real — así se ve</div>
-  <div class="demo-alerts">
-    <div class="demo-alert urgent">
-      <span class="demo-dot"></span>
-      <div>
-        <span class="demo-type">🔴 Urgente</span>
-        <p>SUNAT emitió Resolución de Cobranza Coactiva a Comercializadora Lima SAC — Renta 3a Jul-2025</p>
-      </div>
-      <span class="demo-time">ahora</span>
-    </div>
-    <div class="demo-alert warn">
-      <span class="demo-dot"></span>
-      <div>
-        <span class="demo-type">🟡 Importante</span>
-        <p>Cliente Minimarket Flores pagó S/3,200 por Yape — cruzado con Factura F001-1847 ✓</p>
-      </div>
-      <span class="demo-time">2 min</span>
-    </div>
-    <div class="demo-alert info">
-      <span class="demo-dot"></span>
-      <div>
-        <span class="demo-type">🔵 Informativo</span>
-        <p>Empresa Ríos e Hijos vendió 38% más en mayo pero emitió 15% menos facturas</p>
-      </div>
-      <span class="demo-time">hoy</span>
-    </div>
+<!-- ── MENSAJE CLAVE: no más ruido ──────────────────────────── -->
+<div class="insight-bar">
+  <div class="insight-icon">💡</div>
+  <div class="insight-text">
+    <strong>Tu banco ya te notifica. El problema no es la notificación.</strong>
+    Es que nadie cruza ese pago con la factura, lo clasifica en el libro, detecta la anomalía ni te avisa cuando hay riesgo tributario.
   </div>
+</div>
+
+<!-- ── TELÉFONO: notificaciones + dashboard ─────────────────── -->
+<section class="sec" id="como-funciona" style="padding-bottom:0;">
+  <div class="sec-chip red">📱 Demo en tiempo real</div>
+  <h2 class="sec-title">No solo alertas — <em style="font-style:normal;color:var(--red-lt);">control</em></h2>
+  <p class="sec-sub">Las notificaciones llegan arriba. Abajo, la inteligencia que construimos con ellas.</p>
+</section>
+
+<div class="phone-wrap">
+  <div class="phone">
+    <div class="phone-screen">
+
+      <div class="phone-bg"></div>
+      <div class="phone-stars"></div>
+
+      <!-- Status bar -->
+      <div class="phone-status">
+        <div class="phone-time" id="phone-time">00:00</div>
+        <div class="phone-sys">
+          <svg width="17" height="12" viewBox="0 0 17 12">
+            <rect x="0"    y="6" width="3" height="6" rx="1"/>
+            <rect x="4.5"  y="4" width="3" height="8" rx="1"/>
+            <rect x="9"    y="2" width="3" height="10" rx="1"/>
+            <rect x="13.5" y="0" width="3" height="12" rx="1" fill-opacity=".35"/>
+          </svg>
+          <svg width="16" height="12" viewBox="0 0 16 12">
+            <circle cx="8" cy="10" r="1.2"/>
+            <path d="M5 7.5C6.2 6.3 9.8 6.3 11 7.5" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+            <path d="M2.5 5C5 2.6 11 2.6 13.5 5" stroke-width="1.4" stroke-linecap="round" fill="none" fill-opacity=".5"/>
+          </svg>
+          <svg width="25" height="12" viewBox="0 0 25 12">
+            <rect x="0" y="1" width="21" height="10" rx="3" stroke-width="1" fill="none"/>
+            <rect x="1.5" y="2.5" width="14" height="7" rx="2" fill-opacity=".9"/>
+            <path d="M22 4.5v3a1.5 1.5 0 000-3z" fill-opacity=".4"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Notch -->
+      <div class="phone-notch">
+        <div class="phone-speaker"></div>
+        <div class="phone-cam"></div>
+      </div>
+
+      <!-- Lock screen -->
+      <div class="phone-lock">
+        <div class="phone-lock-clock" id="phone-lock-clock">00:00</div>
+        <div class="phone-lock-date"  id="phone-lock-date">Lun, 1 ene</div>
+      </div>
+
+      <!-- Notificaciones push — JS las inyecta -->
+      <div class="phone-notifs"></div>
+
+      <!-- Dashboard consolidado — parte baja del teléfono -->
+      <div class="phone-dashboard">
+        <div class="dash-header">
+          <div class="dash-title">Dashboard · Abril 2026</div>
+          <div class="dash-badge">🔴 2 alertas activas</div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="dash-card">
+            <div class="dc-label">Cobrado este mes</div>
+            <div class="dc-value green" id="dc-cobrado">···</div>
+            <div class="dc-sub">↑ 18% vs. marzo</div>
+          </div>
+          <div class="dash-card">
+            <div class="dc-label">Pendiente de cobro</div>
+            <div class="dc-value gold" id="dc-pending">···</div>
+            <div class="dc-sub">3 clientes morosos</div>
+          </div>
+          <div class="dash-card">
+            <div class="dc-label">Alertas SUNAT/SUNAFIL</div>
+            <div class="dc-value red" id="dc-alertas">···</div>
+            <div class="dc-sub">Requieren atención</div>
+          </div>
+          <div class="dash-card">
+            <div class="dc-label">Clientes activos</div>
+            <div class="dc-value" id="dc-clientes">···</div>
+            <div class="dc-sub">2 nuevos este mes</div>
+          </div>
+        </div>
+
+        <div class="dash-row">
+          <div class="dash-row-icon">⚠️</div>
+          <div class="dash-row-text">
+            <strong>Anomalía:</strong> Cliente XYZ facturó 20% menos de lo que cobró — revisar declaración.
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /phone-screen -->
+  </div><!-- /phone -->
 </div>
 
 <div class="divider"></div>
 
-<!-- CÓMO FUNCIONA -->
-<section class="section" id="como-funciona">
-  <h2 class="section-title">¿Cómo funciona?</h2>
-  <p class="section-sub">Tres pasos y tú solo recibes lo que importa.</p>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <div class="step-title">Conectas el correo de notificaciones</div>
-        <div class="step-desc">Yape, Plin, BCP, Interbank, BBVA — todos envían correos cuando llega un pago. alerta.pe los lee automáticamente.</div>
+<!-- ── NO MÁS RUIDO — SOLUCIÓN REAL ─────────────────────────── -->
+<section class="sec">
+  <div class="sec-chip">El problema de fondo</div>
+  <h2 class="sec-title">La diferencia entre ruido e inteligencia</h2>
+
+  <div class="diff-cards" style="margin-top:1.2rem;">
+    <div class="diff-card bad">
+      <div class="diff-icon">🔕</div>
+      <div class="diff-text">
+        <strong>Sin alerta.pe — lo que tienes hoy</strong>
+        <span>Recibes 20 notificaciones sueltas de Yape, BCP y Plin. Nada está cruzado, nada está clasificado. Tienes más datos y menos claridad.</span>
       </div>
     </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <div class="step-title">Clasificamos y cruzamos</div>
-        <div class="step-desc">La IA identifica el pagador, el monto y lo cruza con las facturas emitidas en SUNAT vía Facturalo.pro.</div>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-body">
-        <div class="step-title">Recibes la alerta exacta</div>
-        <div class="step-desc">Urgente, Importante o Informativo — directo a tu celular. Sin ruido. Sin perder tiempo revisando bandejas.</div>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">4</div>
-      <div class="step-body">
-        <div class="step-title">Insights contables automáticos</div>
-        <div class="step-desc">Detectamos anomalías: un cliente que vende mucho pero factura poco, picos de ingreso, riesgos tributarios.</div>
+    <div class="diff-card good">
+      <div class="diff-icon">🧠</div>
+      <div class="diff-text">
+        <strong>Con alerta.pe — lo que recibes</strong>
+        <span>Un pago llega → se cruza con la factura → se clasifica en el libro → si hay anomalía, te avisamos. Si hay riesgo SUNAT, te avisamos primero.</span>
       </div>
     </div>
   </div>
@@ -557,144 +171,177 @@
 
 <div class="divider"></div>
 
-<!-- FEATURES -->
-<section class="section">
-  <h2 class="section-title">Lo que incluye</h2>
-  <div class="features">
-    <div class="feat">
-      <div class="feat-icon">📧</div>
-      <div class="feat-title">Lectura automática de correos</div>
-      <div class="feat-desc">Yape, Plin, BCP, Interbank, BBVA y más</div>
+<!-- ── TIPOS DE ALERTA ───────────────────────────────────────── -->
+<section class="sec">
+  <div class="sec-chip red">Sistema de alertas</div>
+  <h2 class="sec-title">Tres niveles. Cero ruido.</h2>
+  <p class="sec-sub">Cada alerta llega porque importa, no porque pasó algo.</p>
+
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:1.2rem;">
+    <div class="diff-card" style="background:rgba(217,30,24,.1);border-color:rgba(217,30,24,.35);">
+      <div class="diff-icon">🔴</div>
+      <div class="diff-text">
+        <strong>Urgente — actúa hoy</strong>
+        <span>Resolución de Cobranza Coactiva SUNAT · Notificación SUNAFIL con plazo · Pago grande no identificado</span>
+      </div>
     </div>
-    <div class="feat">
-      <div class="feat-icon">🔔</div>
-      <div class="feat-title">Alertas en tiempo real</div>
-      <div class="feat-desc">Push notifications + WhatsApp</div>
+    <div class="diff-card" style="background:rgba(212,160,18,.08);border-color:rgba(212,160,18,.3);">
+      <div class="diff-icon">🟡</div>
+      <div class="diff-text">
+        <strong>Importante — revisa pronto</strong>
+        <span>Pago recibido y cruzado con factura · Anomalía en facturación vs. cobros · Vencimiento próximo</span>
+      </div>
     </div>
-    <div class="feat">
-      <div class="feat-icon">🧾</div>
-      <div class="feat-title">Cruce con facturas SUNAT</div>
-      <div class="feat-desc">Integrado con Facturalo.pro</div>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">📊</div>
-      <div class="feat-title">Clasificación automática</div>
-      <div class="feat-desc">Ingresos y gastos categorizados por IA</div>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">🤖</div>
-      <div class="feat-title">Insights contables</div>
-      <div class="feat-desc">Anomalías, tendencias y alertas tributarias</div>
-    </div>
-    <div class="feat">
-      <div class="feat-icon">📱</div>
-      <div class="feat-title">PWA — funciona offline</div>
-      <div class="feat-desc">Instálala como app en tu celular</div>
+    <div class="diff-card" style="background:rgba(59,130,246,.07);border-color:rgba(59,130,246,.25);">
+      <div class="diff-icon">🔵</div>
+      <div class="diff-text">
+        <strong>Informativo — para tu análisis</strong>
+        <span>Tendencias del mes · Cliente que creció · Estadísticas de cobro · Resumen semanal</span>
+      </div>
     </div>
   </div>
 </section>
 
 <div class="divider"></div>
 
-<!-- PRICING -->
-<section class="section" id="precios">
-  <h2 class="section-title">Planes — cuando lancemos</h2>
-  <p class="section-sub">Los pioneros de abril conservan su 75% de descuento de por vida.</p>
-  <div class="pricing-cards">
+<!-- ── VERTICALES / CLIENTES ─────────────────────────────────── -->
+<section class="sec">
+  <div class="sec-chip">¿Para quién es?</div>
+  <h2 class="sec-title">Cualquier organización que cobre cuotas o verifique pagos</h2>
 
-    <div class="pricing-card">
-      <div class="pricing-plan">Básico</div>
-      <div class="pricing-price">S/ 49</div>
-      <div class="pricing-period">/ mes por contador</div>
-      <ul class="pricing-features">
-        <li>Hasta 3 empresas cliente</li>
-        <li>Alertas de pagos Yape y Plin</li>
-        <li>Cruce básico con facturas</li>
-        <li>App móvil PWA</li>
+  <div class="verticals" style="margin-top:1.2rem;">
+    <div class="vertical">
+      <div class="vertical-icon">🧾</div>
+      <div>
+        <div class="vertical-name">Contadores independientes (CPC)</div>
+        <div class="vertical-desc">Gestiona pagos de múltiples clientes desde un solo dashboard. Sin Excel, sin correos.</div>
+      </div>
+      <span class="vertical-chip vc-live">Lanzamiento</span>
+    </div>
+
+    <div class="vertical">
+      <div class="vertical-icon">🏢</div>
+      <div>
+        <div class="vertical-name">Estudios contables</div>
+        <div class="vertical-desc">Vista multi-cliente con priorización automática. Tus CPC ven solo lo que les corresponde.</div>
+      </div>
+      <span class="vertical-chip vc-live">Lanzamiento</span>
+    </div>
+
+    <div class="vertical">
+      <div class="vertical-icon">🏛</div>
+      <div>
+        <div class="vertical-name">Colegios profesionales</div>
+        <div class="vertical-desc">Alertas de cuotas vencidas, estado de habilitación, comunicación masiva a colegiados.</div>
+      </div>
+      <span class="vertical-chip vc-live">CCPL activo</span>
+    </div>
+
+    <div class="vertical">
+      <div class="vertical-icon">🎓</div>
+      <div>
+        <div class="vertical-name">Academias y centros educativos</div>
+        <div class="vertical-desc">Mensualidades, matrículas, alertas de morosidad automáticas a padres y alumnos.</div>
+      </div>
+      <span class="vertical-chip vc-pronto">Próximo</span>
+    </div>
+
+    <div class="vertical">
+      <div class="vertical-icon">🏋️</div>
+      <div>
+        <div class="vertical-name">Gimnasios y clubes</div>
+        <div class="vertical-desc">Control de membresías, alertas de vencimiento y confirmación de pagos en tiempo real.</div>
+      </div>
+      <span class="vertical-chip vc-pronto">Próximo</span>
+    </div>
+
+    <div class="vertical">
+      <div class="vertical-icon">🏘</div>
+      <div>
+        <div class="vertical-name">Asociaciones y juntas</div>
+        <div class="vertical-desc">Cuotas de mantenimiento, asambleas, comunicación de vencimientos a propietarios.</div>
+      </div>
+      <span class="vertical-chip vc-pronto">Próximo</span>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── PRECIOS ───────────────────────────────────────────────── -->
+<section class="sec" id="precios">
+  <div class="sec-chip">Cuando lancemos</div>
+  <h2 class="sec-title">Los Pioneros nunca pagan precio lleno</h2>
+  <p class="sec-sub">Registrarte hoy en abril te congela el 75% de descuento de por vida.</p>
+
+  <div class="plans" style="margin-top:1.4rem;">
+    <div class="plan">
+      <div class="plan-name">Básico</div>
+      <div class="plan-price">S/ 49</div>
+      <div class="plan-period">/ mes · por contador</div>
+      <ul class="plan-feats">
+        <li>Hasta 5 empresas cliente</li>
+        <li>Alertas Yape, Plin y BCP</li>
+        <li>Cruce automático con facturas</li>
+        <li>App PWA en tu celular</li>
       </ul>
-      <a href="/pioneros" class="btn-plan">Registrarme como Pionero</a>
+      <a href="/pioneros" class="plan-btn">Registrarme como Pionero</a>
     </div>
 
-    <div class="pricing-card highlight">
-      <div class="pricing-badge">⭐ Más elegido</div>
-      <div class="pricing-plan">Pro</div>
-      <div class="pricing-price">S/ 89</div>
-      <div class="pricing-period">/ mes por contador</div>
-      <ul class="pricing-features">
+    <div class="plan featured">
+      <div class="plan-badge">⭐ Más elegido</div>
+      <div class="plan-name">Pro</div>
+      <div class="plan-price">S/ 89</div>
+      <div class="plan-period">/ mes · por contador</div>
+      <ul class="plan-feats">
         <li>Empresas ilimitadas</li>
         <li>Todos los bancos + billeteras</li>
-        <li>Insights IA — anomalías y riesgos</li>
-        <li>Alertas por WhatsApp + Push</li>
+        <li>Alertas SUNAT y SUNAFIL</li>
+        <li>Inteligencia IA — anomalías</li>
+        <li>Alertas push + WhatsApp</li>
         <li>Integración Facturalo.pro</li>
-        <li>Soporte prioritario</li>
       </ul>
-      <a href="/pioneros" class="btn-plan">Registrarme como Pionero</a>
+      <a href="/pioneros" class="plan-btn">Registrarme como Pionero</a>
     </div>
 
+    <div class="plan">
+      <div class="plan-name">Organizaciones</div>
+      <div class="plan-price">S/ 120</div>
+      <div class="plan-period">/ mes · colegios, academias, clubes</div>
+      <ul class="plan-feats">
+        <li>Gestión de cuotas y membresías</li>
+        <li>Alertas de vencimiento masivas</li>
+        <li>Panel de morosos</li>
+        <li>Comunicación a socios/alumnos</li>
+        <li>Integración Facturalo.pro</li>
+      </ul>
+      <a href="/pioneros" class="plan-btn">Registrarme como Pionero</a>
+    </div>
   </div>
 </section>
 
-<!-- STRIP PIONEROS -->
-<div class="pioneer-strip">
-  <h2>Únete ahora y asegura tu descuento</h2>
-  <p>El descuento es de por vida — nunca sube para los pioneros. Cada mes el porcentaje baja.</p>
-  <div class="pioneer-months" id="pm-container">
-    <div class="pm" id="pm-abr">
-      <div class="pm-pct">75%</div>
-      <div class="pm-mes">Abril</div>
-    </div>
-    <div class="pm" id="pm-may">
-      <div class="pm-pct">50%</div>
-      <div class="pm-mes">Mayo</div>
-    </div>
-    <div class="pm" id="pm-jun">
-      <div class="pm-pct">25%</div>
-      <div class="pm-mes">Junio</div>
-    </div>
-  </div>
-  <a href="/pioneros" class="btn-primary" style="max-width:320px;margin:0 auto;">
-    🚀 Quiero mi descuento de por vida
-  </a>
+<!-- ── ECOSISTEMA ────────────────────────────────────────────── -->
+<div class="eco-row">
+  <a href="/"              class="eco-chip active">🔔 alerta.pe</a>
+  <a href="https://facturalo.pro" class="eco-chip">🧾 Facturalo.pro</a>
+  <a href="https://quevendi.pro"  class="eco-chip">🏪 QueVendi.pro</a>
+  <a href="https://metraes.com"   class="eco-chip">🍽 Metraes.com</a>
+  <a href="https://perusistemas.pro" class="eco-chip">🌐 Peru Sistemas</a>
 </div>
 
-<!-- ECOSISTEMA -->
-<div class="ecosystem">
-  <div class="ecosystem-title">Parte del ecosistema Peru Sistemas Pro</div>
-  <div class="eco-pills">
-    <span class="eco-pill active">🔔 alerta.pe</span>
-    <a href="https://facturalo.pro" class="eco-pill">🧾 Facturalo.pro</a>
-    <a href="https://quevendi.pro"  class="eco-pill">🏪 QueVendi.pro</a>
-    <a href="https://metraes.com"  class="eco-pill">🍽 Metraes.com</a>
-  </div>
-</div>
-
-<!-- FOOTER -->
+<!-- ── FOOTER ────────────────────────────────────────────────── -->
 <footer class="footer">
-  <div class="footer-brand">🔔 alerta<span>.pe</span></div>
+  <div class="footer-logo">🔔 alerta.pe</div>
   <div class="footer-links">
     <a href="/pioneros">Pioneros</a>
     <a href="#como-funciona">Cómo funciona</a>
     <a href="#precios">Precios</a>
+    <a href="https://duilio.store">duilio.store</a>
     <a href="https://perusistemas.pro">Peru Sistemas Pro</a>
   </div>
-  <div class="footer-copy">
-    © 2026 Peru Sistemas Pro E.I.R.L. · RUC 20615446565 · Iquitos, Loreto, Perú
-  </div>
+  <div>© 2026 Peru Sistemas Pro E.I.R.L. · RUC 20615446565 · Iquitos, Loreto, Perú</div>
 </footer>
 
-<script>
-/* Descuento activo por mes */
-(function() {
-  const mes = new Date().getMonth() + 1;
-  if (mes === 4) document.getElementById('pm-abr').classList.add('current');
-  if (mes === 5) document.getElementById('pm-may').classList.add('current');
-  if (mes === 6) document.getElementById('pm-jun').classList.add('current');
-})();
-
-/* Service Worker */
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
-}
-</script>
+<script src="/static/js/main_index.js"></script>
 </body>
 </html>
