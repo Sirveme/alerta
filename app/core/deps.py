@@ -22,7 +22,6 @@ import functools
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -48,28 +47,25 @@ def get_db():
         db.close()
 
 
-# --- Auth bearer ---
-_bearer = HTTPBearer(auto_error=False)
+# --- Auth ---
 
 
 def get_current_user(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
     db: Session = Depends(get_db),
 ) -> Usuario:
     """
-    Extrae el usuario actual del JWT (header Authorization o cookie 'token').
-    Valida que el usuario exista y esté activo.
+    Extrae el usuario actual del JWT.
+    Prioridad: cookie access_token > header Authorization: Bearer <token>.
     """
-    token = None
+    # 1. Intentar desde cookie primero
+    token = request.cookies.get("access_token")
 
-    # 1. Intentar header Authorization: Bearer <token>
-    if credentials:
-        token = credentials.credentials
-
-    # 2. Fallback: cookie 'access_token' (para requests de templates/HTMX)
+    # 2. Si no hay cookie, intentar desde header Authorization
     if not token:
-        token = request.cookies.get("access_token")
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            token = auth[7:]
 
     if not token:
         raise HTTPException(
