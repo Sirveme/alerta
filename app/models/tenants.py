@@ -13,9 +13,10 @@ Decisiones técnicas:
 
 import enum
 import uuid
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Text, Boolean, Enum as SAEnum
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Boolean, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -84,4 +85,47 @@ class Tenant(Base, TimestampMixin, SoftDeleteMixin):
     )
     empresas: Mapped[list["EmpresaCliente"]] = relationship(
         "EmpresaCliente", back_populates="tenant", lazy="selectin",
+    )
+
+
+class Invitacion(Base, TimestampMixin):
+    """
+    Token de invitacion para registro de nuevos tenants.
+    Generado por SOTE, valido 72 horas. Se marca como usado al completar registro.
+    """
+
+    __tablename__ = "invitaciones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False, index=True,
+        comment="Token unico de invitacion (URL-safe).",
+    )
+    whatsapp: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    tipo_tenant: Mapped[str] = mapped_column(
+        String(30), nullable=False,
+        comment="Tipo de tenant: estudio_contable, contador_independiente, empresa, etc.",
+    )
+    plan: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True,
+        comment="Plan sugerido: gratis, basico, pro, enterprise.",
+    )
+    nombre_contacto: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    creado_por: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("usuarios.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    expira_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        comment="Timestamp de expiracion (created_at + 72 horas).",
+    )
+    usado_en: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Timestamp cuando se completo el registro.",
+    )
+    tenant_creado_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="SET NULL"),
+        nullable=True,
     )

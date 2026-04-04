@@ -12,7 +12,7 @@ las tablas en Base.metadata al momento del import.
 from app.models.base import Base, TimestampMixin, SoftDeleteMixin
 
 # Tenants
-from app.models.tenants import Tenant, TipoServicio, PlanTenant
+from app.models.tenants import Tenant, TipoServicio, PlanTenant, Invitacion
 
 # Usuarios
 from app.models.usuarios import (
@@ -106,7 +106,7 @@ __all__ = [
     # Base
     "Base", "TimestampMixin", "SoftDeleteMixin",
     # Tenants
-    "Tenant", "TipoServicio", "PlanTenant",
+    "Tenant", "TipoServicio", "PlanTenant", "Invitacion",
     # Usuarios
     "Usuario", "UsuarioTenant", "WebAuthnCredential", "RecuperacionClave", "RolUsuario",
     # Empresas
