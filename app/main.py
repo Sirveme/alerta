@@ -202,9 +202,16 @@ async def pioneros(request: Request):
 # ── PÁGINAS AUTENTICADAS ─────────────────────────────────────
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    # Si ya tiene token válido, redirigir a dashboard
+    # Si ya tiene cookie con token valido (no expirado), redirigir a dashboard.
+    # request.state.user es None si no hay cookie o si el token es invalido/expirado
+    # (el middleware ya maneja el try/except JWTError).
     if request.state.user:
         return RedirectResponse(url="/dashboard", status_code=302)
+    # Si hay cookie pero el token era invalido, limpiarla para no dejar basura
+    if request.cookies.get("access_token") and not request.state.user:
+        response = templates.TemplateResponse("auth/login.html", {"request": request})
+        response.delete_cookie(key="access_token", path="/")
+        return response
     return templates.TemplateResponse("auth/login.html", {"request": request})
 
 
