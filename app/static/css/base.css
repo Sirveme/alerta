@@ -1,0 +1,310 @@
+/*
+ * base.css — Sistema de temas y estilos base para alerta.pe
+ *
+ * Decisiones:
+ * - 4 temas dark: dark, semi (default), feminine, classic.
+ * - 3 tamaños de fuente: sm (14px), md (16px), lg (19px).
+ * - Variables CSS centralizadas para cambio instantáneo de tema.
+ * - Scrollbar personalizada: 3px, casi invisible, color del accent.
+ * - Mobile-first, max-width 480px para contenido principal.
+ * - Transiciones: 0.25s cubic-bezier(.4,0,.2,1) para todo.
+ */
+
+/* ── FUENTES ────────────────────────────────────────────────── */
+:root {
+    --font-serif: 'Playfair Display', Georgia, serif;
+    --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --ease: cubic-bezier(.4, 0, .2, 1);
+    --radius: 14px;
+    --radius-input: 10px;
+    --radius-pill: 100px;
+}
+
+/* ── TAMAÑOS DE FUENTE ──────────────────────────────────────── */
+[data-size="sm"] { font-size: 14px; }
+[data-size="md"] { font-size: 16px; }
+[data-size="lg"] { font-size: 19px; }
+
+/* ── TEMA: SEMI (default) ───────────────────────────────────── */
+[data-theme="semi"] {
+    --bg: #0e1526;
+    --bg-mid: #131c30;
+    --bg-glass: rgba(19, 28, 48, 0.7);
+    --border: rgba(255, 255, 255, 0.06);
+    --text-1: #e8eaf0;
+    --text-2: #a0a8be;
+    --text-3: #5c6580;
+    --red: #d91e18;
+    --gold: #d4a012;
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --accent: #d91e18;
+    --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ── TEMA: DARK ─────────────────────────────────────────────── */
+[data-theme="dark"] {
+    --bg: #07101f;
+    --bg-mid: #0b1529;
+    --bg-glass: rgba(11, 21, 41, 0.8);
+    --border: rgba(255, 255, 255, 0.04);
+    --text-1: #dce0e8;
+    --text-2: #8891a5;
+    --text-3: #4a5268;
+    --red: #d91e18;
+    --gold: #d4a012;
+    --green: #22c55e;
+    --blue: #3b82f6;
+    --accent: #d91e18;
+    --shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ── TEMA: FEMININE ─────────────────────────────────────────── */
+[data-theme="feminine"] {
+    --bg: #1a0d1f;
+    --bg-mid: #221428;
+    --bg-glass: rgba(34, 20, 40, 0.7);
+    --border: rgba(255, 200, 220, 0.08);
+    --text-1: #f0e4ef;
+    --text-2: #b89db5;
+    --text-3: #705a6e;
+    --red: #e84393;
+    --gold: #d4a012;
+    --green: #22c55e;
+    --blue: #a78bfa;
+    --accent: #e84393;
+    --shadow: 0 4px 24px rgba(30, 0, 20, 0.4);
+}
+
+/* ── TEMA: CLASSIC ──────────────────────────────────────────── */
+[data-theme="classic"] {
+    --bg: #0a1628;
+    --bg-mid: #0f1d35;
+    --bg-glass: rgba(15, 29, 53, 0.7);
+    --border: rgba(100, 150, 255, 0.06);
+    --text-1: #e0e8f5;
+    --text-2: #8da0c0;
+    --text-3: #4e6080;
+    --red: #d91e18;
+    --gold: #d4a012;
+    --green: #22c55e;
+    --blue: #60a5fa;
+    --accent: #60a5fa;
+    --shadow: 0 4px 24px rgba(0, 10, 30, 0.4);
+}
+
+/* ── RESET Y BASE ───────────────────────────────────────────── */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text-1);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+}
+
+/* ── SCROLLBAR ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
+
+/* ── MAIN CONTENT ───────────────────────────────────────────── */
+.main {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100dvh;
+}
+.main--auth {
+    padding-top: 80px; /* Espacio para cabecera expandida */
+}
+
+/* ── TRANSICIONES GLOBALES ──────────────────────────────────── */
+a, button, input, select, textarea {
+    transition: all 0.25s var(--ease);
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: var(--font-sans);
+    color: var(--text-1);
+}
+
+input, select, textarea {
+    font-family: var(--font-sans);
+}
+
+/* ── BOTTOM SHEET ───────────────────────────────────────────── */
+.sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+.sheet[hidden] { display: none; }
+
+.sheet__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.sheet__content {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    max-height: 85dvh;
+    background: var(--bg-mid);
+    border-radius: 20px 20px 0 0;
+    padding: 12px 20px 32px;
+    overflow-y: auto;
+    animation: sheetUp 0.3s var(--ease);
+}
+.sheet--full .sheet__content { max-height: 92dvh; }
+
+@keyframes sheetUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.sheet__handle {
+    width: 36px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+}
+
+.sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.sheet__title {
+    font-family: var(--font-serif);
+    font-size: 1.2rem;
+    color: var(--text-1);
+    margin-bottom: 16px;
+}
+.sheet__header .sheet__title { margin-bottom: 0; }
+
+.sheet__close {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--bg);
+    color: var(--text-3);
+    font-size: 1.1rem;
+}
+
+.sheet__search {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    color: var(--text-1);
+    font-size: 0.88rem;
+    margin-bottom: 12px;
+    outline: none;
+    box-sizing: border-box;
+}
+.sheet__search:focus { border-color: var(--accent); }
+
+.sheet__list { display: flex; flex-direction: column; gap: 4px; }
+
+.sheet__nav { display: flex; flex-direction: column; gap: 2px; }
+.sheet__nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: var(--radius-input);
+    color: var(--text-2);
+    font-size: 0.92rem;
+    text-decoration: none;
+}
+.sheet__nav-item:hover { background: var(--bg); color: var(--text-1); }
+.sheet__nav-item--danger { color: var(--red); }
+.sheet__nav-item--danger:hover { background: rgba(217,30,24,0.08); }
+.sheet__nav-item i { font-size: 1.2rem; }
+
+/* ── TOAST ──────────────────────────────────────────────────── */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 10px 20px;
+    color: var(--text-1);
+    font-size: 0.85rem;
+    z-index: 2000;
+    animation: toastIn 0.3s var(--ease);
+    box-shadow: var(--shadow);
+}
+.toast[hidden] { display: none; }
+@keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── EMPRESA ITEM (en sheet) ────────────────────────────────── */
+.empresa-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--radius-input);
+    cursor: pointer;
+    transition: background 0.2s var(--ease);
+}
+.empresa-item:hover { background: var(--bg); }
+.empresa-item.active { background: rgba(217,30,24,0.08); }
+
+.empresa-item__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.empresa-item__dot--al_dia { background: var(--green); }
+.empresa-item__dot--pendientes { background: var(--gold); }
+.empresa-item__dot--alertas { background: var(--red); }
+
+.empresa-item__info { flex: 1; }
+.empresa-item__nombre { font-size: 0.9rem; color: var(--text-1); font-weight: 500; }
+.empresa-item__ruc { font-size: 0.75rem; color: var(--text-3); }

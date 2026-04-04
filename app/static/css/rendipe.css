@@ -1,0 +1,867 @@
+/*
+ * rendipe.css — Estilos para el modulo RendiPe (rendicion de viaticos)
+ *
+ * Usa las variables CSS de base.css (tema dark de alerta.pe).
+ * Mobile-first, max-width 600px para formularios y tablas.
+ * Incluye: wizard de pasos, semaforo de gastos, barra de saldo,
+ * captura de campo, tabla de rendicion y KPI cards.
+ */
+
+/* ── CONTENEDOR PRINCIPAL ─────────────────────────────────── */
+.rendipe {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px 16px;
+}
+
+.rendipe__titulo {
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 4px;
+}
+
+.rendipe__subtitulo {
+    font-size: 0.82rem;
+    color: var(--text-3);
+    margin-bottom: 24px;
+}
+
+/* ── STEP FORM WIZARD ─────────────────────────────────────── */
+.step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 28px;
+    padding: 0 8px;
+}
+
+.step-indicator__item {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.step-indicator__circle {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 2px solid var(--border);
+    background: transparent;
+    color: var(--text-3);
+    transition: all 0.3s var(--ease);
+    flex-shrink: 0;
+}
+
+.step-indicator__circle--active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+}
+
+.step-indicator__circle--done {
+    border-color: var(--green);
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--green);
+}
+
+.step-indicator__line {
+    width: 28px;
+    height: 2px;
+    background: var(--border);
+    transition: background 0.3s var(--ease);
+    flex-shrink: 0;
+}
+
+.step-indicator__line--done {
+    background: var(--green);
+}
+
+/* Step content panels */
+.step-panel {
+    display: none;
+}
+
+.step-panel--active {
+    display: block;
+    animation: stepFadeIn 0.3s var(--ease);
+}
+
+@keyframes stepFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.step-panel__titulo {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 16px;
+}
+
+/* Step navigation buttons */
+.step-nav {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.step-nav__btn {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s var(--ease);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-2);
+}
+
+.step-nav__btn:hover {
+    border-color: var(--accent);
+    color: var(--text-1);
+}
+
+.step-nav__btn--primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.step-nav__btn--primary:hover {
+    opacity: 0.9;
+}
+
+.step-nav__btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ── FORMULARIO ───────────────────────────────────────────── */
+.rendipe-form__group {
+    margin-bottom: 16px;
+}
+
+.rendipe-form__label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 6px;
+}
+
+.rendipe-form__input,
+.rendipe-form__select,
+.rendipe-form__textarea {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    color: var(--text-1);
+    font-size: 0.88rem;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.25s var(--ease);
+    box-sizing: border-box;
+}
+
+.rendipe-form__input:focus,
+.rendipe-form__select:focus,
+.rendipe-form__textarea:focus {
+    border-color: var(--accent);
+}
+
+.rendipe-form__select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235c6580' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+}
+
+.rendipe-form__textarea {
+    min-height: 100px;
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.rendipe-form__hint {
+    font-size: 0.72rem;
+    color: var(--text-3);
+    margin-top: 4px;
+}
+
+.rendipe-form__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* Autocomplete dropdown */
+.rendipe-autocomplete {
+    position: relative;
+}
+
+.rendipe-autocomplete__list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    max-height: 160px;
+    overflow-y: auto;
+    z-index: 50;
+    display: none;
+}
+
+.rendipe-autocomplete__list--open {
+    display: block;
+}
+
+.rendipe-autocomplete__item {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    color: var(--text-2);
+    cursor: pointer;
+    transition: background 0.15s var(--ease);
+}
+
+.rendipe-autocomplete__item:hover {
+    background: var(--bg);
+    color: var(--text-1);
+}
+
+/* ── SEMAFORO DE GASTOS ───────────────────────────────────── */
+.gasto-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+}
+
+.gasto-estado--valido {
+    background: rgba(34, 197, 94, 0.12);
+    color: var(--green);
+}
+
+.gasto-estado--observado {
+    background: rgba(212, 160, 18, 0.12);
+    color: var(--gold);
+}
+
+.gasto-estado--bloqueado {
+    background: rgba(217, 30, 24, 0.12);
+    color: var(--red);
+}
+
+/* ── BARRA DE SALDO ───────────────────────────────────────── */
+.saldo-bar {
+    margin-bottom: 20px;
+}
+
+.saldo-bar__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+
+.saldo-bar__label {
+    font-size: 0.75rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.saldo-bar__monto {
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-1);
+}
+
+.saldo-bar__monto--warning { color: var(--gold); }
+.saldo-bar__monto--danger { color: var(--red); }
+
+.saldo-bar__track {
+    width: 100%;
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.saldo-bar__fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s var(--ease), background 0.3s var(--ease);
+    background: var(--green);
+}
+
+.saldo-bar__fill--warning { background: var(--gold); }
+.saldo-bar__fill--danger { background: var(--red); }
+
+.saldo-bar__detail {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 0.7rem;
+    color: var(--text-3);
+}
+
+/* ── CAPTURA DE CAMPO ─────────────────────────────────────── */
+.campo-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.campo-header__destino {
+    font-family: var(--font-serif);
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-1);
+    margin-bottom: 4px;
+}
+
+.campo-header__saldo {
+    font-family: var(--font-serif);
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--green);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.campo-header__saldo--warning { color: var(--gold); }
+.campo-header__saldo--danger { color: var(--red); }
+
+.campo-header__saldo-label {
+    font-size: 0.72rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.campo-acciones {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.campo-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 12px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-2);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s var(--ease);
+}
+
+.campo-btn:hover {
+    border-color: var(--accent);
+    color: var(--text-1);
+    transform: translateY(-2px);
+}
+
+.campo-btn i {
+    font-size: 2rem;
+    color: var(--accent);
+}
+
+.campo-btn--camera {
+    grid-column: 1 / -1;
+    padding: 32px 12px;
+}
+
+.campo-btn--camera i {
+    font-size: 2.5rem;
+}
+
+/* Expense list (campo) */
+.campo-gastos__titulo {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+.campo-gasto-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+    transition: border-color 0.25s var(--ease);
+}
+
+.campo-gasto-item:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.campo-gasto-item__icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: var(--accent);
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.campo-gasto-item__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.campo-gasto-item__concepto {
+    font-size: 0.85rem;
+    color: var(--text-1);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.campo-gasto-item__meta {
+    font-size: 0.72rem;
+    color: var(--text-3);
+}
+
+.campo-gasto-item__monto {
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-1);
+    flex-shrink: 0;
+}
+
+.campo-totales {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-top: 16px;
+}
+
+.campo-totales__label {
+    font-size: 0.78rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.campo-totales__valor {
+    font-family: var(--font-serif);
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-1);
+}
+
+/* ── TABLA DE RENDICION ───────────────────────────────────── */
+.rendicion-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    margin-bottom: 20px;
+}
+
+.rendicion-tabla th {
+    text-align: left;
+    color: var(--text-3);
+    font-weight: 500;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.rendicion-tabla td {
+    padding: 10px;
+    color: var(--text-2);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    vertical-align: middle;
+}
+
+.rendicion-tabla td.num {
+    text-align: right;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    color: var(--text-1);
+}
+
+.rendicion-tabla tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Responsive table wrapper */
+.rendicion-tabla-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -16px;
+    padding: 0 16px;
+}
+
+/* Rendicion summary */
+.rendicion-resumen {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.rendicion-resumen__item {
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    text-align: center;
+}
+
+.rendicion-resumen__valor {
+    font-family: var(--font-serif);
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-1);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.rendicion-resumen__valor--green { color: var(--green); }
+.rendicion-resumen__valor--gold { color: var(--gold); }
+.rendicion-resumen__valor--red { color: var(--red); }
+
+.rendicion-resumen__label {
+    font-size: 0.7rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+/* Action buttons row */
+.rendipe-acciones {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.rendipe-acciones__btn {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s var(--ease);
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-2);
+    text-align: center;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.rendipe-acciones__btn:hover {
+    border-color: var(--accent);
+    color: var(--text-1);
+}
+
+.rendipe-acciones__btn--primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.rendipe-acciones__btn--primary:hover {
+    opacity: 0.9;
+}
+
+.rendipe-acciones__btn--success {
+    background: var(--green);
+    color: #fff;
+    border-color: var(--green);
+}
+
+/* ── KPI CARDS (dashboard rendipe) ────────────────────────── */
+.rendipe-kpis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.rendipe-kpi {
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+}
+
+.rendipe-kpi--full {
+    grid-column: 1 / -1;
+}
+
+.rendipe-kpi__valor {
+    font-family: var(--font-serif);
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-1);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.rendipe-kpi__valor--green { color: var(--green); }
+.rendipe-kpi__valor--gold { color: var(--gold); }
+.rendipe-kpi__valor--red { color: var(--red); }
+
+.rendipe-kpi__label {
+    font-size: 0.72rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── COMMISSION LIST ──────────────────────────────────────── */
+.comision-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.comision-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.25s var(--ease);
+    text-decoration: none;
+}
+
+.comision-item:hover {
+    border-color: var(--accent);
+}
+
+.comision-item__semaforo {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.comision-item__semaforo--activa { background: var(--green); }
+.comision-item__semaforo--pendiente { background: var(--gold); }
+.comision-item__semaforo--vencida { background: var(--red); }
+.comision-item__semaforo--rendida { background: var(--blue); }
+
+.comision-item__info {
+    flex: 1;
+    min-width: 0;
+}
+
+.comision-item__destino {
+    font-size: 0.88rem;
+    color: var(--text-1);
+    font-weight: 500;
+}
+
+.comision-item__meta {
+    font-size: 0.72rem;
+    color: var(--text-3);
+    margin-top: 2px;
+}
+
+.comision-item__monto {
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-1);
+    flex-shrink: 0;
+}
+
+/* ── INFORME (editable sections) ──────────────────────────── */
+.informe-section {
+    margin-bottom: 20px;
+}
+
+.informe-section__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 6px;
+}
+
+.informe-section__textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    color: var(--text-1);
+    font-size: 0.88rem;
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.25s var(--ease);
+    box-sizing: border-box;
+}
+
+.informe-section__textarea:focus {
+    border-color: var(--accent);
+}
+
+/* IA generation indicator */
+.rendipe-ia-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px;
+    color: var(--text-3);
+    font-size: 0.85rem;
+}
+
+.rendipe-ia-loading__dots span {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: iaDot 1.2s infinite;
+}
+
+.rendipe-ia-loading__dots span:nth-child(2) { animation-delay: 0.2s; }
+.rendipe-ia-loading__dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes iaDot {
+    0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1); }
+}
+
+/* ── STEP SUMMARY (paso 5 confirmar) ──────────────────────── */
+.step-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.step-summary__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-radius: var(--radius-input);
+    font-size: 0.85rem;
+}
+
+.step-summary__key {
+    color: var(--text-3);
+}
+
+.step-summary__val {
+    color: var(--text-1);
+    font-weight: 500;
+}
+
+/* ── EMPTY STATE ──────────────────────────────────────────── */
+.rendipe-empty {
+    text-align: center;
+    color: var(--text-3);
+    font-size: 0.9rem;
+    padding: 40px 20px;
+}
+
+.rendipe-empty i {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 12px;
+    color: var(--accent);
+}
+
+/* ── SECTION TITLE ────────────────────────────────────────── */
+.rendipe__section-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+/* ── RESPONSIVE ───────────────────────────────────────────── */
+@media (max-width: 400px) {
+    .rendipe-form__row {
+        grid-template-columns: 1fr;
+    }
+
+    .rendipe-acciones {
+        flex-direction: column;
+    }
+
+    .rendicion-resumen {
+        grid-template-columns: 1fr;
+    }
+
+    .step-indicator__line {
+        width: 16px;
+    }
+
+    .step-indicator__circle {
+        width: 28px;
+        height: 28px;
+        font-size: 0.72rem;
+    }
+}

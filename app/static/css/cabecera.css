@@ -1,0 +1,221 @@
+/*
+ * cabecera.css — Estilos de la cabecera adaptable de alerta.pe
+ *
+ * Estados:
+ * - Expandido (scroll up / top): 72px, 2 filas, muestra logo texto + hora + meta empresa
+ * - Colapsado (scroll down > 60px): 44px, 1 fila compacta
+ * - Transición suave: 0.25s cubic-bezier(.4,0,.2,1)
+ */
+
+.cabecera {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    transition: all 0.25s var(--ease);
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+/* ── ESTADO EXPANDIDO ─────────────────────────────────────── */
+.cabecera--expanded {
+    height: 72px;
+}
+
+.cabecera__row {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+}
+
+.cabecera__row--top {
+    height: 36px;
+    justify-content: space-between;
+}
+
+.cabecera__row--bottom {
+    height: 36px;
+    gap: 8px;
+}
+
+/* Logo */
+.cabecera__logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    color: var(--text-1);
+}
+.cabecera__logo-icon {
+    font-size: 1.2rem;
+    color: var(--red);
+}
+.cabecera__logo-text {
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--red);
+    transition: opacity 0.25s var(--ease), width 0.25s var(--ease);
+}
+
+/* Hora */
+.cabecera__hora {
+    font-size: 0.75rem;
+    color: var(--text-3);
+    transition: opacity 0.25s var(--ease);
+}
+
+/* User area */
+.cabecera__user {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cabecera__avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.25s var(--ease);
+}
+.cabecera__avatar:hover { transform: scale(1.1); }
+
+.cabecera__config-btn {
+    color: var(--text-3);
+    font-size: 1.1rem;
+    padding: 4px;
+    transition: color 0.25s var(--ease);
+}
+.cabecera__config-btn:hover { color: var(--text-1); }
+
+/* Alertas */
+.cabecera__alertas {
+    position: relative;
+    color: var(--text-3);
+    font-size: 1.1rem;
+    padding: 4px 8px;
+}
+.cabecera__alertas:hover { color: var(--text-1); }
+
+.cabecera__alertas-badge {
+    position: absolute;
+    top: -2px;
+    right: 0;
+    min-width: 16px;
+    height: 16px;
+    background: var(--red);
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 700;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+/* Selector de empresa */
+.cabecera__empresa {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 4px 12px;
+    min-width: 0;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.25s var(--ease);
+}
+.cabecera__empresa:hover { border-color: var(--accent); }
+
+.cabecera__empresa-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    flex-shrink: 0;
+}
+
+.cabecera__empresa-nombre {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    text-align: left;
+}
+
+.cabecera__empresa-meta {
+    font-size: 0.68rem;
+    color: var(--text-3);
+    white-space: nowrap;
+    transition: opacity 0.25s var(--ease), max-width 0.25s var(--ease);
+    overflow: hidden;
+}
+
+.cabecera__empresa i {
+    color: var(--text-3);
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+/* Voz */
+.cabecera__voz {
+    color: var(--text-3);
+    font-size: 1.2rem;
+    padding: 4px 8px;
+    transition: color 0.25s var(--ease);
+}
+.cabecera__voz:hover { color: var(--accent); }
+.cabecera__voz.listening {
+    color: var(--red);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ── ESTADO COLAPSADO ─────────────────────────────────────── */
+.cabecera--collapsed {
+    height: 44px;
+}
+
+.cabecera--collapsed .cabecera__row--top {
+    display: none;
+}
+
+.cabecera--collapsed .cabecera__row--bottom {
+    height: 44px;
+}
+
+.cabecera--collapsed .cabecera__empresa-meta {
+    opacity: 0;
+    max-width: 0;
+    margin: 0;
+    padding: 0;
+}
+
+/* Mostrar avatar en la fila bottom cuando colapsado */
+.cabecera__avatar-compact {
+    display: none;
+}
+.cabecera--collapsed .cabecera__avatar-compact {
+    display: flex;
+}

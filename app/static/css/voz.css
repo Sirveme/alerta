@@ -1,0 +1,165 @@
+/*
+ * voz.css — Animaciones de ondas, panel de respuesta de voz.
+ *
+ * Estados visuales del botón:
+ * - idle: color text-3
+ * - escuchando: rojo + ondas pulsantes
+ * - procesando: dorado + spinner
+ * - respondiendo: verde + fade out
+ */
+
+/* ── Botón de voz con ondas ─────────────────────────────────── */
+.voz-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: var(--text-3);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.25s var(--ease);
+    z-index: 1;
+}
+.voz-btn:hover { color: var(--accent); }
+
+/* Ondas concéntricas */
+.voz-ondas {
+    position: absolute;
+    inset: -8px;
+    display: none;
+    z-index: -1;
+}
+.voz-ondas span {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--red);
+    opacity: 0;
+}
+
+/* Estado: escuchando */
+.voz-btn.escuchando {
+    color: var(--red);
+}
+.voz-btn.escuchando .voz-ondas {
+    display: block;
+}
+.voz-btn.escuchando .voz-ondas span {
+    animation: vozOnda 2s ease-out infinite;
+}
+.voz-btn.escuchando .voz-ondas span:nth-child(2) { animation-delay: 0.4s; }
+.voz-btn.escuchando .voz-ondas span:nth-child(3) { animation-delay: 0.8s; }
+
+@keyframes vozOnda {
+    0% { opacity: 0.6; transform: scale(0.8); }
+    100% { opacity: 0; transform: scale(1.6); }
+}
+
+/* Estado: procesando */
+.voz-btn.procesando {
+    color: var(--gold);
+    animation: vozPulse 1s ease-in-out infinite;
+}
+@keyframes vozPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Estado: respondiendo */
+.voz-btn.respondiendo {
+    color: var(--green);
+}
+
+/* ── Panel de respuesta ─────────────────────────────────────── */
+.voz-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 480px;
+    margin: 0 auto;
+    background: var(--bg-mid);
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid var(--border);
+    padding: 16px 20px 32px;
+    z-index: 500;
+    transform: translateY(100%);
+    transition: transform 0.3s var(--ease);
+    max-height: 70dvh;
+    overflow-y: auto;
+}
+.voz-panel.visible {
+    transform: translateY(0);
+}
+
+.voz-panel__handle {
+    width: 36px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+}
+
+.voz-panel__transcripcion {
+    font-size: 0.78rem;
+    color: var(--text-3);
+    margin-bottom: 12px;
+    font-style: italic;
+}
+
+.voz-panel__respuesta {
+    font-size: 1rem;
+    color: var(--text-1);
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+/* Cards de datos en respuesta de voz */
+.voz-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.voz-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+}
+.voz-card__label { font-size: 0.72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; }
+.voz-card__valor { font-family: var(--font-serif); font-size: 1.3rem; font-weight: 700; color: var(--text-1); }
+.voz-card__valor--green { color: var(--green); }
+.voz-card__valor--gold { color: var(--gold); }
+.voz-card__valor--red { color: var(--red); }
+
+.voz-panel__actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+.voz-panel__btn {
+    padding: 10px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    color: var(--text-2);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.25s var(--ease);
+}
+.voz-panel__btn:hover { border-color: var(--accent); color: var(--text-1); }
+.voz-panel__btn--primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Historial mini */
+.voz-historial { margin-top: 16px; }
+.voz-historial__title {
+    font-size: 0.75rem; color: var(--text-3); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 8px; cursor: pointer;
+}
+.voz-historial__list { display: flex; flex-direction: column; gap: 4px; }
+.voz-historial__item {
+    font-size: 0.78rem; color: var(--text-3); padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+}
+.voz-historial__item span { color: var(--text-2); }
