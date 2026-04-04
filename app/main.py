@@ -171,7 +171,7 @@ async def inject_user_context(request: Request, call_next):
     """
     from app.core.security import SECRET_KEY, ALGORITHM
     request.state.user = None
-    token = request.cookies.get("token")
+    token = request.cookies.get("access_token")
     if token:
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
