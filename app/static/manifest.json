@@ -11,15 +11,21 @@
   "lang": "es-PE",
   "icons": [
     {
-      "src": "/static/img/icon-192.png",
+      "src": "/static/img/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/img/favicon.svg",
       "sizes": "192x192",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/static/img/icon-512.png",
+      "src": "/static/img/favicon.svg",
       "sizes": "512x512",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],
@@ -31,14 +37,14 @@
       "short_name": "Inicio",
       "description": "Panel principal",
       "url": "/dashboard",
-      "icons": [{ "src": "/static/img/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/img/favicon.svg", "sizes": "any" }]
     },
     {
       "name": "Ser Pionero",
       "short_name": "Pioneros",
       "description": "Regístrate como pionero de alerta.pe",
       "url": "/pioneros",
-      "icons": [{ "src": "/static/img/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/img/favicon.svg", "sizes": "any" }]
     }
   ]
 }
