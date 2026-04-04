@@ -41,6 +41,19 @@
     gap: 8px;
 }
 
+/* Botón atrás */
+.cabecera__back {
+    color: var(--text-2);
+    font-size: 1.1rem;
+    padding: 4px 6px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s;
+    flex-shrink: 0;
+}
+.cabecera__back:hover { color: var(--text-1); }
+
 /* Logo */
 .cabecera__logo {
     display: flex;

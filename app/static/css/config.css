@@ -1,0 +1,338 @@
+/*
+ * config.css — Estilos del panel de configuracion (bottom sheet).
+ * Acordeon de secciones con campos de formulario.
+ */
+
+/* ── Progreso banner ──────────────────────────────────────── */
+.config-progreso {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+.config-progreso__icon {
+    font-size: 1.4rem;
+    color: var(--gold);
+}
+.config-progreso__text {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--text-2);
+}
+.config-progreso__text strong {
+    color: var(--text-1);
+    display: block;
+    margin-bottom: 6px;
+}
+.config-progreso__text small {
+    color: var(--text-3);
+    font-size: 0.75rem;
+}
+.config-progreso__bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 6px 0;
+    overflow: hidden;
+}
+.config-progreso__fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 2px;
+    transition: width 0.5s var(--ease);
+}
+
+/* ── Accordion ────────────────────────────────────────────── */
+.config-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.config-section {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.config-section.open {
+    border-color: var(--accent);
+}
+
+.config-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--bg-glass);
+    border: none;
+    color: var(--text-1);
+    font-size: 0.9rem;
+    font-weight: 500;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.config-section__header:hover {
+    background: var(--bg-mid);
+}
+.config-section__header i {
+    color: var(--text-3);
+    transition: transform 0.25s var(--ease);
+}
+.config-section.open .config-section__header i {
+    transform: rotate(180deg);
+}
+
+.config-section__body {
+    padding: 16px;
+    border-top: 1px solid var(--border);
+}
+
+/* ── Campos ───────────────────────────────────────────────── */
+.config-field {
+    margin-bottom: 14px;
+}
+.config-field label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-3);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.config-field input[type="text"],
+.config-field input[type="tel"],
+.config-field input[type="number"],
+.config-field input[type="password"],
+.config-field input[type="time"],
+.config-field select {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    color: var(--text-1);
+    font-size: 0.9rem;
+    font-family: var(--font-sans);
+    outline: none;
+    box-sizing: border-box;
+}
+.config-field input:focus,
+.config-field select:focus {
+    border-color: var(--accent);
+}
+.config-field small {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.72rem;
+    color: var(--text-3);
+}
+.config-field input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+}
+.config-field input[type="checkbox"] {
+    accent-color: var(--accent);
+    margin-right: 6px;
+}
+
+.config-hint {
+    font-size: 0.8rem;
+    color: var(--text-3);
+    margin-bottom: 12px;
+}
+
+.config-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.config-row input[type="time"] {
+    flex: 1;
+}
+.config-row span {
+    color: var(--text-3);
+    font-size: 0.8rem;
+}
+
+.config-input-prefix {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    overflow: hidden;
+}
+.config-input-prefix span {
+    padding: 10px 8px 10px 12px;
+    color: var(--text-3);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.config-input-prefix input {
+    border: none !important;
+    background: transparent !important;
+    padding-left: 0 !important;
+}
+
+/* ── Toggles (botones de seleccion) ───────────────────────── */
+.config-toggles {
+    display: flex;
+    gap: 6px;
+}
+.config-toggle {
+    flex: 1;
+    padding: 8px 10px;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    color: var(--text-2);
+    font-size: 0.82rem;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+.config-toggle:hover {
+    border-color: var(--accent);
+}
+.config-toggle.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 500;
+}
+
+/* ── Swatches (temas) ─────────────────────────────────────── */
+.config-swatches {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+.config-swatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px;
+    background: var(--bg-mid);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+.config-swatch:hover {
+    border-color: var(--text-3);
+}
+.config-swatch.active {
+    border-color: var(--accent);
+}
+.config-swatch__preview {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+}
+.config-swatch--dark .config-swatch__preview { background: #0e1526; }
+.config-swatch--semi .config-swatch__preview { background: #1a2035; }
+.config-swatch--feminine .config-swatch__preview { background: linear-gradient(135deg, #2d1f3d, #3d2040); }
+.config-swatch--classic .config-swatch__preview { background: linear-gradient(135deg, #1a1a2e, #16213e); }
+.config-swatch__label {
+    font-size: 0.68rem;
+    color: var(--text-3);
+}
+
+.config-preview {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.75rem;
+    color: var(--text-3);
+    font-style: italic;
+}
+
+/* ── Botones ──────────────────────────────────────────────── */
+.config-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: var(--radius-input);
+    font-size: 0.85rem;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+.config-btn--save {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    margin-top: 8px;
+}
+.config-btn--save:hover {
+    filter: brightness(1.1);
+}
+.config-btn--outline {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-2);
+}
+.config-btn--outline:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.config-btn--primary {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+}
+
+/* ── Empresa items en config ──────────────────────────────── */
+.config-empresa-item {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 6px;
+    overflow: hidden;
+}
+.config-empresa-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.config-empresa-header:hover {
+    background: var(--bg-mid);
+}
+.config-empresa-nombre {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--text-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.config-empresa-ruc {
+    font-size: 0.72rem;
+    color: var(--text-3);
+}
+.config-empresa-header i {
+    color: var(--text-3);
+    font-size: 0.8rem;
+}
+.config-empresa-body {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+}
+.config-empresa-progress {
+    margin-bottom: 10px;
+}
