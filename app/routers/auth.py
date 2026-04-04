@@ -158,7 +158,7 @@ def login(body: LoginRequest, request: Request, response: Response, db: Session 
         key="access_token",
         value=token,
         httponly=True,
-        secure=True,
+        secure=False,
         samesite="lax",
         max_age=28800,  # 8 horas
         path="/",
@@ -230,7 +230,7 @@ def cambiar_empresa(
         key="access_token",
         value=token,
         httponly=True,
-        secure=True,
+        secure=False,
         samesite="lax",
         max_age=28800,
         path="/",
@@ -527,7 +527,7 @@ def webauthn_login_finish(
         usuario.ultimo_acceso = datetime.now(timezone.utc)
         db.commit()
 
-        response.set_cookie(key="access_token", value=token, httponly=True, secure=True, samesite="lax", max_age=28800, path="/")
+        response.set_cookie(key="access_token", value=token, httponly=True, secure=False, samesite="lax", max_age=28800, path="/")
 
         return {"access_token": token, "token_type": "bearer"}
     except ImportError:
