@@ -218,7 +218,9 @@
                 <label for="clave">Clave</label>
                 <input type="password" id="clave" name="clave" minlength="8"
                        placeholder="Mínimo 8 caracteres" autocomplete="current-password" required>
-                <span class="input-icon"><i class="ph-lock"></i></span>
+                <span class="input-icon toggle-pass" onclick="togglePassword()" style="cursor:pointer">
+                    <i class="ph-eye" id="eye-icon"></i>
+                </span>
             </div>
 
             <button type="submit" class="login-btn" id="login-btn">
@@ -238,6 +240,19 @@
         <source src="/static/audio/successfinish-ui-sound.mp3" type="audio/mpeg">
     </audio>
 
+    <script>
+    function togglePassword() {
+        var input = document.getElementById('clave');
+        var icon = document.getElementById('eye-icon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'ph-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'ph-eye';
+        }
+    }
+    </script>
     <script src="/static/js/auth.js"></script>
     <script>
         // Generar partículas
