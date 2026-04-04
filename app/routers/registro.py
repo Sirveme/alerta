@@ -251,8 +251,13 @@ def registrar(
     token = create_access_token(token_data)
 
     response.set_cookie(
-        key="token", value=token, httponly=True, samesite="lax",
-        max_age=8 * 3600, secure=False,
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=28800,
+        path="/",
     )
 
     return {

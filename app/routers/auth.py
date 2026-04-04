@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -152,37 +153,39 @@ def login(body: LoginRequest, request: Request, response: Response, db: Session 
                          ip=request.client.host if request.client else None,
                          user_agent=request.headers.get("user-agent"))
 
-    # Setear cookie httponly para requests de templates
+    # Setear cookie httponly
     response.set_cookie(
-        key="token", value=token, httponly=True, samesite="lax",
-        max_age=8 * 3600, secure=False,  # secure=True en producción con HTTPS
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=28800,  # 8 horas
+        path="/",
     )
 
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": str(usuario.id),
-            "dni": usuario.dni,
-            "nombres": usuario.nombres,
-            "apellidos": usuario.apellidos,
-            "rol": usuario_tenant.rol.value,
-            "tenant_id": str(usuario_tenant.tenant_id),
-            "empresa_activa_id": empresa_activa_id,
-            "tema": config.tema.value if config else "semi",
-            "fuente_size": config.fuente_size.value if config else "md",
-        },
-    }
+    return RedirectResponse(url="/dashboard", status_code=303)
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response, current_user: Usuario = Depends(get_current_user)):
+def logout(request: Request, response: Response):
     """Invalida el token actual (blacklist en memoria)."""
-    token = request.cookies.get("token") or request.headers.get("authorization", "").replace("Bearer ", "")
+    token = request.cookies.get("access_token") or request.headers.get("authorization", "").replace("Bearer ", "")
     if token:
         _token_blacklist.add(token)
-    response.delete_cookie("token")
-    return {"detail": "Sesión cerrada"}
+    response.delete_cookie("access_token", path="/")
+    return RedirectResponse(url="/login", status_code=303)
+
+
+@router.get("/logout")
+def logout_get(request: Request):
+    """GET /auth/logout — limpiar cookie y redirigir a login."""
+    response = RedirectResponse(url="/login", status_code=302)
+    token = request.cookies.get("access_token")
+    if token:
+        _token_blacklist.add(token)
+    response.delete_cookie("access_token", path="/")
+    return response
 
 
 @router.post("/cambiar-empresa")
@@ -224,8 +227,13 @@ def cambiar_empresa(
     token = create_access_token(new_payload)
 
     response.set_cookie(
-        key="token", value=token, httponly=True, samesite="lax",
-        max_age=8 * 3600, secure=False,
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=28800,
+        path="/",
     )
 
     # Auditoría
@@ -519,7 +527,7 @@ def webauthn_login_finish(
         usuario.ultimo_acceso = datetime.now(timezone.utc)
         db.commit()
 
-        response.set_cookie(key="token", value=token, httponly=True, samesite="lax", max_age=8*3600)
+        response.set_cookie(key="access_token", value=token, httponly=True, secure=True, samesite="lax", max_age=28800, path="/")
 
         return {"access_token": token, "token_type": "bearer"}
     except ImportError:
