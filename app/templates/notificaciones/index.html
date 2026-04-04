@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Notificaciones — alerta.pe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/tablas.css">
+<style>
+    .notif-form { max-width: 700px; }
+    .notif-section { margin-bottom: 24px; }
+    .notif-section__title { font-size: 0.82rem; font-weight: 600; color: var(--text-3); text-transform: uppercase; margin-bottom: 10px; }
+    .notif-plantillas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .notif-plantilla {
+        padding: 8px 14px; background: var(--bg-mid); border: 1px solid var(--border);
+        border-radius: var(--radius-input); color: var(--text-2); font-size: 0.82rem;
+        cursor: pointer; transition: all 0.15s;
+    }
+    .notif-plantilla:hover { border-color: var(--accent); color: var(--accent); }
+    .notif-plantilla.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .notif-textarea {
+        width: 100%; min-height: 120px; padding: 12px; background: var(--bg-mid);
+        border: 1px solid var(--border); border-radius: var(--radius-input); color: var(--text-1);
+        font-size: 0.9rem; font-family: var(--font-sans); resize: vertical; outline: none;
+        box-sizing: border-box;
+    }
+    .notif-textarea:focus { border-color: var(--accent); }
+    .notif-radios label {
+        display: flex; align-items: center; gap: 8px; padding: 8px 0;
+        font-size: 0.88rem; color: var(--text-2); cursor: pointer;
+    }
+    .notif-radios input[type="radio"] { accent-color: var(--accent); }
+    .notif-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="padding:20px 16px;max-width:900px;margin:0 auto">
+    <div class="page-header">
+        <h1 class="page-header__title">Central de Notificaciones</h1>
+    </div>
+
+    <div class="notif-form">
+        <!-- Destinatarios -->
+        <div class="notif-section">
+            <div class="notif-section__title">Destinatarios</div>
+            <div class="notif-radios">
+                <label><input type="radio" name="dest" value="todos" checked> Todos mis clientes</label>
+                <label><input type="radio" name="dest" value="urgentes"> Solo con alertas urgentes</label>
+                <label><input type="radio" name="dest" value="manual"> Seleccion manual</label>
+            </div>
+        </div>
+
+        <!-- Plantillas -->
+        <div class="notif-section">
+            <div class="notif-section__title">Mensaje</div>
+            <div class="notif-plantillas">
+                <button class="notif-plantilla" data-text="DJ presentada ante SUNAT dentro del plazo. Sin observaciones.">DJ presentada</button>
+                <button class="notif-plantilla" data-text="Recordatorio: el vencimiento de su declaracion es el proximo dia 12. Favor confirmar si necesita asistencia.">Vencimiento</button>
+                <button class="notif-plantilla" data-text="IMPORTANTE: Se ha detectado una observacion en su declaracion. Contactenos a la brevedad.">Fraccionamiento</button>
+                <button class="notif-plantilla" data-text="">Personalizado</button>
+            </div>
+            <textarea class="notif-textarea" id="notif-mensaje" placeholder="Escribe tu mensaje..."></textarea>
+        </div>
+
+        <!-- Canal -->
+        <div class="notif-section">
+            <div class="notif-section__title">Canal de envio</div>
+            <div style="display:flex;gap:8px">
+                <select id="notif-canal" style="padding:8px 12px;background:var(--bg-mid);border:1px solid var(--border);border-radius:var(--radius-input);color:var(--text-1);font-size:0.85rem">
+                    <option value="push">Push</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="ambos">Ambos</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="notif-actions">
+            <button class="btn btn--primary" onclick="enviarNotif()"><i class="ph-paper-plane-tilt"></i> Enviar ahora</button>
+            <button class="btn"><i class="ph-eye"></i> Vista previa</button>
+            <button class="btn"><i class="ph-floppy-disk"></i> Guardar borrador</button>
+        </div>
+    </div>
+
+    <!-- Historial -->
+    <div style="margin-top:40px">
+        <h2 style="font-size:0.82rem;font-weight:600;color:var(--text-3);text-transform:uppercase;margin-bottom:12px">Historial de envios</h2>
+        <div id="notif-historial" style="color:var(--text-3);font-size:0.88rem">
+            Sin envios recientes
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Plantillas
+document.querySelectorAll('.notif-plantilla').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.notif-plantilla').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const text = btn.dataset.text;
+        if (text) document.getElementById('notif-mensaje').value = text;
+    });
+});
+
+async function enviarNotif() {
+    const mensaje = document.getElementById('notif-mensaje').value;
+    if (!mensaje.trim()) { if (typeof showToast === 'function') showToast('Escribe un mensaje'); return; }
+    const canal = document.getElementById('notif-canal').value;
+    try {
+        const res = await fetch('/notificaciones-central/enviar', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({destinatarios: [], mensaje, canal}),
+        });
+        const data = await res.json();
+        if (typeof showToast === 'function') showToast(data.mensaje || 'Enviado');
+    } catch { if (typeof showToast === 'function') showToast('Error de conexion'); }
+}
+</script>
+{% endblock %}

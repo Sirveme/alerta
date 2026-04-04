@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Ventas — alerta.pe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/tablas.css">
+{% endblock %}
+
+{% block content %}
+<div style="padding:20px 16px;max-width:1100px;margin:0 auto">
+    <div class="page-header">
+        <div>
+            <h1 class="page-header__title">Ventas</h1>
+            <span class="page-header__empresa" id="ventas-empresa"></span>
+        </div>
+        <div class="page-header__actions">
+            <a href="/ventas/nueva" class="btn btn--primary"><i class="ph-plus"></i> Nuevo</a>
+            <a href="/subir-foto" class="btn"><i class="ph-camera"></i> Foto</a>
+            <button class="btn" onclick="voz.activar()"><i class="ph-microphone"></i> Voz</button>
+        </div>
+    </div>
+
+    <div class="tabla-filtros" id="ventas-filtros">
+        <select id="f-mes">
+            <option value="">Mes actual</option>
+        </select>
+        <select id="f-tipo-v">
+            <option value="">Todos los tipos</option>
+            <option value="factura">Factura</option>
+            <option value="boleta">Boleta</option>
+            <option value="nota_credito">Nota de Credito</option>
+            <option value="nota_debito">Nota de Debito</option>
+        </select>
+        <select id="f-estado-v">
+            <option value="">Todos los estados</option>
+            <option value="validado">Validado</option>
+            <option value="observado">Observado</option>
+            <option value="pendiente">Pendiente</option>
+        </select>
+        <input type="search" id="f-buscar-v" placeholder="Buscar RUC o nombre...">
+    </div>
+
+    <div id="ventas-tabla">
+        <table class="tabla-moderna">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Serie-Numero</th>
+                    <th>Cliente</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="ventas-tbody">
+                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)">Cargando comprobantes...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="tabla-totales" id="ventas-totales" style="display:none">
+        <div class="tabla-totales__item">
+            <span class="tabla-totales__label">Facturado</span>
+            <span class="tabla-totales__valor" id="vt-facturado">S/ 0.00</span>
+        </div>
+        <div class="tabla-totales__item">
+            <span class="tabla-totales__label">IGV</span>
+            <span class="tabla-totales__valor" id="vt-igv">S/ 0.00</span>
+        </div>
+    </div>
+
+    <div class="tabla-paginacion" id="ventas-pag" style="display:none">
+        <span id="ventas-pag-info"></span>
+        <div class="tabla-paginacion__btns">
+            <button id="ventas-prev" disabled>&laquo; Anterior</button>
+            <button id="ventas-next">Siguiente &raquo;</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let ventasPage = 1;
+const ESTADO_MAP = {
+    validado: '<span class="estado-badge estado-valido">Valido</span>',
+    observado: '<span class="estado-badge estado-observado">Observado</span>',
+    pendiente: '<span class="estado-badge estado-pendiente">Pendiente</span>',
+    rechazado_sunat: '<span class="estado-badge estado-bloqueado">Rechazado</span>',
+    anulado: '<span class="estado-badge estado-bloqueado">Anulado</span>',
+    duplicado: '<span class="estado-badge estado-duplicado">Duplicado</span>',
+};
+const TIPO_MAP = {factura:'FAC', boleta:'BOL', nota_credito:'NC', nota_debito:'ND', guia_remision:'GR', liquidacion:'LIQ'};
+
+async function cargarVentas(page) {
+    ventasPage = page || 1;
+    const tbody = document.getElementById('ventas-tbody');
+    try {
+        const params = new URLSearchParams({page: ventasPage, limit: 20});
+        const tipo = document.getElementById('f-tipo-v')?.value;
+        const estado = document.getElementById('f-estado-v')?.value;
+        if (tipo) params.set('tipo', tipo);
+        if (estado) params.set('estado', estado);
+
+        const res = await fetch('/comprobantes/?' + params);
+        if (!res.ok) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3)">Sin datos</td></tr>'; return; }
+        const data = await res.json();
+
+        if (!data.items || data.items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3)"><i class="ph-check-circle" style="font-size:1.5rem;display:block;margin-bottom:8px"></i>Sin comprobantes de venta</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.items.map(c => {
+            const esNC = c.tipo === 'nota_credito';
+            return `<tr>
+                <td data-label="Fecha">${c.fecha_emision || ''}</td>
+                <td data-label="Tipo">${TIPO_MAP[c.tipo] || c.tipo}</td>
+                <td data-label="Serie-Num">${c.serie}-${c.correlativo}</td>
+                <td data-label="Cliente">${c.razon_social_receptor || c.ruc_receptor || ''}</td>
+                <td data-label="Total" class="monto ${esNC ? 'negativo' : ''}">S/ ${Number(c.total).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
+                <td data-label="Estado">${ESTADO_MAP[c.estado] || c.estado}</td>
+                <td data-label="Acciones"><div class="tabla-acciones"><button title="Ver"><i class="ph-eye"></i></button></div></td>
+            </tr>`;
+        }).join('');
+
+        // Totales y paginacion
+        document.getElementById('ventas-totales').style.display = 'flex';
+        document.getElementById('ventas-pag').style.display = 'flex';
+        document.getElementById('ventas-pag-info').textContent = `Pagina ${data.page} de ${Math.ceil((data.total||1)/20)}`;
+        document.getElementById('ventas-prev').disabled = ventasPage <= 1;
+        document.getElementById('ventas-next').disabled = data.items.length < 20;
+    } catch { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red)">Error de conexion</td></tr>'; }
+}
+
+document.getElementById('ventas-prev')?.addEventListener('click', () => cargarVentas(ventasPage - 1));
+document.getElementById('ventas-next')?.addEventListener('click', () => cargarVentas(ventasPage + 1));
+document.getElementById('f-tipo-v')?.addEventListener('change', () => cargarVentas(1));
+document.getElementById('f-estado-v')?.addEventListener('change', () => cargarVentas(1));
+
+cargarVentas(1);
+</script>
+{% endblock %}

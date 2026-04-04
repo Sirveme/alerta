@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Comparativo — alerta.pe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/tablas.css">
+<style>
+    .comp-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    @media (max-width: 600px) { .comp-grid { grid-template-columns: 1fr; } }
+    .comp-card { background: var(--bg-glass); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .comp-card__label { font-size: 0.72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .comp-card__valor { font-family: var(--font-serif); font-size: 1.5rem; font-weight: 700; color: var(--text-1); }
+    .comp-card__sub { font-size: 0.78rem; color: var(--text-3); margin-top: 4px; }
+    .comp-diff { font-size: 0.82rem; font-weight: 600; }
+    .comp-diff--ok { color: var(--green); }
+    .comp-diff--warn { color: var(--gold); }
+    .comp-diff--error { color: var(--red); }
+    .comp-section { margin-bottom: 24px; }
+    .comp-section__title { font-size: 0.82rem; font-weight: 600; color: var(--text-3); text-transform: uppercase; margin-bottom: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="padding:20px 16px;max-width:900px;margin:0 auto">
+    <div class="page-header">
+        <div>
+            <h1 class="page-header__title">Comparativo Mensual</h1>
+            <span class="page-header__empresa" id="comp-periodo"></span>
+        </div>
+        <div class="page-header__actions">
+            <select id="comp-mes" class="btn" style="background:var(--bg-mid);color:var(--text-1)">
+                <option value="">Mes actual</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- KPIs comparativo -->
+    <div class="comp-grid">
+        <div class="comp-card">
+            <div class="comp-card__label">Sistema</div>
+            <div class="comp-card__valor" id="comp-sistema-total">S/ --</div>
+            <div class="comp-card__sub" id="comp-sistema-n">-- comprobantes</div>
+        </div>
+        <div class="comp-card">
+            <div class="comp-card__label">SIRE SUNAT</div>
+            <div class="comp-card__valor" id="comp-sire-total">S/ --</div>
+            <div class="comp-card__sub" id="comp-sire-n">Pendiente sincronizar</div>
+        </div>
+        <div class="comp-card">
+            <div class="comp-card__label">Diferencia</div>
+            <div class="comp-card__valor comp-diff" id="comp-diff">--</div>
+            <div class="comp-card__sub" id="comp-diff-n"></div>
+        </div>
+    </div>
+
+    <!-- Pagos recibidos -->
+    <div class="comp-section">
+        <div class="comp-section__title">Pagos recibidos</div>
+        <div class="comp-card">
+            <div class="comp-card__valor" id="comp-pagos-total">S/ --</div>
+        </div>
+    </div>
+
+    <!-- Faltantes -->
+    <div class="comp-section" id="comp-faltantes-sec" style="display:none">
+        <div class="comp-section__title">Faltantes en SIRE</div>
+        <div id="comp-faltantes"></div>
+    </div>
+
+    <div class="page-header__actions" style="margin-top:20px">
+        <button class="btn"><i class="ph-download-simple"></i> Descargar PLE</button>
+        <button class="btn"><i class="ph-arrows-clockwise"></i> Reemplazar propuesta SIRE</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function cargarComparativo() {
+    const empresaId = '{{ user.empresa_activa_id if user and user.empresa_activa_id else "" }}';
+    if (!empresaId) return;
+    const ahora = new Date();
+    const periodo = `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}`;
+    document.getElementById('comp-periodo').textContent = periodo;
+
+    try {
+        const res = await fetch(`/comparativo/datos/${empresaId}/${periodo}`);
+        if (!res.ok) return;
+        const d = await res.json();
+
+        document.getElementById('comp-sistema-total').textContent = `S/ ${Number(d.sistema.total).toLocaleString('es-PE',{minimumFractionDigits:2})}`;
+        document.getElementById('comp-sistema-n').textContent = `${d.sistema.comprobantes} comprobantes`;
+        document.getElementById('comp-sire-total').textContent = d.sire.total ? `S/ ${Number(d.sire.total).toLocaleString('es-PE',{minimumFractionDigits:2})}` : '--';
+        document.getElementById('comp-sire-n').textContent = d.sire.nota || `${d.sire.comprobantes} comprobantes`;
+        document.getElementById('comp-pagos-total').textContent = `S/ ${Number(d.pagos.total).toLocaleString('es-PE',{minimumFractionDigits:2})}`;
+
+        const diff = d.sistema.total - (d.sire.total || 0);
+        const diffEl = document.getElementById('comp-diff');
+        diffEl.textContent = `S/ ${Math.abs(diff).toLocaleString('es-PE',{minimumFractionDigits:2})}`;
+        diffEl.className = 'comp-card__valor comp-diff ' + (diff === 0 ? 'comp-diff--ok' : 'comp-diff--warn');
+    } catch {}
+}
+cargarComparativo();
+</script>
+{% endblock %}

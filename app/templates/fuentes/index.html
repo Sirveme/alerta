@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Fuentes de Datos — alerta.pe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/tablas.css">
+{% endblock %}
+
+{% block content %}
+<div style="padding:20px 16px;max-width:900px;margin:0 auto">
+    <div class="page-header">
+        <h1 class="page-header__title">Fuentes de Datos</h1>
+    </div>
+
+    <!-- SUNAT -->
+    <div class="fuente-card">
+        <div class="fuente-card__header">
+            <span class="fuente-card__title"><i class="ph-bank"></i> SUNAT</span>
+            <span class="fuente-card__status" style="color:var(--green)"><i class="ph-circle-fill" style="font-size:8px"></i> Conectado</span>
+        </div>
+        <div class="fuente-card__row">
+            <span>SIRE Ventas</span>
+            <span style="color:var(--text-3);font-size:0.78rem">Ultimo: pendiente</span>
+        </div>
+        <div class="fuente-card__row">
+            <span>SIRE Compras</span>
+            <span style="color:var(--text-3);font-size:0.78rem">Ultimo: pendiente</span>
+        </div>
+        <div class="fuente-card__row">
+            <span>Buzon SOL</span>
+            <span style="color:var(--text-3);font-size:0.78rem">Ultimo: pendiente</span>
+        </div>
+        <div class="fuente-card__row">
+            <span>Propuesta SIRE</span>
+            <span style="color:var(--gold);font-size:0.78rem">Pendiente</span>
+        </div>
+        <div class="fuente-card__actions">
+            <button class="btn" onclick="actualizarSunat()"><i class="ph-arrows-clockwise"></i> Actualizar SIRE</button>
+        </div>
+    </div>
+
+    <!-- Correos Bancarios -->
+    <div class="fuente-card">
+        <div class="fuente-card__header">
+            <span class="fuente-card__title"><i class="ph-envelope-simple"></i> Correos Bancarios</span>
+            <span class="fuente-card__status" style="color:var(--gold)"><i class="ph-circle-fill" style="font-size:8px"></i> Pendiente</span>
+        </div>
+        <div class="fuente-card__row"><span>Yape</span><span style="color:var(--text-3);font-size:0.78rem">Sin configurar</span></div>
+        <div class="fuente-card__row"><span>Plin</span><span style="color:var(--text-3);font-size:0.78rem">Sin configurar</span></div>
+        <div class="fuente-card__row"><span>BCP</span><span style="color:var(--text-3);font-size:0.78rem">Sin configurar</span></div>
+        <div class="fuente-card__row"><span>BBVA</span><span style="color:var(--text-3);font-size:0.78rem">Sin configurar</span></div>
+        <div class="fuente-card__row"><span>Interbank</span><span style="color:var(--text-3);font-size:0.78rem">Sin configurar</span></div>
+        <div class="fuente-card__row"><span>Scotiabank</span><span style="color:var(--text-3);font-size:0.78rem">Sin configurar</span></div>
+        <div class="fuente-card__row"><span>Banco de la Nacion</span><span style="color:var(--text-3);font-size:0.78rem">Sin configurar</span></div>
+        <div class="fuente-card__actions">
+            <button class="btn" onclick="procesarCorreos()"><i class="ph-paper-plane-tilt"></i> Procesar correos ahora</button>
+            <button class="btn"><i class="ph-queue"></i> Ver cola</button>
+        </div>
+    </div>
+
+    <!-- Gastos sin CE -->
+    <div class="fuente-card">
+        <div class="fuente-card__header">
+            <span class="fuente-card__title"><i class="ph-buildings"></i> Empresa — Gastos sin CE</span>
+            <span class="fuente-card__status" style="color:var(--green)"><i class="ph-circle-fill" style="font-size:8px"></i> Activo</span>
+        </div>
+        <div class="fuente-card__row"><span>Planillas / Remuneraciones</span><span style="font-size:0.78rem">0 registros</span></div>
+        <div class="fuente-card__row"><span>Alquileres</span><span style="font-size:0.78rem">0 registros</span></div>
+        <div class="fuente-card__row"><span>Servicios basicos</span><span style="font-size:0.78rem">0 registros</span></div>
+        <div class="fuente-card__row"><span>Otros egresos</span><span style="font-size:0.78rem">0 registros</span></div>
+    </div>
+
+    <!-- Tipo de Cambio -->
+    <div class="fuente-card">
+        <div class="fuente-card__header">
+            <span class="fuente-card__title"><i class="ph-currency-dollar-simple"></i> BCRP — Tipo de Cambio</span>
+            <span class="fuente-card__status" style="color:var(--green)"><i class="ph-circle-fill" style="font-size:8px"></i> Actualizado</span>
+        </div>
+        <div class="fuente-card__row">
+            <span>Hoy</span>
+            <span style="font-size:0.85rem;font-weight:600">Compra S/ 3.72 | Venta S/ 3.75</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function actualizarSunat() {
+    try {
+        const res = await fetch('/fuentes/sunat/actualizar', {method:'POST'});
+        const data = await res.json();
+        if (typeof showToast === 'function') showToast(data.mensaje || 'Sincronizacion iniciada');
+    } catch { if (typeof showToast === 'function') showToast('Error de conexion'); }
+}
+async function procesarCorreos() {
+    try {
+        const res = await fetch('/fuentes/correos/procesar', {method:'POST'});
+        const data = await res.json();
+        if (typeof showToast === 'function') showToast(data.mensaje || 'Procesamiento iniciado');
+    } catch { if (typeof showToast === 'function') showToast('Error de conexion'); }
+}
+</script>
+{% endblock %}

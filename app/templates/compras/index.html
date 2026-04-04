@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Compras — alerta.pe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/tablas.css">
+{% endblock %}
+
+{% block content %}
+<div style="padding:20px 16px;max-width:1100px;margin:0 auto">
+    <div class="page-header">
+        <div>
+            <h1 class="page-header__title">Compras</h1>
+            <span class="page-header__empresa" id="compras-empresa"></span>
+        </div>
+        <div class="page-header__actions">
+            <a href="/compras/nueva" class="btn btn--primary"><i class="ph-plus"></i> Nuevo</a>
+            <a href="/subir-foto" class="btn"><i class="ph-camera"></i> Foto</a>
+        </div>
+    </div>
+
+    <div class="tabla-filtros">
+        <select id="f-tipo-c">
+            <option value="">Todos los tipos</option>
+            <option value="factura">Factura</option>
+            <option value="boleta">Boleta</option>
+            <option value="nota_credito">Nota de Credito</option>
+        </select>
+        <select id="f-estado-c">
+            <option value="">Todos los estados</option>
+            <option value="validado">Validado</option>
+            <option value="observado">Observado</option>
+            <option value="rechazado_sunat">Bloqueado</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.82rem;color:var(--text-2);cursor:pointer">
+            <input type="checkbox" id="f-solo-errores" style="accent-color:var(--red)"> Solo con errores
+        </label>
+        <input type="search" id="f-buscar-c" placeholder="Buscar RUC o proveedor...">
+    </div>
+
+    <div id="compras-tabla">
+        <table class="tabla-moderna">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Serie-Numero</th>
+                    <th>Proveedor</th>
+                    <th>Total</th>
+                    <th>Fiabilidad</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="compras-tbody">
+                <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)">Cargando comprobantes...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="tabla-paginacion" id="compras-pag" style="display:none">
+        <span id="compras-pag-info"></span>
+        <div class="tabla-paginacion__btns">
+            <button id="compras-prev" disabled>&laquo; Anterior</button>
+            <button id="compras-next">Siguiente &raquo;</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let comprasPage = 1;
+const ESTADO_C = {
+    validado: '<span class="estado-badge estado-valido">Valido</span>',
+    observado: '<span class="estado-badge estado-observado">Observado</span>',
+    pendiente: '<span class="estado-badge estado-pendiente">Pendiente</span>',
+    rechazado_sunat: '<span class="estado-badge estado-bloqueado">Bloqueado</span>',
+    duplicado: '<span class="estado-badge estado-duplicado">Duplicado</span>',
+};
+
+async function cargarCompras(page) {
+    comprasPage = page || 1;
+    const tbody = document.getElementById('compras-tbody');
+    try {
+        const params = new URLSearchParams({page: comprasPage, limit: 20});
+        const tipo = document.getElementById('f-tipo-c')?.value;
+        const estado = document.getElementById('f-estado-c')?.value;
+        if (tipo) params.set('tipo', tipo);
+        if (estado) params.set('estado', estado);
+
+        const res = await fetch('/comprobantes/?' + params);
+        if (!res.ok) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3)">Sin datos</td></tr>'; return; }
+        const data = await res.json();
+
+        if (!data.items || data.items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3)">Sin comprobantes de compra</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.items.map(c => {
+            const esNC = c.tipo === 'nota_credito';
+            return `<tr>
+                <td data-label="Fecha">${c.fecha_emision || ''}</td>
+                <td data-label="Tipo">${c.tipo === 'factura' ? 'FAC' : c.tipo === 'boleta' ? 'BOL' : c.tipo === 'nota_credito' ? 'NC' : c.tipo}</td>
+                <td data-label="Serie-Num">${c.serie}-${c.correlativo}</td>
+                <td data-label="Proveedor">${c.razon_social_emisor || c.ruc_emisor || ''}</td>
+                <td data-label="Total" class="monto ${esNC ? 'negativo' : ''}">S/ ${Number(c.total).toLocaleString('es-PE', {minimumFractionDigits:2})}</td>
+                <td data-label="Fiabilidad"><span class="fiabilidad fiabilidad--alta">--</span></td>
+                <td data-label="Estado">${ESTADO_C[c.estado] || c.estado}</td>
+                <td data-label="Acciones"><div class="tabla-acciones"><button title="Ver"><i class="ph-eye"></i></button></div></td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('compras-pag').style.display = 'flex';
+        document.getElementById('compras-pag-info').textContent = `Pagina ${data.page} de ${Math.ceil((data.total||1)/20)}`;
+        document.getElementById('compras-prev').disabled = comprasPage <= 1;
+        document.getElementById('compras-next').disabled = data.items.length < 20;
+    } catch { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red)">Error de conexion</td></tr>'; }
+}
+
+document.getElementById('compras-prev')?.addEventListener('click', () => cargarCompras(comprasPage - 1));
+document.getElementById('compras-next')?.addEventListener('click', () => cargarCompras(comprasPage + 1));
+document.getElementById('f-tipo-c')?.addEventListener('change', () => cargarCompras(1));
+document.getElementById('f-estado-c')?.addEventListener('change', () => cargarCompras(1));
+
+cargarCompras(1);
+</script>
+{% endblock %}

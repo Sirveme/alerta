@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Directorio — alerta.pe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/tablas.css">
+{% endblock %}
+
+{% block content %}
+<div style="padding:20px 16px;max-width:1100px;margin:0 auto">
+    <div class="page-header">
+        <h1 class="page-header__title">Directorio de Proveedores</h1>
+    </div>
+
+    <div class="tabla-filtros">
+        <input type="search" id="dir-buscar" placeholder="Buscar por RUC o razon social..." style="flex:1;min-width:250px">
+    </div>
+
+    <table class="tabla-moderna">
+        <thead>
+            <tr>
+                <th>RUC</th>
+                <th>Razon Social</th>
+                <th>Estado</th>
+                <th>CEs</th>
+                <th>Fiabilidad</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="dir-tbody">
+            <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-3)">Busca un RUC o nombre para comenzar</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let dirTimeout;
+document.getElementById('dir-buscar')?.addEventListener('input', (e) => {
+    clearTimeout(dirTimeout);
+    dirTimeout = setTimeout(() => buscarDirectorio(e.target.value), 400);
+});
+
+async function buscarDirectorio(q) {
+    const tbody = document.getElementById('dir-tbody');
+    if (!q || q.length < 3) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-3)">Ingresa al menos 3 caracteres</td></tr>';
+        return;
+    }
+
+    // Si es RUC (11 digitos), buscar directo
+    if (/^\d{11}$/.test(q)) {
+        try {
+            const res = await fetch(`/api/directorio/buscar-ruc/${q}`);
+            if (!res.ok) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3)">No encontrado</td></tr>'; return; }
+            const d = await res.json();
+            const fiab = d.fiabilidad_pct;
+            const fiabClass = fiab === null ? '' : fiab > 80 ? 'fiabilidad--alta' : fiab > 60 ? 'fiabilidad--media' : 'fiabilidad--baja';
+            const fiabIcon = fiab === null ? '--' : fiab > 80 ? '&#x1F7E2;' : fiab > 60 ? '&#x1F7E1;' : '&#x1F534;';
+            tbody.innerHTML = `<tr>
+                <td data-label="RUC">${d.ruc}</td>
+                <td data-label="Razon Social">${d.razon_social || 'Sin datos'}</td>
+                <td data-label="Estado"><span class="estado-badge ${d.estado_sunat === 'ACTIVO' ? 'estado-valido' : 'estado-observado'}">${d.estado_sunat || '--'}</span></td>
+                <td data-label="CEs">${d.total_comprobantes || 0}</td>
+                <td data-label="Fiabilidad"><span class="fiabilidad ${fiabClass}">${fiab !== null && fiab !== undefined ? fiab + '%' : '--'} ${fiabIcon}</span></td>
+                <td data-label="Acciones"><div class="tabla-acciones"><button title="Ver historial"><i class="ph-eye"></i></button></div></td>
+            </tr>`;
+        } catch { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">Error de conexion</td></tr>'; }
+    } else {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-3)">Ingresa un RUC completo (11 digitos) para buscar</td></tr>';
+    }
+}
+</script>
+{% endblock %}
