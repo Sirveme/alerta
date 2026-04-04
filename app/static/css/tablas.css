@@ -1,0 +1,311 @@
+/*
+ * tablas.css — Estilos de tablas modernas (no Excel).
+ * Filas con hover sutil, montos alineados, badges de estado,
+ * responsive: colapsa a cards en movil.
+ */
+
+.tabla-moderna {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.tabla-moderna thead th {
+    background: var(--bg-mid);
+    color: var(--text-3);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.tabla-moderna thead th:hover { color: var(--text-1); }
+.tabla-moderna thead th .sort-icon {
+    font-size: 0.65rem;
+    margin-left: 3px;
+    opacity: 0.4;
+}
+.tabla-moderna thead th.sorted .sort-icon { opacity: 1; color: var(--accent); }
+
+.tabla-moderna tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+}
+.tabla-moderna tbody tr:hover {
+    background: var(--bg-glass);
+}
+/* Cebra muy sutil */
+.tabla-moderna tbody tr:nth-child(even) {
+    background: rgba(255,255,255,0.015);
+}
+.tabla-moderna tbody tr:nth-child(even):hover {
+    background: var(--bg-glass);
+}
+
+.tabla-moderna td {
+    padding: 11px 14px;
+    color: var(--text-2);
+    vertical-align: middle;
+}
+
+/* Columna monto */
+.tabla-moderna td.monto {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--text-1);
+    white-space: nowrap;
+}
+.tabla-moderna td.monto.negativo { color: var(--red); }
+.tabla-moderna td.monto.positivo { color: var(--green); }
+
+/* Badge de estado */
+.estado-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 100px;
+    white-space: nowrap;
+}
+.estado-valido     { background: rgba(46,204,113,0.12); color: var(--green); }
+.estado-observado  { background: rgba(212,160,18,0.12); color: var(--gold); }
+.estado-bloqueado  { background: rgba(217,30,24,0.12);  color: var(--red); }
+.estado-correccion { background: rgba(52,152,219,0.12); color: var(--blue, #3498db); }
+.estado-duplicado  { background: rgba(155,89,182,0.12); color: #9b59b6; }
+.estado-pendiente  { background: rgba(149,165,166,0.12); color: var(--text-3); }
+
+/* Fiabilidad */
+.fiabilidad { font-weight: 600; font-size: 0.82rem; }
+.fiabilidad--alta { color: var(--green); }
+.fiabilidad--media { color: var(--gold); }
+.fiabilidad--baja { color: var(--red); }
+
+/* Acciones en tabla */
+.tabla-acciones {
+    display: flex;
+    gap: 6px;
+}
+.tabla-acciones button,
+.tabla-acciones a {
+    padding: 4px 6px;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    color: var(--text-3);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+.tabla-acciones button:hover,
+.tabla-acciones a:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Paginacion */
+.tabla-paginacion {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    font-size: 0.8rem;
+    color: var(--text-3);
+}
+.tabla-paginacion__btns {
+    display: flex;
+    gap: 4px;
+}
+.tabla-paginacion__btns button {
+    padding: 6px 12px;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    color: var(--text-2);
+    cursor: pointer;
+    font-size: 0.78rem;
+}
+.tabla-paginacion__btns button:hover { border-color: var(--accent); }
+.tabla-paginacion__btns button:disabled { opacity: 0.4; cursor: default; }
+
+/* Filtros */
+.tabla-filtros {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+.tabla-filtros select,
+.tabla-filtros input {
+    padding: 8px 12px;
+    background: var(--bg-mid);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-input);
+    color: var(--text-1);
+    font-size: 0.82rem;
+    font-family: var(--font-sans);
+    outline: none;
+}
+.tabla-filtros select:focus,
+.tabla-filtros input:focus { border-color: var(--accent); }
+
+/* Totales */
+.tabla-totales {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 14px 0;
+    border-top: 2px solid var(--border);
+    margin-top: 8px;
+}
+.tabla-totales__item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.tabla-totales__label {
+    font-size: 0.7rem;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.tabla-totales__valor {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-1);
+}
+
+/* Responsive: tabla a cards en movil */
+@media (max-width: 767px) {
+    .tabla-moderna thead { display: none; }
+    .tabla-moderna,
+    .tabla-moderna tbody,
+    .tabla-moderna tr,
+    .tabla-moderna td {
+        display: block;
+    }
+    .tabla-moderna tr {
+        background: var(--bg-glass);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px;
+        margin-bottom: 8px;
+    }
+    .tabla-moderna td {
+        padding: 4px 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .tabla-moderna td::before {
+        content: attr(data-label);
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-3);
+        text-transform: uppercase;
+    }
+    .tabla-moderna td.monto { text-align: left; }
+}
+
+/* Header de pagina */
+.page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.page-header__title {
+    font-family: var(--font-serif);
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--text-1);
+}
+.page-header__empresa {
+    font-size: 0.8rem;
+    color: var(--text-3);
+}
+.page-header__actions {
+    display: flex;
+    gap: 8px;
+}
+.page-header__actions .btn {
+    padding: 8px 14px;
+    border-radius: var(--radius-input);
+    font-size: 0.82rem;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-mid);
+    color: var(--text-2);
+    text-decoration: none;
+}
+.page-header__actions .btn:hover { border-color: var(--accent); color: var(--accent); }
+.page-header__actions .btn--primary {
+    background: var(--red);
+    color: #fff;
+    border-color: var(--red);
+}
+.page-header__actions .btn--primary:hover { background: #c41a15; color: #fff; }
+
+/* Panel fuente de datos */
+.fuente-card {
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.fuente-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+.fuente-card__title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.fuente-card__status {
+    font-size: 0.75rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.fuente-card__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.84rem;
+    color: var(--text-2);
+}
+.fuente-card__row:last-child { border-bottom: none; }
+.fuente-card__actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+}

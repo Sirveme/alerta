@@ -1,0 +1,208 @@
+/*
+ * sidebar.css — Layout desktop con sidebar fija + bottom nav movil.
+ *
+ * Desktop (>768px): grid 240px sidebar + contenido scrollable.
+ * Movil (<768px): cabecera sticky + contenido + bottom tab bar.
+ */
+
+/* ── Layout wrapper ───────────────────────────────────────── */
+.layout {
+    min-height: 100dvh;
+}
+
+/* ── Desktop: sidebar + contenido ─────────────────────────── */
+@media (min-width: 768px) {
+    .layout {
+        display: grid;
+        grid-template-columns: 240px 1fr;
+    }
+
+    .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100dvh;
+        overflow-y: auto;
+        background: var(--bg-mid);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        padding: 1.2rem 0;
+    }
+
+    .main-content {
+        overflow-y: auto;
+        height: 100dvh;
+    }
+
+    /* Ocultar cabecera mobile y bottom nav en desktop */
+    .cabecera { display: none !important; }
+    .bottom-nav { display: none !important; }
+}
+
+/* ── Sidebar elementos ────────────────────────────────────── */
+.sidebar__logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px 16px;
+    text-decoration: none;
+    color: var(--red);
+    font-family: var(--font-serif);
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+.sidebar__logo i { font-size: 1.3rem; }
+
+.sidebar__divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 16px;
+}
+
+/* Selector empresa en sidebar */
+.sidebar__empresa {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 12px 8px;
+    padding: 10px 12px;
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.2s;
+    font-family: var(--font-sans);
+    color: var(--text-1);
+    font-size: 0.82rem;
+    text-align: left;
+    width: calc(100% - 24px);
+}
+.sidebar__empresa:hover { border-color: var(--accent); }
+.sidebar__empresa-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    flex-shrink: 0;
+}
+.sidebar__empresa-nombre {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sidebar__empresa i {
+    color: var(--text-3);
+    font-size: 0.8rem;
+}
+
+/* Nav items */
+.sidebar__nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+}
+
+.sidebar__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    color: var(--text-2);
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 400;
+    transition: all 0.15s;
+    position: relative;
+}
+.sidebar__item:hover {
+    background: var(--bg-glass);
+    color: var(--text-1);
+}
+.sidebar__item.active {
+    color: var(--accent);
+    font-weight: 500;
+    background: rgba(217,30,24,0.06);
+    border-right: 3px solid var(--accent);
+}
+.sidebar__item i {
+    font-size: 1.15rem;
+    width: 22px;
+    text-align: center;
+}
+.sidebar__badge {
+    margin-left: auto;
+    min-width: 18px;
+    height: 18px;
+    background: var(--red);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+}
+
+/* Footer del sidebar */
+.sidebar__footer {
+    padding: 4px 0;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+}
+
+/* ── Movil: ocultar sidebar, mostrar bottom nav ───────────── */
+@media (max-width: 767px) {
+    .sidebar { display: none; }
+    .layout { display: block; }
+}
+
+/* ── Bottom nav (tab bar movil) ───────────────────────────── */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    height: 56px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    max-width: 480px;
+    margin: 0 auto;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.bottom-nav a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-decoration: none;
+    color: var(--text-3);
+    font-size: 0.65rem;
+    padding: 6px 12px;
+    transition: color 0.2s;
+}
+.bottom-nav a:hover,
+.bottom-nav a.active {
+    color: var(--accent);
+}
+.bottom-nav a .nav-icon {
+    font-size: 1.3rem;
+}
+
+/* Desktop: ocultar bottom nav */
+@media (min-width: 768px) {
+    .bottom-nav { display: none !important; }
+}
+
+/* Movil: agregar padding inferior al main para que el bottom-nav no tape contenido */
+@media (max-width: 767px) {
+    .main--auth {
+        padding-bottom: 64px;
+    }
+}
