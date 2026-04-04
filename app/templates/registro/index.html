@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="semi" data-size="md">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0e1526">
+    <title>Registro — alerta.pe</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+    <link rel="shortcut icon" href="/static/img/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/phosphor-icons@1.4.2/src/css/icons.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <style>
+        body {
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .registro-card {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 420px;
+            padding: 36px 28px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .registro-logo {
+            font-family: var(--font-serif);
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--red);
+            text-shadow: 0 0 40px rgba(217,30,24,0.4);
+            margin-bottom: 8px;
+        }
+        .registro-logo i { margin-right: 6px; font-size: 1.6rem; }
+
+        .registro-subtitle {
+            color: rgba(226, 232, 244, 0.78);
+            font-size: 0.9rem;
+            margin-bottom: 28px;
+        }
+
+        .registro-form { display: flex; flex-direction: column; gap: 14px; }
+
+        .registro-section {
+            text-align: left;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .registro-section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: rgba(226, 232, 244, 0.65);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .input-group {
+            position: relative;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: rgba(226, 232, 244, 0.82);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px 14px;
+            background: var(--bg-mid);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-input);
+            color: var(--text-1);
+            font-size: 1rem;
+            font-family: var(--font-sans);
+            transition: border-color 0.25s var(--ease), box-shadow 0.25s var(--ease);
+            outline: none;
+            box-sizing: border-box;
+        }
+        .input-group input:focus {
+            border-color: var(--red);
+            box-shadow: 0 0 0 3px rgba(217,30,24,0.15);
+        }
+        .input-group input::placeholder {
+            color: rgba(226, 232, 244, 0.42);
+        }
+
+        .registro-btn {
+            padding: 14px;
+            background: var(--red);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-input);
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            transition: all 0.25s var(--ease);
+            margin-top: 8px;
+        }
+        .registro-btn:hover { background: #c41a15; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(217,30,24,0.3); }
+        .registro-btn:active { transform: translateY(0); }
+        .registro-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .registro-error {
+            background: rgba(217,30,24,0.1);
+            border: 1px solid rgba(217,30,24,0.3);
+            border-radius: var(--radius-input);
+            padding: 12px 14px;
+            color: var(--red);
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        .registro-link {
+            color: rgba(226, 232, 244, 0.65);
+            font-size: 0.8rem;
+            text-decoration: none;
+            margin-top: 12px;
+            display: inline-block;
+            transition: color 0.2s;
+        }
+        .registro-link:hover { color: var(--gold); }
+
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="registro-card">
+        <div class="registro-logo"><i class="ph-bell-ringing"></i>alerta.pe</div>
+
+        {% if error %}
+        <div class="registro-error" style="margin-bottom: 20px;">
+            <i class="ph-warning-circle"></i> {{ error }}
+        </div>
+        <p class="registro-subtitle">
+            Si crees que esto es un error, contacta a quien te envio la invitacion.
+        </p>
+        <a href="/login" class="registro-link">Ir al login</a>
+        {% elif invitacion %}
+        <p class="registro-subtitle">Bienvenido — completa tu registro</p>
+
+        <div class="registro-error" id="registro-error" style="display:none"></div>
+
+        <form class="registro-form" id="registro-form">
+            <input type="hidden" name="token" value="{{ invitacion.token }}">
+
+            <div class="registro-section">
+                <div class="registro-section-title">Datos personales</div>
+            </div>
+
+            <div class="input-group">
+                <label for="dni">DNI</label>
+                <input type="text" id="dni" name="dni" inputmode="numeric" pattern="\d{8}"
+                       maxlength="8" placeholder="12345678" autocomplete="username" required>
+            </div>
+
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="nombres">Nombres</label>
+                    <input type="text" id="nombres" name="nombres" placeholder="Juan Carlos"
+                           value="{{ invitacion.nombre_contacto or '' }}" required>
+                </div>
+                <div class="input-group">
+                    <label for="apellidos">Apellidos</label>
+                    <input type="text" id="apellidos" name="apellidos" placeholder="Perez Rios" required>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="whatsapp">WhatsApp (opcional)</label>
+                <input type="tel" id="whatsapp" name="whatsapp" placeholder="+51 999 888 777">
+            </div>
+
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="clave">Clave</label>
+                    <input type="password" id="clave" name="clave" minlength="8"
+                           placeholder="Min. 8 caracteres" autocomplete="new-password" required>
+                </div>
+                <div class="input-group">
+                    <label for="clave2">Confirmar clave</label>
+                    <input type="password" id="clave2" name="clave2" minlength="8"
+                           placeholder="Repetir clave" autocomplete="new-password" required>
+                </div>
+            </div>
+
+            <div class="registro-section">
+                <div class="registro-section-title">Datos de tu estudio / empresa</div>
+            </div>
+
+            <div class="input-group">
+                <label for="nombre_tenant">Nombre del estudio o empresa</label>
+                <input type="text" id="nombre_tenant" name="nombre_tenant"
+                       placeholder="Estudio Contable Perez & Asociados" required>
+            </div>
+
+            <div class="input-group">
+                <label for="ruc_tenant">RUC (opcional)</label>
+                <input type="text" id="ruc_tenant" name="ruc_tenant" inputmode="numeric"
+                       pattern="\d{11}" maxlength="11" placeholder="20601234567">
+            </div>
+
+            <button type="submit" class="registro-btn" id="registro-btn">
+                Crear mi cuenta &rarr;
+            </button>
+        </form>
+
+        <a href="/login" class="registro-link">Ya tengo cuenta</a>
+        {% else %}
+        <p class="registro-subtitle">No se proporciono un token de invitacion.</p>
+        <a href="/login" class="registro-link">Ir al login</a>
+        {% endif %}
+    </div>
+
+    <script>
+    (function() {
+        const form = document.getElementById('registro-form');
+        if (!form) return;
+
+        const errorDiv = document.getElementById('registro-error');
+        const btn = document.getElementById('registro-btn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorDiv.style.display = 'none';
+
+            const clave = document.getElementById('clave').value;
+            const clave2 = document.getElementById('clave2').value;
+            if (clave !== clave2) {
+                errorDiv.textContent = 'Las claves no coinciden';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Creando cuenta...';
+
+            try {
+                const data = {
+                    token: form.querySelector('[name=token]').value,
+                    dni: document.getElementById('dni').value,
+                    nombres: document.getElementById('nombres').value,
+                    apellidos: document.getElementById('apellidos').value,
+                    whatsapp: document.getElementById('whatsapp').value,
+                    clave: clave,
+                    nombre_tenant: document.getElementById('nombre_tenant').value,
+                    ruc_tenant: document.getElementById('ruc_tenant').value,
+                };
+
+                const resp = await fetch('/registro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error(result.detail || 'Error en el registro');
+                }
+
+                if (result.redirect) {
+                    window.location.href = result.redirect;
+                }
+            } catch (err) {
+                errorDiv.textContent = err.message;
+                errorDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = 'Crear mi cuenta &rarr;';
+            }
+        });
+    })();
+    </script>
+</body>
+</html>
