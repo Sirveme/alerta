@@ -8,11 +8,6 @@
 const CACHE = 'alertape-v2';
 
 const PRECACHE = [
-  '/',
-  '/login',
-  '/dashboard',
-  '/pioneros',
-  '/static/manifest.json',
   '/static/css/base.css',
   '/static/css/cabecera.css',
   '/static/js/temas.js',
