@@ -146,8 +146,16 @@
             <span class="form-total__valor" id="calc-subtotal">S/ 0.00</span>
         </div>
         <div class="form-total">
-            <span class="form-total__label">IGV</span>
+            <span class="form-total__label">IGV (18%)</span>
             <span class="form-total__valor" id="calc-igv">S/ 0.00</span>
+        </div>
+        <div class="form-total" id="row-isc" style="display:none">
+            <span class="form-total__label">ISC</span>
+            <span class="form-total__valor" id="calc-isc">S/ 0.00</span>
+        </div>
+        <div class="form-total" id="row-icbper" style="display:none">
+            <span class="form-total__label">ICBPER</span>
+            <span class="form-total__valor" id="calc-icbper">S/ 0.00</span>
         </div>
         <div class="form-total" style="border-color:var(--accent)">
             <span class="form-total__label" style="font-weight:600">TOTAL</span>
@@ -190,6 +198,31 @@ function agregarLinea() {
                 <input type="number" class="linea-precio" step="0.01" placeholder="0.00" oninput="calcularTotales()">
             </div>
         </div>
+        <div class="form-row">
+            <div class="form-field">
+                <label>Afectación IGV</label>
+                <select class="linea-afectacion" onchange="calcularTotales()">
+                    <option value="10">Gravado (10)</option>
+                    <option value="20">Exonerado (20)</option>
+                    <option value="30">Inafecto (30)</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label>ISC</label>
+                <input type="number" class="linea-isc" step="0.01" value="0" placeholder="0.00" oninput="calcularTotales()">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-field">
+                <label>Bolsas plástico (ICBPER)</label>
+                <input type="number" class="linea-icbper-cant" step="1" min="0" value="0" placeholder="0" oninput="calcularTotales()">
+            </div>
+            <div class="form-field">
+                <label>ICBPER (S/ 0.50/bolsa)</label>
+                <input type="number" class="linea-icbper-monto" step="0.01" value="0" readonly tabindex="-1"
+                       style="opacity:0.6; cursor:default">
+            </div>
+        </div>
     `;
     container.appendChild(div);
 }
@@ -200,20 +233,50 @@ function removerLinea(num) {
     calcularTotales();
 }
 
+const ICBPER_TARIFA = 0.50; // S/ por bolsa (2025-2026)
+
 function calcularTotales() {
     let subtotal = 0;
+    let igv = 0;
+    let iscTotal = 0;
+    let icbperTotal = 0;
+
     document.querySelectorAll('.linea-item').forEach(linea => {
         const cant = parseFloat(linea.querySelector('.linea-cant')?.value) || 0;
         const precio = parseFloat(linea.querySelector('.linea-precio')?.value) || 0;
-        subtotal += cant * precio;
+        const valorVenta = cant * precio;
+        subtotal += valorVenta;
+
+        // Afectacion IGV: solo gravado (10) aplica 18%
+        const afectacion = linea.querySelector('.linea-afectacion')?.value || '10';
+        if (afectacion === '10') {
+            igv += valorVenta * 0.18;
+        }
+
+        // ISC manual
+        const isc = parseFloat(linea.querySelector('.linea-isc')?.value) || 0;
+        iscTotal += isc;
+
+        // ICBPER: cantidad de bolsas * tarifa
+        const bolsas = parseInt(linea.querySelector('.linea-icbper-cant')?.value) || 0;
+        const icbperMonto = bolsas * ICBPER_TARIFA;
+        icbperTotal += icbperMonto;
+        const montoEl = linea.querySelector('.linea-icbper-monto');
+        if (montoEl) montoEl.value = icbperMonto.toFixed(2);
     });
-    const igv = subtotal * 0.18;
-    const total = subtotal + igv;
+
+    const total = subtotal + igv + iscTotal + icbperTotal;
     const moneda = document.getElementById('f-moneda').value === 'USD' ? '$' : 'S/';
 
     document.getElementById('calc-subtotal').textContent = `${moneda} ${subtotal.toFixed(2)}`;
     document.getElementById('calc-igv').textContent = `${moneda} ${igv.toFixed(2)}`;
+    document.getElementById('calc-isc').textContent = `${moneda} ${iscTotal.toFixed(2)}`;
+    document.getElementById('calc-icbper').textContent = `${moneda} ${icbperTotal.toFixed(2)}`;
     document.getElementById('calc-total').textContent = `${moneda} ${total.toFixed(2)}`;
+
+    // Mostrar/ocultar filas de ISC e ICBPER si hay valores
+    document.getElementById('row-isc').style.display = iscTotal > 0 ? '' : 'none';
+    document.getElementById('row-icbper').style.display = icbperTotal > 0 ? '' : 'none';
 }
 
 document.getElementById('btn-add-linea').addEventListener('click', agregarLinea);
@@ -233,18 +296,34 @@ document.getElementById('form-manual').addEventListener('submit', async (e) => {
         const cant = parseFloat(linea.querySelector('.linea-cant')?.value) || 1;
         const precio = parseFloat(linea.querySelector('.linea-precio')?.value) || 0;
         const valor = cant * precio;
+        const afectacion = linea.querySelector('.linea-afectacion')?.value || '10';
+        const igvMonto = afectacion === '10' ? parseFloat((valor * 0.18).toFixed(2)) : 0;
+        const iscMonto = parseFloat(linea.querySelector('.linea-isc')?.value) || 0;
+        const bolsas = parseInt(linea.querySelector('.linea-icbper-cant')?.value) || 0;
+        const icbperMonto = parseFloat((bolsas * ICBPER_TARIFA).toFixed(2));
+
         lineas.push({
             numero_linea: lineNum,
             descripcion: linea.querySelector('.linea-desc')?.value || '',
             cantidad: cant,
             precio_unitario: precio,
-            igv_monto: parseFloat((valor * 0.18).toFixed(2)),
-            total_linea: parseFloat((valor * 1.18).toFixed(2)),
+            igv_afectacion: afectacion === '10' ? 'Gravado' : afectacion === '20' ? 'Exonerado' : 'Inafecto',
+            igv_tipo: afectacion === '10' ? '1000' : afectacion === '20' ? '9997' : '9998',
+            igv_monto: igvMonto,
+            isc_monto: iscMonto,
+            icbper_cantidad: bolsas,
+            icbper_monto: icbperMonto,
+            total_linea: parseFloat((valor + igvMonto + iscMonto + icbperMonto).toFixed(2)),
         });
     });
 
-    let subtotal = 0, igv = 0;
-    lineas.forEach(l => { subtotal += l.cantidad * l.precio_unitario; igv += l.igv_monto; });
+    let subtotal = 0, igv = 0, iscTotal = 0, icbperTotal = 0;
+    lineas.forEach(l => {
+        subtotal += l.cantidad * l.precio_unitario;
+        igv += l.igv_monto;
+        iscTotal += l.isc_monto;
+        icbperTotal += l.icbper_monto;
+    });
 
     const body = {
         tipo: document.getElementById('f-tipo').value,
@@ -257,7 +336,9 @@ document.getElementById('form-manual').addEventListener('submit', async (e) => {
         moneda: document.getElementById('f-moneda').value,
         subtotal: parseFloat(subtotal.toFixed(2)),
         igv: parseFloat(igv.toFixed(2)),
-        total: parseFloat((subtotal + igv).toFixed(2)),
+        isc: parseFloat(iscTotal.toFixed(2)),
+        icbper: parseFloat(icbperTotal.toFixed(2)),
+        total: parseFloat((subtotal + igv + iscTotal + icbperTotal).toFixed(2)),
         fecha_emision: document.getElementById('f-fecha').value,
         detalle_lineas: lineas,
     };
