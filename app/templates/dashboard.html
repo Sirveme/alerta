@@ -152,7 +152,7 @@
     <!-- Alertas recientes — se actualizan cada 60s -->
     <h2 class="dash__section-title">Alertas recientes</h2>
     <div class="alertas-list" id="alertas-list"
-         hx-get="/alertas/?size=5"
+         hx-get="/alertas/?limit=5"
          hx-trigger="load, every 60s"
          hx-swap="innerHTML"
          hx-select=".alerta-item-wrap">
@@ -220,7 +220,7 @@
         if (!empresaId) return;
 
         try {
-            const res = await fetch(`/pagos/?size=5`);
+            const res = await fetch(`/pagos/?limit=5`);
             if (!res.ok) return;
             const data = await res.json();
             const list = document.getElementById('pagos-list');
@@ -248,7 +248,7 @@
     // Cargar alertas
     async function cargarAlertas() {
         try {
-            const res = await fetch('/alertas/?size=5');
+            const res = await fetch('/alertas/?limit=5');
             if (!res.ok) return;
             const data = await res.json();
             const list = document.getElementById('alertas-list');
