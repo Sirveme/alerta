@@ -58,9 +58,9 @@ def get_current_user(
     if credentials:
         token = credentials.credentials
 
-    # 2. Fallback: cookie 'token' (para requests de templates/HTMX)
+    # 2. Fallback: cookie 'access_token' (para requests de templates/HTMX)
     if not token:
-        token = request.cookies.get("token")
+        token = request.cookies.get("access_token")
 
     if not token:
         raise HTTPException(
