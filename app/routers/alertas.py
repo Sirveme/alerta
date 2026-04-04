@@ -22,7 +22,7 @@ def listar_alertas(
     nivel: Optional[str] = None,
     estado: Optional[str] = None,
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=100, alias="size"),
     current_user: Usuario = Depends(get_current_user),
     empresa: Optional[EmpresaCliente] = Depends(get_empresa_activa),
     db: Session = Depends(get_db),
@@ -43,7 +43,7 @@ def listar_alertas(
     total = db.execute(count_query).scalar()
 
     query = query.order_by(Alerta.created_at.desc())
-    query = query.offset((page - 1) * size).limit(size)
+    query = query.offset((page - 1) * limit).limit(limit)
     alertas = db.execute(query).scalars().all()
 
     return {
@@ -63,7 +63,7 @@ def listar_alertas(
         ],
         "total": total,
         "page": page,
-        "size": size,
+        "limit": limit,
     }
 
 
