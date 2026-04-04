@@ -141,6 +141,17 @@ from app.routers.rendipe import router as rendipe_router
 
 app.include_router(rendipe_router)
 
+# ── ROUTERS (Sesión B — SOTE + Registro) ─────────────────────
+from app.routers.sote import router as sote_router
+from app.routers.registro import router as registro_router
+
+# SOTE — oculto del docs publico
+app.include_router(sote_router, prefix="/sote", tags=["sote"],
+                   include_in_schema=False)
+
+# Registro de nuevos tenants
+app.include_router(registro_router, tags=["registro"])
+
 # Rate limiting para endpoints públicos
 from app.core.rate_limit import limiter
 from slowapi import _rate_limit_exceeded_handler
