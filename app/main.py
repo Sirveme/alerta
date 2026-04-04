@@ -152,6 +152,21 @@ app.include_router(sote_router, prefix="/sote", tags=["sote"],
 # Registro de nuevos tenants
 app.include_router(registro_router, tags=["registro"])
 
+# ── ROUTERS (Sesion C — Pantallas operativas) ────────────────
+from app.routers.ventas_page import router as ventas_page_router
+from app.routers.compras_page import router as compras_page_router
+from app.routers.fuentes_page import router as fuentes_page_router
+from app.routers.comparativo_page import router as comparativo_page_router
+from app.routers.directorio_page import router as directorio_page_router
+from app.routers.notificaciones_page import router as notificaciones_page_router
+
+app.include_router(ventas_page_router, tags=["ventas"])
+app.include_router(compras_page_router, tags=["compras"])
+app.include_router(fuentes_page_router, tags=["fuentes"])
+app.include_router(comparativo_page_router, tags=["comparativo"])
+app.include_router(directorio_page_router, tags=["directorio"])
+app.include_router(notificaciones_page_router, tags=["notificaciones"])
+
 # Rate limiting para endpoints públicos
 from app.core.rate_limit import limiter
 from slowapi import _rate_limit_exceeded_handler
