@@ -30,9 +30,9 @@ def listar_pagos(
     empresa: Optional[EmpresaCliente] = Depends(get_empresa_activa),
     db: Session = Depends(get_db),
 ):
-    """Lista paginada de pagos con filtros."""
+    """Lista paginada de pagos con filtros. Si no hay empresa activa, retorna lista vacia."""
     if not empresa:
-        raise HTTPException(status_code=400, detail="Selecciona una empresa")
+        return {"items": [], "total": 0, "page": page, "limit": limit}
 
     query = select(Pago).where(
         Pago.empresa_id == empresa.id,

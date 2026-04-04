@@ -173,13 +173,14 @@ def login(body: LoginRequest, request: Request, response: Response, db: Session 
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response):
-    """Invalida el token actual (blacklist en memoria)."""
+def logout(request: Request):
+    """Invalida el token actual y redirige a login."""
     token = request.cookies.get("access_token") or request.headers.get("authorization", "").replace("Bearer ", "")
     if token:
         _token_blacklist.add(token)
-    response.delete_cookie("access_token", path="/")
-    return RedirectResponse(url="/login", status_code=303)
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(key="access_token", path="/")
+    return response
 
 
 @router.get("/logout")
