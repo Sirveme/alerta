@@ -11,15 +11,30 @@ class Settings:
     PROJECT_NAME: str = "alerta.pe"
     VERSION: str = "0.2.0"
 
-    # Base de datos
-    DATABASE_URL: str = os.environ.get(
-        "DATABASE_URL",
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/alertape",
-    )
-    DATABASE_URL_SYNC: str = os.environ.get(
-        "DATABASE_URL_SYNC",
-        "postgresql://postgres:postgres@localhost:5432/alertape",
-    )
+    # Base de datos — sin default a localhost para no enmascarar errores en produccion
+    _raw_db_url: str = os.environ.get("DATABASE_URL", "")
+
+    @property
+    def DATABASE_URL(self) -> str:
+        url = self._raw_db_url
+        if not url:
+            raise RuntimeError("DATABASE_URL no esta definida en las variables de entorno")
+        # Railway usa postgres:// pero asyncpg necesita postgresql+asyncpg://
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url
+
+    @property
+    def DATABASE_URL_SYNC(self) -> str:
+        url = self._raw_db_url
+        if not url:
+            raise RuntimeError("DATABASE_URL no esta definida en las variables de entorno")
+        # Railway usa postgres:// pero SQLAlchemy sync necesita postgresql://
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        return url
 
     # CORS
     CORS_ORIGINS: list[str] = ["*"]
