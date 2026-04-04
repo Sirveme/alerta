@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -153,13 +153,8 @@ def login(body: LoginRequest, request: Request, response: Response, db: Session 
                          ip=request.client.host if request.client else None,
                          user_agent=request.headers.get("user-agent"))
 
-    # Responder con HTML que setea la cookie y luego redirige via JS.
-    # Esto evita el loop 303->302 donde la cookie no llega al siguiente request.
-    html = """<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<script>window.location.href='/dashboard';</script>
-</head><body>Redirigiendo...</body></html>"""
-    response = HTMLResponse(content=html)
+    # JSON response con cookie — auth.js hace fetch() y espera JSON
+    response = JSONResponse({"ok": True, "redirect": "/dashboard"})
     response.set_cookie(
         key="access_token",
         value=token,
