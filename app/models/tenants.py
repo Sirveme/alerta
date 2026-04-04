@@ -68,6 +68,10 @@ class Tenant(Base, TimestampMixin, SoftDeleteMixin):
         default=PlanTenant.GRATIS,
     )
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    es_produccion: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        comment="Protege tenants reales del reset de datos de prueba. True = tenant real (SOTE, etc).",
+    )
     dominio_custom: Mapped[Optional[str]] = mapped_column(
         String(255), unique=True, nullable=True,
         comment="Subdominio o dominio personalizado, ej: estudio-lopez.alerta.pe",
