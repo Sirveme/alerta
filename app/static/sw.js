@@ -39,50 +39,28 @@ self.addEventListener('activate', e => {
   );
 });
 
-/* Fetch */
-self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
 
-  /* No interceptar navegacion ni rutas de auth/login/dashboard/registro */
-  if (e.request.mode === 'navigate' ||
-      url.pathname.startsWith('/auth/') ||
-      url.pathname === '/login' ||
-      url.pathname === '/dashboard' ||
-      url.pathname === '/registro') {
+  // Solo cachear archivos estáticos con extensión conocida
+  const esEstatico = /\.(css|js|png|svg|webp|woff2?|mp3|ico|woff)$/.test(url.pathname);
+
+  if (!esEstatico) {
+    // Rutas dinámicas: pasar directo al servidor sin interceptar
     return;
   }
 
-  /* API y auth: network-first */
-  if (url.pathname.startsWith('/api/') ||
-      url.pathname.startsWith('/auth/') ||
-      url.pathname.startsWith('/config/') ||
-      url.pathname.startsWith('/empresas/')) {
-    e.respondWith(
-      fetch(e.request).catch(() =>
-        new Response(JSON.stringify({ error: 'Sin conexión' }), {
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-    );
-    return;
-  }
-
-  /* Estáticos: cache-first */
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (!res || res.status !== 200 || res.type === 'opaque') return res;
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
-        return res;
-      }).catch(() => {
-        /* Offline fallback para HTML */
-        if (e.request.mode === 'navigate') {
-          return caches.match('/login');
+  // Cache-first solo para archivos estáticos
+  event.respondWith(
+    caches.match(event.request).then(cached =>
+      cached || fetch(event.request).then(res => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open('alertape-v1').then(c => c.put(event.request, clone));
         }
-      });
-    })
+        return res;
+      })
+    )
   );
 });
 
