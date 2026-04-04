@@ -96,7 +96,10 @@ from app.models.contabilidad import (
 # Portal público (sesión 6)
 from app.models.portal import EnvioPortal, EstadoSistema
 
-# RendiPe — Rendición de Gastos (sesión 7a)
+# Directorio RUC (sesion C)
+from app.models.directorio import DirectorioRUC
+
+# RendiPe — Rendicion de Gastos (sesion 7a)
 from app.models.rendipe import (
     InstitucionConfig, Servidor, Comision,
     GastoComision, InformeComision, SaldoComision,
@@ -132,6 +135,8 @@ __all__ = [
     "CanalPreferido", "TonoIA", "VelocidadVoz", "RegimenTributario",
     # Voz
     "ConsultaVoz",
-    # Auditoría
+    # Auditoria
     "RegistroAuditoria",
+    # Directorio
+    "DirectorioRUC",
 ]
