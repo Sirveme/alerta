@@ -9,6 +9,15 @@ Decisiones técnicas:
 - require_rol es un dependency factory que valida el rol del usuario en el tenant actual.
 """
 
+import os
+if not os.environ.get('DATABASE_URL'):
+    # Fallback para desarrollo local cuando .env no parsea bien
+    from dotenv import dotenv_values
+    vals = dotenv_values('.env', encoding='latin-1')
+    for k, v in vals.items():
+        if k and v and k not in os.environ:
+            os.environ[k] = v
+
 import functools
 from typing import Optional
 
