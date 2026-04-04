@@ -56,13 +56,16 @@
             <!-- Hora (solo expandido) -->
             <span class="cabecera__hora" id="cabecera-hora"></span>
 
-            <!-- Avatar + Config -->
+            <!-- Avatar + Config + Logout -->
             <div class="cabecera__user">
                 <button class="cabecera__avatar" id="btn-user-menu" title="Menú de usuario">
                     {{ user.nombres[:1] }}{{ user.apellidos[:1] if user.apellidos else '' }}
                 </button>
                 <button class="cabecera__config-btn" id="btn-config" title="Configuración">
                     <i class="ph-gear-six"></i>
+                </button>
+                <button class="cabecera__logout-btn" id="btn-logout" title="Cerrar sesión">
+                    <i class="ph-sign-out"></i>
                 </button>
             </div>
         </div>
