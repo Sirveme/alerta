@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Rendicion — RendiPe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/rendipe.css">
+{% endblock %}
+
+{% block content %}
+<div class="rendipe">
+    <h1 class="rendipe__titulo">Rendicion de viaticos</h1>
+    <p class="rendipe__subtitulo">{{ comision.destino }} &middot; {{ comision.fecha_inicio }} al {{ comision.fecha_fin }}</p>
+
+    <!-- Resumen -->
+    <div class="rendicion-resumen">
+        <div class="rendicion-resumen__item">
+            <div class="rendicion-resumen__valor">S/ {{ "%.2f"|format(comision.total_viaticos) }}</div>
+            <div class="rendicion-resumen__label">Asignado</div>
+        </div>
+        <div class="rendicion-resumen__item">
+            <div class="rendicion-resumen__valor rendicion-resumen__valor--green">S/ {{ "%.2f"|format(rendicion.total_gastado) }}</div>
+            <div class="rendicion-resumen__label">Gastado</div>
+        </div>
+        <div class="rendicion-resumen__item">
+            <div class="rendicion-resumen__valor rendicion-resumen__valor--gold">S/ {{ "%.2f"|format(rendicion.total_observado) }}</div>
+            <div class="rendicion-resumen__label">Observado</div>
+        </div>
+        <div class="rendicion-resumen__item">
+            {% set saldo = comision.total_viaticos - rendicion.total_gastado %}
+            <div class="rendicion-resumen__valor {% if saldo >= 0 %}rendicion-resumen__valor--green{% else %}rendicion-resumen__valor--red{% endif %}">
+                S/ {{ "%.2f"|format(saldo) }}
+            </div>
+            <div class="rendicion-resumen__label">{% if saldo >= 0 %}Saldo a devolver{% else %}Deficit{% endif %}</div>
+        </div>
+    </div>
+
+    <!-- Barra de saldo -->
+    <div class="saldo-bar">
+        <div class="saldo-bar__header">
+            <span class="saldo-bar__label">Ejecucion</span>
+            {% set pct = (rendicion.total_gastado / comision.total_viaticos * 100) if comision.total_viaticos > 0 else 0 %}
+            <span class="saldo-bar__monto">{{ pct|int }}%</span>
+        </div>
+        <div class="saldo-bar__track">
+            <div class="saldo-bar__fill {% if pct >= 90 %}saldo-bar__fill--danger{% elif pct >= 70 %}saldo-bar__fill--warning{% endif %}"
+                 style="width: {{ pct|int }}%"></div>
+        </div>
+    </div>
+
+    <!-- Sección 1: Comprobantes Electrónicos -->
+    <h2 class="rendipe__section-title">
+        Comprobantes Electronicos
+        <span class="badge-monto" id="total-ce"></span>
+    </h2>
+    <div class="rendicion-tabla-wrap">
+        <table class="rendicion-tabla">
+            <thead>
+                <tr><th>Fecha</th><th>RUC</th><th>Tipo</th><th>Serie-Num</th><th>Rubro</th><th>Monto</th><th>Estado</th></tr>
+            </thead>
+            <tbody>
+                {% for gasto in gastos if gasto.origen != 'declaracion_jurada' and not gasto.monto_moneda_ext %}
+                <tr>
+                    <td>{{ gasto.fecha_emision or '—' }}</td>
+                    <td>{{ gasto.ruc_emisor or '—' }}</td>
+                    <td>{{ gasto.tipo_comprobante|upper if gasto.tipo_comprobante else '—' }}</td>
+                    <td>{{ gasto.serie or '' }}-{{ gasto.correlativo or '' }}</td>
+                    <td>{{ gasto.rubro }}</td>
+                    <td class="num">S/ {{ "%.2f"|format(gasto.monto) }}</td>
+                    <td>
+                        <span class="gasto-estado gasto-estado--{{ gasto.estado_validacion }}">
+                            {% if gasto.estado_validacion == 'valido' %}Valido
+                            {% elif gasto.estado_validacion == 'observado' %}Observado
+                            {% elif gasto.estado_validacion == 'bloqueado' %}Bloqueado
+                            {% else %}{{ gasto.estado_validacion }}{% endif %}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Sección 2: Declaraciones Juradas -->
+    <h2 class="rendipe__section-title">
+        Declaraciones Juradas
+        <span class="badge-monto" style="background:rgba(212,160,18,0.12);color:var(--gold)" id="total-dj"></span>
+        <span style="font-size:.72rem;color:var(--text-3);margin-left:8px" id="dj-pct-info"></span>
+    </h2>
+    <div class="rendicion-tabla-wrap">
+        <table class="rendicion-tabla">
+            <thead>
+                <tr><th>Fecha</th><th>Establecimiento</th><th>Motivo</th><th>Rubro</th><th>Monto</th><th>DJ</th></tr>
+            </thead>
+            <tbody>
+                {% for gasto in gastos if gasto.origen == 'declaracion_jurada' %}
+                <tr>
+                    <td>{{ gasto.fecha_emision or '—' }}</td>
+                    <td>{{ gasto.dj_establecimiento or gasto.nombre_emisor or '—' }}</td>
+                    <td style="font-size:.78rem">{{ gasto.dj_motivo or '—' }}</td>
+                    <td>{{ gasto.rubro }}</td>
+                    <td class="num">S/ {{ "%.2f"|format(gasto.monto) }}</td>
+                    <td>
+                        {% if gasto.dj_pdf_gcs %}
+                        <a href="/rendipe/gastos/{{ gasto.id }}/dj/pdf" target="_blank" style="color:var(--accent);font-size:.78rem">PDF</a>
+                        {% else %}
+                        <span style="font-size:.72rem;color:var(--text-3)">Pendiente</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Sección 3: Gastos en el Exterior (si aplica) -->
+    {% if comision.es_exterior %}
+    <h2 class="rendipe__section-title">
+        Gastos en el Exterior
+        <span class="badge-monto" style="background:rgba(59,130,246,0.12);color:var(--blue)" id="total-ext"></span>
+    </h2>
+    <div class="rendicion-tabla-wrap">
+        <table class="rendicion-tabla">
+            <thead>
+                <tr><th>Fecha</th><th>Establecimiento</th><th>Rubro</th><th>Mon. Ext.</th><th>TC</th><th>Monto PEN</th></tr>
+            </thead>
+            <tbody>
+                {% for gasto in gastos if gasto.monto_moneda_ext %}
+                <tr>
+                    <td>{{ gasto.fecha_emision or '—' }}</td>
+                    <td>{{ gasto.nombre_emisor or gasto.dj_establecimiento or '—' }}</td>
+                    <td>{{ gasto.rubro }}</td>
+                    <td class="num">{{ comision.moneda_exterior }} {{ "%.2f"|format(gasto.monto_moneda_ext) }}</td>
+                    <td>{{ "%.4f"|format(gasto.tipo_cambio_usado) if gasto.tipo_cambio_usado else '—' }}</td>
+                    <td class="num">S/ {{ "%.2f"|format(gasto.monto) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Acciones -->
+    <div class="rendipe-acciones">
+        <button class="rendipe-acciones__btn rendipe-acciones__btn--success"
+                onclick="presentarRendicion('{{ comision.id }}')"
+                {% if rendicion.estado == 'presentada' %}disabled{% endif %}>
+            <i class="ph-paper-plane-tilt"></i>
+            {% if rendicion.estado == 'presentada' %}Rendicion presentada{% else %}Presentar Rendicion{% endif %}
+        </button>
+        <a href="/rendipe/comisiones/{{ comision.id }}/rendicion/pdf" class="rendipe-acciones__btn" target="_blank">
+            <i class="ph-file-pdf"></i>
+            Descargar PDF
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/rendipe.js"></script>
+<script>
+    async function presentarRendicion(comisionId) {
+        if (!confirm('Una vez presentada, la rendicion no se puede modificar. Continuar?')) return;
+
+        try {
+            const res = await fetch(`/rendipe/comisiones/${comisionId}/rendicion/presentar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (res.ok) {
+                const toast = document.getElementById('toast');
+                const toastMsg = document.getElementById('toast-msg');
+                if (toast && toastMsg) {
+                    toastMsg.textContent = 'Rendicion presentada exitosamente';
+                    toast.hidden = false;
+                    setTimeout(() => { toast.hidden = true; }, 3000);
+                }
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || 'Error al presentar la rendicion');
+            }
+        } catch {
+            alert('Error de conexion');
+        }
+    }
+</script>
+{% endblock %}

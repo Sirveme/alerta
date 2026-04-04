@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>reenviame.pe — Envía tu comprobante</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/phosphor-icons@1.4.2/src/css/icons.css">
+    <link rel="stylesheet" href="/static/css/portal.css">
+</head>
+<body class="portal">
+    <header class="p-header">
+        <a href="/" class="p-header__logo">reenviame<span>.pe</span></a>
+        <nav class="p-header__nav">
+            <a href="/comprador">Soy Comprador</a>
+            <a href="/estado"><span class="p-header__status"><span class="p-header__dot"></span> Estado</span></a>
+        </nav>
+    </header>
+
+    <div class="p-hero">
+        <h1 class="p-hero__title">Envía tu comprobante y recibe validación al instante</h1>
+        <p class="p-hero__subtitle">Sin registro. Gratis. Resultado en menos de 10 segundos.</p>
+    </div>
+
+    <div class="p-form-card">
+        <form id="p-form">
+            <div class="p-field">
+                <label for="p-ruc-emisor">Tu RUC (emisor)</label>
+                <input type="text" id="p-ruc-emisor" inputmode="numeric" maxlength="11" placeholder="20601234567" required data-ruc-autocomplete="p-nombre-emisor">
+                <div class="p-field__ruc-nombre" id="p-nombre-emisor"></div>
+            </div>
+
+            <div class="p-field">
+                <label for="p-ruc-receptor">RUC del comprador (receptor)</label>
+                <input type="text" id="p-ruc-receptor" inputmode="numeric" maxlength="11" placeholder="20601234567" required data-ruc-autocomplete="p-nombre-receptor" value="{{ receptor_ruc }}">
+                <div class="p-field__ruc-nombre" id="p-nombre-receptor"></div>
+            </div>
+
+            <div class="p-tipo-btns">
+                <button type="button" class="p-tipo-btn active" data-tipo="xml">
+                    <i class="ph-file-xml"></i> XML
+                </button>
+                <button type="button" class="p-tipo-btn" data-tipo="pdf">
+                    <i class="ph-file-pdf"></i> PDF
+                </button>
+                <button type="button" class="p-tipo-btn" data-tipo="datos">
+                    <i class="ph-pencil-simple"></i> Manual
+                </button>
+            </div>
+
+            <div class="p-dropzone" id="p-dropzone">
+                <div class="p-dropzone__icon"><i class="ph-upload-simple"></i></div>
+                <span id="p-filename">Arrastra tu archivo aquí o toca para seleccionar</span>
+                <input type="file" id="p-file-input" accept=".xml,.pdf" hidden>
+            </div>
+
+            <!-- Formulario manual (oculto por defecto) -->
+            <div id="p-datos-form" style="display:none">
+                <div class="p-field">
+                    <label>Tipo</label>
+                    <select id="p-tipo-comp">
+                        <option value="factura">Factura</option>
+                        <option value="boleta">Boleta</option>
+                        <option value="nota_credito">Nota de Crédito</option>
+                    </select>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="p-field"><label>Serie</label><input type="text" id="p-serie" placeholder="F001" maxlength="10"></div>
+                    <div class="p-field"><label>Correlativo</label><input type="text" id="p-correlativo" placeholder="12345" maxlength="15"></div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    <div class="p-field"><label>Fecha emisión</label><input type="date" id="p-fecha"></div>
+                    <div class="p-field"><label>Total (S/)</label><input type="number" id="p-total" step="0.01" placeholder="0.00"></div>
+                </div>
+            </div>
+
+            <div class="p-field">
+                <label for="p-email">Tu correo (opcional)</label>
+                <input type="email" id="p-email" placeholder="tu@empresa.pe">
+                <div class="p-field__hint">Te enviamos el acuse de recepción</div>
+            </div>
+
+            <button type="submit" class="p-submit" id="p-submit">Enviar y validar</button>
+        </form>
+    </div>
+
+    <!-- Spinner -->
+    <div class="p-spinner" id="p-spinner">
+        <span class="p-spinner__dot"></span>
+        <span class="p-spinner__dot"></span>
+        <span class="p-spinner__dot"></span>
+        <p style="margin-top:12px;color:var(--p-text-3)">Verificando con SUNAT...</p>
+    </div>
+
+    <!-- Resultado -->
+    <div class="p-resultado" id="p-resultado"></div>
+
+    <footer class="p-footer">
+        Peru Sistemas Pro E.I.R.L. · RUC 20615446565 · Iquitos, Peru<br>
+        <a href="https://alerta.pe">¿Eres contador? Conoce alerta.pe</a>
+    </footer>
+
+    <script src="/static/js/portal.js"></script>
+</body>
+</html>

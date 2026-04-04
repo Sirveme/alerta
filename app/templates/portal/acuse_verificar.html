@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificar acuse — reenviame.pe</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/portal.css">
+</head>
+<body class="portal">
+    <header class="p-header">
+        <a href="/" class="p-header__logo">reenviame<span>.pe</span></a>
+    </header>
+
+    <div style="max-width:500px;margin:40px auto;padding:0 20px">
+        <div class="p-form-card">
+            <div style="text-align:center;margin-bottom:20px">
+                {% if envio.estado_validacion.value == 'valido' %}
+                <div style="font-size:3rem">✅</div>
+                <h2 style="color:var(--p-green);font-size:1.2rem">Acuse de recepcion verificado</h2>
+                {% elif envio.estado_validacion.value == 'observado' %}
+                <div style="font-size:3rem">⚠️</div>
+                <h2 style="color:var(--p-gold);font-size:1.2rem">Comprobante con observaciones</h2>
+                {% else %}
+                <div style="font-size:3rem">❌</div>
+                <h2 style="color:var(--p-red);font-size:1.2rem">Comprobante con errores</h2>
+                {% endif %}
+            </div>
+
+            <div style="font-size:0.82rem;color:var(--p-text-3);text-align:center;margin-bottom:20px">
+                Acuse ARE-{{ str(envio.acuse_uuid)[:8]|upper }}
+            </div>
+
+            <div class="p-estado__item">
+                <span class="p-estado__label">Tipo</span>
+                <span class="p-estado__valor">{{ envio.tipo_comprobante or '—' }}</span>
+            </div>
+            <div class="p-estado__item">
+                <span class="p-estado__label">Serie - Correlativo</span>
+                <span class="p-estado__valor">{{ envio.serie or '—' }}-{{ envio.correlativo or '—' }}</span>
+            </div>
+            <div class="p-estado__item">
+                <span class="p-estado__label">RUC Emisor</span>
+                <span class="p-estado__valor">{{ envio.ruc_emisor }}</span>
+            </div>
+            <div class="p-estado__item">
+                <span class="p-estado__label">Nombre Emisor</span>
+                <span class="p-estado__valor">{{ envio.nombre_emisor or '—' }}</span>
+            </div>
+            <div class="p-estado__item">
+                <span class="p-estado__label">RUC Receptor</span>
+                <span class="p-estado__valor">{{ envio.ruc_receptor }}</span>
+            </div>
+            <div class="p-estado__item">
+                <span class="p-estado__label">Fecha emision</span>
+                <span class="p-estado__valor">{{ envio.fecha_emision or '—' }}</span>
+            </div>
+            <div class="p-estado__item">
+                <span class="p-estado__label">Total</span>
+                <span class="p-estado__valor">{{ envio.moneda or 'PEN' }} {{ envio.total or '—' }}</span>
+            </div>
+            <div class="p-estado__item">
+                <span class="p-estado__label">Validado</span>
+                <span class="p-estado__valor">{{ envio.validado_en or 'Pendiente' }}</span>
+            </div>
+
+            <div style="text-align:center;margin-top:20px">
+                <a href="/acuse/{{ envio.acuse_uuid }}" class="p-resultado__acuse-btn">Descargar acuse PDF</a>
+            </div>
+        </div>
+
+        <div style="text-align:center;margin-top:16px;font-size:0.75rem;color:var(--p-text-3)">
+            Este acuse certifica la recepcion y validacion del comprobante.<br>
+            Emitido por Peru Sistemas Pro E.I.R.L. · RUC 20615446565
+        </div>
+    </div>
+
+    <footer class="p-footer">
+        <a href="/">reenviame.pe</a> · <a href="https://alerta.pe">alerta.pe</a>
+    </footer>
+</body>
+</html>

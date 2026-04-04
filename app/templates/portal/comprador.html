@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soy Comprador — reenviame.pe</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/phosphor-icons@1.4.2/src/css/icons.css">
+    <link rel="stylesheet" href="/static/css/portal.css">
+</head>
+<body class="portal">
+    <header class="p-header">
+        <a href="/" class="p-header__logo">reenviame<span>.pe</span></a>
+        <nav class="p-header__nav">
+            <a href="/">Enviar comprobante</a>
+            <a href="/estado"><span class="p-header__status"><span class="p-header__dot"></span> Estado</span></a>
+        </nav>
+    </header>
+
+    <div class="p-comprador">
+        <h2>Recibe comprobantes validados de tus proveedores</h2>
+
+        <div class="p-paso">
+            <div class="p-paso__num">1</div>
+            <div class="p-paso__text">
+                <strong>Comparte tu link personalizado con tus proveedores:</strong><br>
+                <code style="background:#f1f5f9;padding:4px 8px;border-radius:4px;font-size:0.85rem">reenviame.pe/?receptor=TU_RUC</code>
+                <br><br>
+                <div class="p-field" style="margin-bottom:8px">
+                    <label for="p-comprador-ruc">Tu RUC</label>
+                    <input type="text" id="p-comprador-ruc" maxlength="11" inputmode="numeric" placeholder="20601234567">
+                </div>
+                <button class="p-copy-link" id="p-copy-link">Copiar mi link personalizado</button>
+            </div>
+        </div>
+
+        <div class="p-paso">
+            <div class="p-paso__num">2</div>
+            <div class="p-paso__text">
+                <strong>Tu proveedor sube el XML en segundos</strong><br>
+                Sin registro, sin costo, desde cualquier dispositivo.
+            </div>
+        </div>
+
+        <div class="p-paso">
+            <div class="p-paso__num">3</div>
+            <div class="p-paso__text">
+                <strong>Recibes notificacion inmediata</strong><br>
+                El comprobante ya esta validado con SUNAT y listo en tu sistema.
+            </div>
+        </div>
+
+        <div style="text-align:center;margin-top:32px">
+            <p style="color:var(--p-text-3);font-size:0.88rem">
+                ¿Eres contador o empresa? <a href="https://alerta.pe" style="color:var(--p-blue);font-weight:600">Conoce alerta.pe</a>
+            </p>
+        </div>
+    </div>
+
+    <footer class="p-footer">
+        Peru Sistemas Pro E.I.R.L. · RUC 20615446565 · Iquitos, Peru
+    </footer>
+
+    <script src="/static/js/portal.js"></script>
+</body>
+</html>

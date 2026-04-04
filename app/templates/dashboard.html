@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — alerta.pe{% endblock %}
+
+{% block head %}
+<style>
+    .dash { padding: 20px 16px; max-width: 600px; margin: 0 auto; }
+
+    .dash__saludo {
+        font-family: var(--font-serif);
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: var(--text-1);
+        margin-bottom: 4px;
+    }
+    .dash__fecha {
+        color: var(--text-3);
+        font-size: 0.82rem;
+        margin-bottom: 28px;
+    }
+
+    /* KPI Cards */
+    .dash__kpis {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 28px;
+    }
+    .kpi {
+        background: var(--bg-glass);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+        text-align: center;
+    }
+    .kpi--full { grid-column: 1 / -1; }
+    .kpi__valor {
+        font-family: var(--font-serif);
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--text-1);
+        line-height: 1;
+        margin-bottom: 4px;
+    }
+    .kpi__valor--green { color: var(--green); }
+    .kpi__valor--gold { color: var(--gold); }
+    .kpi__valor--red { color: var(--red); }
+    .kpi__label {
+        font-size: 0.72rem;
+        color: var(--text-3);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Alertas recientes */
+    .dash__section-title {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-3);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+    }
+    .alertas-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
+    .alerta-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        background: var(--bg-glass);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        cursor: pointer;
+        transition: border-color 0.25s var(--ease);
+    }
+    .alerta-item:hover { border-color: var(--accent); }
+    .alerta-item__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-top: 5px;
+        flex-shrink: 0;
+    }
+    .alerta-item__dot--urgente { background: var(--red); }
+    .alerta-item__dot--importante { background: var(--gold); }
+    .alerta-item__dot--info { background: var(--blue); }
+    .alerta-item__text { flex: 1; }
+    .alerta-item__titulo { font-size: 0.88rem; color: var(--text-1); font-weight: 500; }
+    .alerta-item__desc { font-size: 0.78rem; color: var(--text-3); margin-top: 2px; }
+
+    /* Acceso rápido */
+    .dash__acceso {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .acceso-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: var(--bg-glass);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px 12px;
+        color: var(--text-2);
+        text-decoration: none;
+        font-size: 0.82rem;
+        font-weight: 500;
+        transition: all 0.25s var(--ease);
+    }
+    .acceso-btn:hover { border-color: var(--accent); color: var(--text-1); transform: translateY(-2px); }
+    .acceso-btn i { font-size: 1.5rem; color: var(--accent); }
+
+    .dash__empty {
+        text-align: center;
+        color: var(--text-3);
+        font-size: 0.9rem;
+        padding: 40px 20px;
+    }
+    .dash__empty i { font-size: 2rem; display: block; margin-bottom: 12px; color: var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dash">
+    <!-- Saludo dinámico -->
+    <h1 class="dash__saludo" id="dash-saludo">Hola, {{ user.nombres.split(' ')[0] if user else 'usuario' }}</h1>
+    <p class="dash__fecha" id="dash-fecha"></p>
+
+    <!-- KPIs — se cargan via HTMX / JS -->
+    <div class="dash__kpis" id="dash-kpis">
+        <div class="kpi">
+            <div class="kpi__valor kpi__valor--green" id="kpi-cobrado">—</div>
+            <div class="kpi__label">Cobrado este mes</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi__valor kpi__valor--gold" id="kpi-pendiente">—</div>
+            <div class="kpi__label">Pendiente</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi__valor kpi__valor--red" id="kpi-alertas">—</div>
+            <div class="kpi__label">Alertas activas</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi__valor" id="kpi-comprobantes">—</div>
+            <div class="kpi__label">Comprobantes del mes</div>
+        </div>
+    </div>
+
+    <!-- Alertas recientes — se actualizan cada 60s -->
+    <h2 class="dash__section-title">Alertas recientes</h2>
+    <div class="alertas-list" id="alertas-list"
+         hx-get="/alertas/?size=5"
+         hx-trigger="load, every 60s"
+         hx-swap="innerHTML"
+         hx-select=".alerta-item-wrap">
+        <div class="dash__empty">
+            <i class="ph-check-circle"></i>
+            Cargando alertas...
+        </div>
+    </div>
+
+    <!-- Últimos pagos -->
+    <h2 class="dash__section-title">Últimos pagos</h2>
+    <div class="alertas-list" id="pagos-list" style="margin-bottom:28px">
+        <div class="dash__empty" id="pagos-loading">
+            Cargando pagos...
+        </div>
+    </div>
+
+    <!-- Acceso rápido -->
+    <h2 class="dash__section-title">Acceso rápido</h2>
+    <div class="dash__acceso">
+        <a href="/comprobantes" class="acceso-btn"><i class="ph-arrow-circle-up"></i> Ventas</a>
+        <a href="/comprobantes" class="acceso-btn"><i class="ph-arrow-circle-down"></i> Compras</a>
+        <a href="/subir-foto" class="acceso-btn"><i class="ph-camera"></i> Subir foto</a>
+        <a href="/formulario-manual" class="acceso-btn"><i class="ph-pencil-simple"></i> Manual</a>
+        <a href="#" class="acceso-btn" onclick="voz.activar();return false"><i class="ph-microphone"></i> Voz</a>
+        <a href="#" class="acceso-btn"><i class="ph-chart-bar"></i> Reportes</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Saludo según hora
+    const hora = new Date().getHours();
+    let saludo = 'Buenas noches';
+    if (hora >= 5 && hora < 12) saludo = 'Buenos días';
+    else if (hora >= 12 && hora < 19) saludo = 'Buenas tardes';
+    document.getElementById('dash-saludo').textContent = saludo + ', {{ user.nombres.split(" ")[0] if user else "usuario" }}';
+
+    // Fecha
+    const ahora = new Date();
+    const opciones = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
+    document.getElementById('dash-fecha').textContent =
+        ahora.toLocaleDateString('es-PE', opciones).replace(/^\w/, c => c.toUpperCase());
+
+    // Cargar resumen de empresa activa
+    async function cargarResumen() {
+        const empresaId = '{{ user.empresa_activa_id if user and user.empresa_activa_id else "" }}';
+        if (!empresaId) return;
+
+        try {
+            const res = await fetch(`/empresas/${empresaId}/resumen`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            document.getElementById('kpi-cobrado').textContent = 'S/ ' + Number(data.total_cobrado).toLocaleString('es-PE', {minimumFractionDigits: 2});
+            document.getElementById('kpi-pendiente').textContent = 'S/ ' + Number(data.total_pendiente).toLocaleString('es-PE', {minimumFractionDigits: 2});
+            document.getElementById('kpi-alertas').textContent = data.alertas_activas;
+        } catch {}
+    }
+
+    // Cargar últimos pagos
+    async function cargarPagos() {
+        const empresaId = '{{ user.empresa_activa_id if user and user.empresa_activa_id else "" }}';
+        if (!empresaId) return;
+
+        try {
+            const res = await fetch(`/pagos/?size=5`);
+            if (!res.ok) return;
+            const data = await res.json();
+            const list = document.getElementById('pagos-list');
+
+            if (!data.items || data.items.length === 0) {
+                list.innerHTML = '<div class="dash__empty"><i class="ph-coins"></i> Sin pagos registrados este mes</div>';
+                return;
+            }
+
+            list.innerHTML = data.items.map(p => `
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-glass);border:1px solid var(--border);border-radius:var(--radius);">
+                    <div style="width:32px;height:32px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--accent);">
+                        <i class="ph-${p.canal === 'yape' || p.canal === 'plin' ? 'lightning' : 'bank'}"></i>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:0.88rem;color:var(--text-1);font-weight:500;">S/ ${Number(p.monto).toLocaleString('es-PE', {minimumFractionDigits: 2})}</div>
+                        <div style="font-size:0.72rem;color:var(--text-3);">${p.canal.toUpperCase()} · ${p.pagador_nombre || 'Sin nombre'}</div>
+                    </div>
+                    <span style="font-size:0.68rem;color:${p.estado === 'cruzado' ? 'var(--green)' : p.estado === 'pendiente_cruce' ? 'var(--gold)' : 'var(--red)'};font-weight:500;">${p.estado.replace(/_/g,' ')}</span>
+                </div>
+            `).join('');
+        } catch {}
+    }
+
+    // Cargar alertas
+    async function cargarAlertas() {
+        try {
+            const res = await fetch('/alertas/?size=5');
+            if (!res.ok) return;
+            const data = await res.json();
+            const list = document.getElementById('alertas-list');
+
+            if (!data.items || data.items.length === 0) {
+                list.innerHTML = '<div class="dash__empty"><i class="ph-check-circle"></i> Sin alertas pendientes. Todo en orden.</div>';
+                return;
+            }
+
+            list.innerHTML = data.items.map(a => `
+                <div class="alerta-item">
+                    <span class="alerta-item__dot alerta-item__dot--${a.origen === 'sunat' || a.origen === 'sunafil' ? 'urgente' : 'importante'}"></span>
+                    <div class="alerta-item__text">
+                        <div class="alerta-item__titulo">${a.titulo}</div>
+                        <div class="alerta-item__desc">${a.descripcion.substring(0, 120)}</div>
+                    </div>
+                </div>
+            `).join('');
+        } catch {}
+    }
+
+    // Cargar conteo de alertas para badge
+    async function cargarBadge() {
+        try {
+            const res = await fetch('/alertas/no-leidas/count');
+            if (res.ok) {
+                const data = await res.json();
+                const el = document.getElementById('kpi-alertas');
+                if (el) el.textContent = data.count || 0;
+            }
+        } catch {}
+    }
+
+    cargarResumen();
+    cargarPagos();
+    cargarAlertas();
+    cargarBadge();
+
+    // Auto-refresh cada 60s
+    setInterval(() => { cargarAlertas(); cargarBadge(); }, 60000);
+</script>
+{% endblock %}

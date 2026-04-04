@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Subir foto — alerta.pe{% endblock %}
+
+{% block head %}
+<style>
+    .ingesta { padding: 20px 16px; max-width: 600px; margin: 0 auto; }
+    .ingesta__title { font-family: var(--font-serif); font-size: 1.3rem; color: var(--text-1); margin-bottom: 20px; }
+
+    /* Drop zone */
+    .dropzone {
+        border: 2px dashed var(--border);
+        border-radius: var(--radius);
+        padding: 40px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.25s var(--ease);
+        margin-bottom: 20px;
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: rgba(217,30,24,0.03); }
+    .dropzone i { font-size: 2.5rem; color: var(--accent); display: block; margin-bottom: 12px; }
+    .dropzone__text { color: var(--text-2); font-size: 0.9rem; }
+    .dropzone__hint { color: var(--text-3); font-size: 0.75rem; margin-top: 8px; }
+
+    /* Preview */
+    .preview { display: none; margin-bottom: 20px; text-align: center; }
+    .preview img { max-width: 100%; max-height: 300px; border-radius: var(--radius); border: 1px solid var(--border); }
+    .preview__actions { margin-top: 12px; display: flex; gap: 8px; justify-content: center; }
+
+    /* Progress */
+    .progress { display: none; margin-bottom: 20px; }
+    .progress__bar { height: 4px; background: var(--bg-mid); border-radius: 2px; overflow: hidden; }
+    .progress__fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s var(--ease); }
+    .progress__text { font-size: 0.8rem; color: var(--text-3); text-align: center; margin-top: 8px; }
+
+    /* Resultado OCR */
+    .ocr-result { display: none; }
+    .ocr-field { margin-bottom: 12px; }
+    .ocr-field label { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 500; color: var(--text-3); text-transform: uppercase; margin-bottom: 4px; }
+    .ocr-field input, .ocr-field select {
+        width: 100%; padding: 10px 12px; background: var(--bg-mid); border: 1px solid var(--border);
+        border-radius: var(--radius-input); color: var(--text-1); font-size: 0.9rem; outline: none; box-sizing: border-box;
+    }
+    .ocr-field input:focus { border-color: var(--accent); }
+
+    /* Confianza */
+    .conf { font-size: 0.7rem; }
+    .conf--alta { color: var(--green); }
+    .conf--media { color: var(--gold); }
+    .conf--baja { color: var(--red); }
+
+    .btn-primary {
+        width: 100%; padding: 14px; background: var(--red); color: #fff; border: none;
+        border-radius: var(--radius-input); font-size: 1rem; font-weight: 600;
+        font-family: var(--font-sans); cursor: pointer; transition: all 0.25s var(--ease);
+    }
+    .btn-primary:hover { background: #c41a15; }
+    .btn-secondary {
+        padding: 10px 16px; background: var(--bg-mid); color: var(--text-2); border: 1px solid var(--border);
+        border-radius: var(--radius-input); font-size: 0.88rem; cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ingesta">
+    <h1 class="ingesta__title">Subir foto de comprobante</h1>
+
+    <!-- Drop zone -->
+    <div class="dropzone" id="dropzone">
+        <i class="ph-camera"></i>
+        <div class="dropzone__text">Toca para tomar foto o seleccionar imagen</div>
+        <div class="dropzone__hint">JPG, PNG o WebP — máximo 10 MB</div>
+        <input type="file" id="file-input" accept="image/*" capture="environment" hidden>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview" id="preview">
+        <img id="preview-img" src="" alt="Preview">
+        <div class="preview__actions">
+            <button class="btn-secondary" id="btn-cambiar">Cambiar foto</button>
+            <button class="btn-primary" id="btn-enviar" style="width:auto;padding:10px 24px">Procesar OCR</button>
+        </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress" id="progress">
+        <div class="progress__bar"><div class="progress__fill" id="progress-fill"></div></div>
+        <div class="progress__text" id="progress-text">Procesando imagen...</div>
+    </div>
+
+    <!-- Resultado OCR -->
+    <div class="ocr-result" id="ocr-result">
+        <h2 style="font-size:1rem;color:var(--text-1);margin-bottom:16px">Datos extraídos</h2>
+        <p style="font-size:0.8rem;color:var(--text-3);margin-bottom:16px">Verifica y corrige los datos antes de guardar</p>
+
+        <div class="ocr-field">
+            <label>Tipo <span class="conf conf--alta" id="conf-tipo"></span></label>
+            <select id="ocr-tipo">
+                <option value="factura">Factura</option>
+                <option value="boleta">Boleta</option>
+                <option value="nota_credito">Nota de Crédito</option>
+                <option value="nota_debito">Nota de Débito</option>
+            </select>
+        </div>
+        <div class="ocr-field">
+            <label>RUC Emisor <span class="conf" id="conf-ruc"></span></label>
+            <input type="text" id="ocr-ruc" maxlength="11" inputmode="numeric">
+        </div>
+        <div class="ocr-field">
+            <label>Serie <span class="conf" id="conf-serie"></span></label>
+            <input type="text" id="ocr-serie" maxlength="10" placeholder="F001">
+        </div>
+        <div class="ocr-field">
+            <label>Correlativo <span class="conf" id="conf-correlativo"></span></label>
+            <input type="text" id="ocr-correlativo" maxlength="15" inputmode="numeric">
+        </div>
+        <div class="ocr-field">
+            <label>Fecha emisión <span class="conf" id="conf-fecha"></span></label>
+            <input type="date" id="ocr-fecha">
+        </div>
+        <div class="ocr-field">
+            <label>Total <span class="conf" id="conf-total"></span></label>
+            <input type="number" id="ocr-total" step="0.01" inputmode="decimal">
+        </div>
+        <div class="ocr-field">
+            <label>IGV <span class="conf" id="conf-igv"></span></label>
+            <input type="number" id="ocr-igv" step="0.01" inputmode="decimal">
+        </div>
+
+        <button class="btn-primary" id="btn-guardar" style="margin-top:16px">Guardar comprobante</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const preview = document.getElementById('preview');
+const previewImg = document.getElementById('preview-img');
+const progress = document.getElementById('progress');
+const ocrResult = document.getElementById('ocr-result');
+let selectedFile = null;
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+document.getElementById('btn-cambiar').addEventListener('click', () => fileInput.click());
+
+function handleFile(file) {
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
+        showToast('Formato no soportado');
+        return;
+    }
+    if (file.size > 10*1024*1024) { showToast('Máximo 10 MB'); return; }
+
+    selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        previewImg.src = e.target.result;
+        dropzone.style.display = 'none';
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+document.getElementById('btn-enviar').addEventListener('click', async () => {
+    if (!selectedFile) return;
+    preview.style.display = 'none';
+    progress.style.display = 'block';
+
+    const fill = document.getElementById('progress-fill');
+    const text = document.getElementById('progress-text');
+    fill.style.width = '30%';
+    text.textContent = 'Subiendo imagen...';
+
+    const form = new FormData();
+    form.append('foto', selectedFile);
+
+    try {
+        const res = await fetch('/ingesta/foto', { method: 'POST', body: form });
+        fill.style.width = '60%';
+        text.textContent = 'Procesando OCR...';
+
+        if (!res.ok) {
+            const err = await res.json();
+            text.textContent = 'Error: ' + (err.detail || 'Fallo');
+            fill.style.width = '100%';
+            fill.style.background = 'var(--red)';
+            return;
+        }
+
+        const data = await res.json();
+        fill.style.width = '100%';
+        text.textContent = 'OCR completado';
+
+        // Mostrar resultado
+        setTimeout(() => {
+            progress.style.display = 'none';
+            ocrResult.style.display = 'block';
+        }, 500);
+
+    } catch {
+        text.textContent = 'Error de conexión';
+    }
+});
+
+document.getElementById('btn-guardar').addEventListener('click', async () => {
+    const body = {
+        tipo: document.getElementById('ocr-tipo').value,
+        ruc_emisor: document.getElementById('ocr-ruc').value,
+        serie: document.getElementById('ocr-serie').value,
+        correlativo: document.getElementById('ocr-correlativo').value,
+        fecha_emision: document.getElementById('ocr-fecha').value,
+        total: parseFloat(document.getElementById('ocr-total').value) || 0,
+        igv: parseFloat(document.getElementById('ocr-igv').value) || 0,
+        subtotal: (parseFloat(document.getElementById('ocr-total').value) || 0) - (parseFloat(document.getElementById('ocr-igv').value) || 0),
+        ruc_receptor: '',
+    };
+
+    try {
+        const res = await fetch('/ingesta/formulario', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+        if (res.ok) {
+            showToast('Comprobante guardado');
+            setTimeout(() => window.location.href = '/dashboard', 1500);
+        } else {
+            const err = await res.json();
+            showToast('Error: ' + (err.detail || 'Fallo'));
+        }
+    } catch { showToast('Error de conexión'); }
+});
+</script>
+{% endblock %}

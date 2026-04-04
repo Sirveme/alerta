@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="semi" data-size="md">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0e1526">
+    <title>Recuperar clave — alerta.pe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/phosphor-icons@1.4.2/src/css/icons.css">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <style>
+        body {
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+        }
+        .reset-card {
+            width: 100%;
+            max-width: 380px;
+            padding: 40px 28px;
+        }
+        .reset-title {
+            font-family: var(--font-serif);
+            font-size: 1.5rem;
+            color: var(--text-1);
+            margin-bottom: 8px;
+        }
+        .reset-subtitle {
+            color: var(--text-3);
+            font-size: 0.85rem;
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+        .reset-form { display: flex; flex-direction: column; gap: 16px; }
+        .input-group { text-align: left; }
+        .input-group label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-3);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg-mid);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-input);
+            color: var(--text-1);
+            font-size: 1rem;
+            font-family: var(--font-sans);
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.25s var(--ease);
+        }
+        .input-group input:focus { border-color: var(--red); box-shadow: 0 0 0 3px rgba(217,30,24,0.15); }
+
+        .reset-btn {
+            padding: 14px;
+            background: var(--red);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-input);
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            transition: all 0.25s var(--ease);
+        }
+        .reset-btn:hover { background: #c41a15; }
+
+        .reset-msg {
+            padding: 10px 14px;
+            border-radius: var(--radius-input);
+            font-size: 0.85rem;
+            display: none;
+        }
+        .reset-msg--ok { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: #22c55e; }
+        .reset-msg--err { background: rgba(217,30,24,0.1); border: 1px solid rgba(217,30,24,0.3); color: var(--red); }
+
+        .reset-back {
+            color: var(--text-3);
+            font-size: 0.8rem;
+            text-decoration: none;
+            margin-top: 16px;
+            display: inline-block;
+        }
+        .reset-back:hover { color: var(--gold); }
+
+        .step { display: none; }
+        .step.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="reset-card">
+        <!-- Paso 1: Verificar DNI + DNI secundario -->
+        <div class="step active" id="step-1">
+            <h2 class="reset-title">Recuperar clave</h2>
+            <p class="reset-subtitle">
+                Ingresa tu DNI y el DNI del familiar que registraste como respaldo.
+                No se necesita correo electrónico.
+            </p>
+
+            <div class="reset-msg reset-msg--err" id="error-1"></div>
+
+            <form class="reset-form" id="form-step-1">
+                <div class="input-group">
+                    <label for="reset-dni">Tu DNI</label>
+                    <input type="text" id="reset-dni" inputmode="numeric" pattern="\d{8}" maxlength="8" placeholder="12345678" required>
+                </div>
+                <div class="input-group">
+                    <label for="reset-dni-sec">DNI del familiar de respaldo</label>
+                    <input type="text" id="reset-dni-sec" inputmode="numeric" pattern="\d{8}" maxlength="8" placeholder="87654321" required>
+                </div>
+                <button type="submit" class="reset-btn">Verificar</button>
+            </form>
+        </div>
+
+        <!-- Paso 2: Nueva clave -->
+        <div class="step" id="step-2">
+            <h2 class="reset-title">Nueva clave</h2>
+            <p class="reset-subtitle">Tu identidad fue verificada. Ingresa tu nueva clave.</p>
+
+            <div class="reset-msg reset-msg--err" id="error-2"></div>
+            <div class="reset-msg reset-msg--ok" id="success-2"></div>
+
+            <form class="reset-form" id="form-step-2">
+                <div class="input-group">
+                    <label for="nueva-clave">Nueva clave</label>
+                    <input type="password" id="nueva-clave" minlength="8" placeholder="Mínimo 8 caracteres" required>
+                </div>
+                <div class="input-group">
+                    <label for="confirmar-clave">Confirmar clave</label>
+                    <input type="password" id="confirmar-clave" minlength="8" placeholder="Repetir clave" required>
+                </div>
+                <button type="submit" class="reset-btn">Cambiar clave</button>
+            </form>
+        </div>
+
+        <a href="/login" class="reset-back"><i class="ph-arrow-left"></i> Volver al login</a>
+    </div>
+
+    <script>
+        let tokenTemporal = null;
+
+        // Paso 1: Verificar DNIs
+        document.getElementById('form-step-1').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errEl = document.getElementById('error-1');
+            errEl.style.display = 'none';
+
+            const dni = document.getElementById('reset-dni').value;
+            const dniSec = document.getElementById('reset-dni-sec').value;
+
+            try {
+                const res = await fetch('/auth/reset-clave/iniciar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({dni, dni_secundario: dniSec}),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    errEl.textContent = data.detail || 'Datos incorrectos';
+                    errEl.style.display = 'block';
+                    return;
+                }
+                tokenTemporal = data.token_temporal;
+                document.getElementById('step-1').classList.remove('active');
+                document.getElementById('step-2').classList.add('active');
+            } catch {
+                errEl.textContent = 'Error de conexión';
+                errEl.style.display = 'block';
+            }
+        });
+
+        // Paso 2: Cambiar clave
+        document.getElementById('form-step-2').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errEl = document.getElementById('error-2');
+            const okEl = document.getElementById('success-2');
+            errEl.style.display = 'none';
+            okEl.style.display = 'none';
+
+            const nueva = document.getElementById('nueva-clave').value;
+            const confirmar = document.getElementById('confirmar-clave').value;
+
+            if (nueva !== confirmar) {
+                errEl.textContent = 'Las claves no coinciden';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                const res = await fetch('/auth/reset-clave/confirmar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token_temporal: tokenTemporal, nueva_clave: nueva}),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    errEl.textContent = data.detail || 'Error al cambiar clave';
+                    errEl.style.display = 'block';
+                    return;
+                }
+                okEl.textContent = 'Clave actualizada. Redirigiendo al login...';
+                okEl.style.display = 'block';
+                setTimeout(() => window.location.href = '/login', 2000);
+            } catch {
+                errEl.textContent = 'Error de conexión';
+                errEl.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

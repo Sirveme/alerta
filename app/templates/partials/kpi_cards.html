@@ -1,0 +1,17 @@
+{# Partial HTMX: KPI cards del dashboard. Recibe: cobrado, pendiente, alertas, comprobantes #}
+<div class="kpi">
+    <div class="kpi__valor kpi__valor--green">S/ {{ "%.2f"|format(cobrado|default(0)) }}</div>
+    <div class="kpi__label">Cobrado este mes</div>
+</div>
+<div class="kpi">
+    <div class="kpi__valor kpi__valor--gold">S/ {{ "%.2f"|format(pendiente|default(0)) }}</div>
+    <div class="kpi__label">Pendiente</div>
+</div>
+<div class="kpi">
+    <div class="kpi__valor kpi__valor--red">{{ alertas|default(0) }}</div>
+    <div class="kpi__label">Alertas activas</div>
+</div>
+<div class="kpi">
+    <div class="kpi__valor">{{ comprobantes|default(0) }}</div>
+    <div class="kpi__label">Comprobantes del mes</div>
+</div>

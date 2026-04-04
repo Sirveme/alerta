@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Captura de gastos — RendiPe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/rendipe.css">
+{% endblock %}
+
+{% block content %}
+<div class="rendipe">
+
+    <!-- Header: destino y saldo -->
+    <div class="campo-header">
+        <p style="font-size:0.75rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;">Comision a</p>
+        <h1 class="campo-header__destino">{{ comision.destino }}</h1>
+        <div class="campo-header__saldo" id="saldo-disponible">
+            S/ {{ "%.2f"|format(comision.saldo_disponible) }}
+        </div>
+        <p class="campo-header__saldo-label">Saldo disponible</p>
+    </div>
+
+    <!-- Barra de saldo -->
+    <div class="saldo-bar">
+        <div class="saldo-bar__header">
+            <span class="saldo-bar__label">Gastado</span>
+            <span class="saldo-bar__monto" id="saldo-gastado">S/ {{ "%.2f"|format(comision.total_gastado) }}</span>
+        </div>
+        <div class="saldo-bar__track">
+            {% set pct = (comision.total_gastado / comision.total_viaticos * 100) if comision.total_viaticos > 0 else 0 %}
+            <div class="saldo-bar__fill {% if pct >= 90 %}saldo-bar__fill--danger{% elif pct >= 70 %}saldo-bar__fill--warning{% endif %}"
+                 id="saldo-bar-fill"
+                 style="width: {{ pct|int }}%"></div>
+        </div>
+        <div class="saldo-bar__detail">
+            <span>S/ 0.00</span>
+            <span id="saldo-asignado">S/ {{ "%.2f"|format(comision.total_viaticos) }}</span>
+        </div>
+    </div>
+
+    <!-- Acciones: Camara y Manual -->
+    <div class="campo-acciones">
+        <button class="campo-btn campo-btn--camera" id="btn-camara"
+                onclick="rendipe.tomarFoto('{{ comision.id }}')">
+            <i class="ph-camera"></i>
+            Tomar foto del comprobante
+        </button>
+        <a href="/rendipe/comisiones/{{ comision.id }}/gastos/manual" class="campo-btn">
+            <i class="ph-pencil-simple"></i>
+            Registro manual
+        </a>
+        <button class="campo-btn" id="btn-dj" onclick="document.getElementById('modal-dj').style.display='flex'">
+            <i class="ph-note-pencil"></i>
+            Declaracion Jurada (sin C.E.)
+        </button>
+        {% if comision.es_exterior %}
+        <button class="campo-btn" id="btn-exterior" onclick="document.getElementById('modal-exterior').style.display='flex'">
+            <i class="ph-globe"></i>
+            Gasto exterior
+        </button>
+        {% endif %}
+        <a href="/rendipe/comisiones/{{ comision.id }}/rendicion" class="campo-btn">
+            <i class="ph-file-text"></i>
+            Ver rendicion
+        </a>
+    </div>
+
+    <!-- Panel de asistencia / selfie -->
+    <div class="campo-asistencia" style="background:var(--bg-2);border-radius:12px;padding:16px;margin:12px 0;">
+        <h3 style="font-size:0.85rem;margin:0 0 8px 0;">Marcar asistencia</h3>
+        <p style="font-size:0.75rem;color:var(--text-3);margin:0 0 12px 0;">
+            Toma una selfie para verificar tu presencia en el lugar de la comision.
+        </p>
+        <button class="campo-btn" id="btn-selfie"
+                onclick="rendipe.capturarSelfie('{{ comision.id }}')">
+            <i class="ph-user-focus"></i>
+            Selfie + GPS
+        </button>
+        <div id="asistencia-resultado" style="display:none;margin-top:12px;padding:8px;border-radius:8px;font-size:0.8rem;">
+        </div>
+    </div>
+
+    <!-- Modal DJ -->
+    <div id="modal-dj" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-1);border-radius:16px;padding:24px;width:90%;max-width:420px;max-height:85vh;overflow-y:auto;">
+            <h2 style="font-size:1rem;margin:0 0 16px 0;">Declaracion Jurada</h2>
+            <p style="font-size:0.75rem;color:var(--text-3);margin:0 0 12px 0;">
+                Para gastos sin comprobante de pago electronico (zona rural, negocio informal, etc.)
+            </p>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="dj_rubro">Rubro</label>
+                <select class="rendipe-form__select" id="dj_rubro">
+                    <option value="alimentacion">Alimentacion</option>
+                    <option value="movilidad_local">Movilidad local</option>
+                    <option value="otros">Otros</option>
+                </select>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="dj_monto">Monto (S/)</label>
+                <input type="number" class="rendipe-form__input" id="dj_monto" step="0.01" min="0.01" placeholder="0.00">
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="dj_descripcion">Descripcion</label>
+                <input type="text" class="rendipe-form__input" id="dj_descripcion" placeholder="Ej: Almuerzo en mercado local">
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="dj_establecimiento">Establecimiento</label>
+                <input type="text" class="rendipe-form__input" id="dj_establecimiento" placeholder="Ej: Puesto mercado central">
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="dj_motivo">Motivo sin comprobante</label>
+                <select class="rendipe-form__select" id="dj_motivo">
+                    <option value="zona_rural">Zona rural sin acceso a emisor</option>
+                    <option value="negocio_no_emite">Negocio no emite comprobante</option>
+                    <option value="extraviado">Comprobante extraviado</option>
+                    <option value="transporte_informal">Transporte informal</option>
+                    <option value="otro">Otro motivo</option>
+                </select>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="dj_fecha">Fecha del gasto</label>
+                <input type="date" class="rendipe-form__input" id="dj_fecha">
+            </div>
+
+            <div id="dj-limites" style="font-size:0.75rem;color:var(--text-3);margin:8px 0;"></div>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button type="button" class="campo-btn" onclick="document.getElementById('modal-dj').style.display='none'">
+                    Cancelar
+                </button>
+                <button type="button" class="campo-btn campo-btn--camera" onclick="rendipe.guardarDJ('{{ comision.id }}')">
+                    Guardar DJ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Gasto Exterior -->
+    <div id="modal-exterior" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+        <div style="background:var(--bg-1);border-radius:16px;padding:24px;width:90%;max-width:420px;max-height:85vh;overflow-y:auto;">
+            <h2 style="font-size:1rem;margin:0 0 16px 0;">Gasto en moneda extranjera</h2>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="ext_rubro">Rubro</label>
+                <select class="rendipe-form__select" id="ext_rubro">
+                    <option value="alimentacion">Alimentacion</option>
+                    <option value="alojamiento">Alojamiento</option>
+                    <option value="movilidad_local">Movilidad local</option>
+                    <option value="otros">Otros</option>
+                </select>
+            </div>
+
+            <div class="rendipe-form__row">
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="ext_monto">Monto</label>
+                    <input type="number" class="rendipe-form__input" id="ext_monto" step="0.01" min="0.01" placeholder="0.00">
+                </div>
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="ext_moneda">Moneda</label>
+                    <select class="rendipe-form__select" id="ext_moneda">
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="BRL">BRL</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="ext_tc">Tipo de cambio (a PEN)</label>
+                <input type="number" class="rendipe-form__input" id="ext_tc" step="0.0001" placeholder="Ej: 3.7520">
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="ext_descripcion">Descripcion</label>
+                <input type="text" class="rendipe-form__input" id="ext_descripcion" placeholder="Descripcion del gasto">
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="ext_establecimiento">Establecimiento</label>
+                <input type="text" class="rendipe-form__input" id="ext_establecimiento" placeholder="Nombre del establecimiento">
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="ext_fecha">Fecha del gasto</label>
+                <input type="date" class="rendipe-form__input" id="ext_fecha">
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button type="button" class="campo-btn" onclick="document.getElementById('modal-exterior').style.display='none'">
+                    Cancelar
+                </button>
+                <button type="button" class="campo-btn campo-btn--camera" onclick="rendipe.guardarGastoExterior('{{ comision.id }}')">
+                    Guardar gasto
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gastos del dia -->
+    <h2 class="campo-gastos__titulo">Gastos de hoy</h2>
+    <div id="gastos-lista"
+         hx-get="/rendipe/comisiones/{{ comision.id }}/gastos/hoy"
+         hx-trigger="load, refresh"
+         hx-swap="innerHTML">
+
+        {% if gastos_hoy %}
+            {% for gasto in gastos_hoy %}
+            <div class="campo-gasto-item">
+                <div class="campo-gasto-item__icon">
+                    <i class="ph-receipt"></i>
+                </div>
+                <div class="campo-gasto-item__info">
+                    <div class="campo-gasto-item__concepto">{{ gasto.concepto }}</div>
+                    <div class="campo-gasto-item__meta">
+                        {{ gasto.tipo_comprobante|upper if gasto.tipo_comprobante else 'S/C' }}
+                        &middot;
+                        <span class="gasto-estado gasto-estado--{{ gasto.estado_validacion }}">{{ gasto.estado_validacion }}</span>
+                    </div>
+                </div>
+                <span class="campo-gasto-item__monto">S/ {{ "%.2f"|format(gasto.monto) }}</span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="rendipe-empty" style="padding:20px;">
+                <i class="ph-sun"></i>
+                Sin gastos registrados hoy
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Total acumulado vs asignado -->
+    <div class="campo-totales">
+        <div>
+            <div class="campo-totales__label">Total gastado</div>
+            <div class="campo-totales__valor" id="campo-total-gastado">S/ {{ "%.2f"|format(comision.total_gastado) }}</div>
+        </div>
+        <div style="text-align:right;">
+            <div class="campo-totales__label">Asignado</div>
+            <div class="campo-totales__valor">S/ {{ "%.2f"|format(comision.total_viaticos) }}</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/rendipe.js"></script>
+{% endblock %}

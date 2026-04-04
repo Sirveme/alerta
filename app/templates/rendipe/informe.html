@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Informe de Comision — RendiPe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/rendipe.css">
+{% endblock %}
+
+{% block content %}
+<div class="rendipe">
+    <h1 class="rendipe__titulo">Informe de comision</h1>
+    <p class="rendipe__subtitulo">{{ comision.destino }} &middot; {{ comision.fecha_inicio }} al {{ comision.fecha_fin }}</p>
+
+    <!-- Generar con IA -->
+    <button class="rendipe-acciones__btn rendipe-acciones__btn--primary" id="btn-generar-ia"
+            style="width:100%;margin-bottom:24px;"
+            onclick="rendipe.generarInformeIA('{{ comision.id }}')">
+        <i class="ph-magic-wand"></i>
+        Generar borrador con IA
+    </button>
+
+    <div id="informe-container">
+
+        <div class="informe-section">
+            <label class="informe-section__label" for="informe_antecedentes">1. Antecedentes</label>
+            <textarea class="informe-section__textarea" id="informe_antecedentes" name="antecedentes"
+                      placeholder="Resolucion que autoriza la comision, base legal, antecedentes relevantes...">{{ informe.antecedentes if informe else '' }}</textarea>
+        </div>
+
+        <div class="informe-section">
+            <label class="informe-section__label" for="informe_objetivos">2. Objetivos</label>
+            <textarea class="informe-section__textarea" id="informe_objetivos" name="objetivos"
+                      placeholder="Objetivos de la comision de servicio...">{{ informe.objetivos if informe else '' }}</textarea>
+        </div>
+
+        <div class="informe-section">
+            <label class="informe-section__label" for="informe_actividades">3. Actividades realizadas</label>
+            <textarea class="informe-section__textarea" id="informe_actividades" name="actividades"
+                      style="min-height:120px;"
+                      placeholder="Descripcion cronologica de las actividades realizadas dia por dia...">{{ informe.actividades if informe else '' }}</textarea>
+        </div>
+
+        <div class="informe-section">
+            <label class="informe-section__label" for="informe_resultados">4. Resultados</label>
+            <textarea class="informe-section__textarea" id="informe_resultados" name="resultados"
+                      placeholder="Resultados obtenidos, logros alcanzados...">{{ informe.resultados if informe else '' }}</textarea>
+        </div>
+
+        <div class="informe-section">
+            <label class="informe-section__label" for="informe_conclusiones">5. Conclusiones</label>
+            <textarea class="informe-section__textarea" id="informe_conclusiones" name="conclusiones"
+                      placeholder="Conclusiones de la comision...">{{ informe.conclusiones if informe else '' }}</textarea>
+        </div>
+
+        <div class="informe-section">
+            <label class="informe-section__label" for="informe_recomendaciones">6. Recomendaciones</label>
+            <textarea class="informe-section__textarea" id="informe_recomendaciones" name="recomendaciones"
+                      placeholder="Recomendaciones para futuras acciones...">{{ informe.recomendaciones if informe else '' }}</textarea>
+        </div>
+
+    </div>
+
+    <!-- Acciones -->
+    <div class="rendipe-acciones">
+        <button class="rendipe-acciones__btn rendipe-acciones__btn--primary"
+                onclick="rendipe.guardarInforme('{{ comision.id }}')">
+            <i class="ph-floppy-disk"></i>
+            Guardar
+        </button>
+        <a href="/rendipe/comisiones/{{ comision.id }}/informe/pdf" class="rendipe-acciones__btn" target="_blank">
+            <i class="ph-file-pdf"></i>
+            Generar PDF
+        </a>
+        <button class="rendipe-acciones__btn"
+                onclick="enviarInforme('{{ comision.id }}')">
+            <i class="ph-paper-plane-tilt"></i>
+            Enviar
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/rendipe.js"></script>
+<script>
+    async function enviarInforme(comisionId) {
+        if (!confirm('Se enviara el informe para revision. Continuar?')) return;
+
+        // Save first
+        await rendipe.guardarInforme(comisionId);
+
+        try {
+            const res = await fetch(`/rendipe/comisiones/${comisionId}/informe/enviar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (res.ok) {
+                const toast = document.getElementById('toast');
+                const toastMsg = document.getElementById('toast-msg');
+                if (toast && toastMsg) {
+                    toastMsg.textContent = 'Informe enviado correctamente';
+                    toast.hidden = false;
+                    setTimeout(() => { toast.hidden = true; }, 3000);
+                }
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || 'Error al enviar el informe');
+            }
+        } catch {
+            alert('Error de conexion');
+        }
+    }
+</script>
+{% endblock %}

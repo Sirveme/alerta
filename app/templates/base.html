@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="{{ user.tema if user else 'semi' }}" data-size="{{ user.fuente_size if user else 'md' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0e1526">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="alerta.pe — Alertas inteligentes de pagos digitales para contadores peruanos">
+
+    <title>{% block title %}alerta.pe{% endblock %}</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/png" href="/static/img/duilio.webp">
+    <link rel="apple-touch-icon" href="/static/img/duilio.webp">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Phosphor Icons -->
+    <link rel="stylesheet" href="https://unpkg.com/phosphor-icons@1.4.2/src/css/icons.css">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/cabecera.css">
+    <link rel="stylesheet" href="/static/css/voz.css">
+    <link rel="stylesheet" href="/static/css/cards.css">
+    {% block head %}{% endblock %}
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+    <!-- Cabecera -->
+    {% if user %}
+    <header class="cabecera cabecera--expanded" id="cabecera">
+        <div class="cabecera__row cabecera__row--top">
+            <!-- Logo / Home -->
+            <a href="/dashboard" class="cabecera__logo" title="Inicio">
+                <span class="cabecera__logo-icon"><i class="ph-bell-ringing"></i></span>
+                <span class="cabecera__logo-text">alerta.pe</span>
+            </a>
+
+            <!-- Hora (solo expandido) -->
+            <span class="cabecera__hora" id="cabecera-hora"></span>
+
+            <!-- Avatar + Config -->
+            <div class="cabecera__user">
+                <button class="cabecera__avatar" id="btn-user-menu" title="Menú de usuario">
+                    {{ user.nombres[:1] }}{{ user.apellidos[:1] if user.apellidos else '' }}
+                </button>
+                <button class="cabecera__config-btn" id="btn-config" title="Configuración">
+                    <i class="ph-gear-six"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="cabecera__row cabecera__row--bottom">
+            <!-- Alertas -->
+            <button class="cabecera__alertas" id="btn-alertas" title="Alertas">
+                <i class="ph-bell"></i>
+                <span class="cabecera__alertas-badge" id="alertas-badge" style="display:none">0</span>
+            </button>
+
+            <!-- Selector de empresa -->
+            <button class="cabecera__empresa" id="btn-empresa" title="Cambiar empresa">
+                <span class="cabecera__empresa-dot" id="empresa-dot"></span>
+                <span class="cabecera__empresa-nombre" id="empresa-nombre">Seleccionar empresa</span>
+                <span class="cabecera__empresa-meta" id="empresa-meta"></span>
+                <i class="ph-caret-down"></i>
+            </button>
+
+            <!-- Voz (con animación de ondas) -->
+            <button class="voz-btn" id="btn-voz" title="Consulta por voz" onclick="voz.activar()">
+                <div class="voz-ondas" id="voz-ondas">
+                    <span></span><span></span><span></span>
+                </div>
+                <i class="ph-microphone"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Bottom sheet: Selector de empresa -->
+    <div class="sheet" id="sheet-empresas" hidden>
+        <div class="sheet__backdrop"></div>
+        <div class="sheet__content">
+            <div class="sheet__handle"></div>
+            <h3 class="sheet__title">Mis empresas</h3>
+            <input type="search" class="sheet__search" id="buscar-empresa" placeholder="Buscar empresa..." style="display:none">
+            <div class="sheet__list" id="lista-empresas"></div>
+        </div>
+    </div>
+
+    <!-- Bottom sheet: Menú usuario -->
+    <div class="sheet" id="sheet-user-menu" hidden>
+        <div class="sheet__backdrop"></div>
+        <div class="sheet__content">
+            <div class="sheet__handle"></div>
+            <h3 class="sheet__title">{{ user.nombres }} {{ user.apellidos }}</h3>
+            <nav class="sheet__nav">
+                <a href="#" class="sheet__nav-item" id="nav-perfil"><i class="ph-user"></i> Perfil</a>
+                <a href="#" class="sheet__nav-item" id="nav-configuracion"><i class="ph-gear-six"></i> Configuración</a>
+                <a href="#" class="sheet__nav-item" id="nav-cambiar-tenant"><i class="ph-buildings"></i> Cambiar tenant</a>
+                <a href="#" class="sheet__nav-item sheet__nav-item--danger" id="nav-logout"><i class="ph-sign-out"></i> Cerrar sesión</a>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Bottom sheet: Configuración -->
+    <div class="sheet sheet--full" id="sheet-config" hidden>
+        <div class="sheet__backdrop"></div>
+        <div class="sheet__content">
+            <div class="sheet__handle"></div>
+            <div class="sheet__header">
+                <h3 class="sheet__title">Configuración</h3>
+                <button class="sheet__close" id="btn-close-config"><i class="ph-x"></i></button>
+            </div>
+            <div id="config-container"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast" hidden>
+        <span class="toast__msg" id="toast-msg"></span>
+    </div>
+    {% endif %}
+
+    <!-- Contenido principal -->
+    <main class="main {% if user %}main--auth{% endif %}">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Scripts base -->
+    <script src="/static/js/temas.js"></script>
+    {% if user %}
+    <script src="/static/js/cabecera.js"></script>
+    <script src="/static/js/config.js"></script>
+    <script src="/static/js/voz.js"></script>
+    <script src="/static/js/cards.js"></script>
+    {% endif %}
+    {% block scripts %}{% endblock %}
+
+    <!-- Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}Ingreso manual — alerta.pe{% endblock %}
+
+{% block head %}
+<style>
+    .form-page { padding: 20px 16px; max-width: 600px; margin: 0 auto; }
+    .form-page__title { font-family: var(--font-serif); font-size: 1.3rem; color: var(--text-1); margin-bottom: 20px; }
+
+    .form-section { margin-bottom: 24px; }
+    .form-section__title { font-size: 0.8rem; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .form-row--full { grid-template-columns: 1fr; }
+
+    .form-field label { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text-3); margin-bottom: 4px; }
+    .form-field input, .form-field select {
+        width: 100%; padding: 10px 12px; background: var(--bg-mid); border: 1px solid var(--border);
+        border-radius: var(--radius-input); color: var(--text-1); font-size: 0.9rem;
+        font-family: var(--font-sans); outline: none; box-sizing: border-box;
+    }
+    .form-field input:focus, .form-field select:focus { border-color: var(--accent); }
+
+    /* Líneas de detalle */
+    .lineas { margin-top: 8px; }
+    .linea-item {
+        background: var(--bg-glass); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 12px; margin-bottom: 8px; position: relative;
+    }
+    .linea-item__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .linea-item__num { font-size: 0.75rem; color: var(--text-3); font-weight: 600; }
+    .linea-item__remove { color: var(--red); font-size: 1rem; cursor: pointer; background: none; border: none; }
+    .linea-item .form-row { margin-bottom: 8px; }
+
+    .btn-add-linea {
+        display: flex; align-items: center; gap: 6px; padding: 10px 14px;
+        background: transparent; border: 1px dashed var(--border); border-radius: var(--radius-input);
+        color: var(--text-3); font-size: 0.85rem; cursor: pointer; width: 100%;
+        justify-content: center; transition: all 0.25s var(--ease);
+    }
+    .btn-add-linea:hover { border-color: var(--accent); color: var(--accent); }
+
+    .form-total {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 16px; background: var(--bg-glass); border: 1px solid var(--border);
+        border-radius: var(--radius); margin-top: 16px;
+    }
+    .form-total__label { font-size: 0.85rem; color: var(--text-2); }
+    .form-total__valor { font-family: var(--font-serif); font-size: 1.3rem; color: var(--text-1); font-weight: 700; }
+
+    .btn-submit {
+        width: 100%; padding: 14px; background: var(--red); color: #fff; border: none;
+        border-radius: var(--radius-input); font-size: 1rem; font-weight: 600;
+        font-family: var(--font-sans); cursor: pointer; margin-top: 20px;
+    }
+    .btn-submit:hover { background: #c41a15; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+    <h1 class="form-page__title">Ingreso manual de comprobante</h1>
+
+    <form id="form-manual">
+        <!-- Cabecera -->
+        <div class="form-section">
+            <div class="form-section__title">Datos del comprobante</div>
+            <div class="form-row">
+                <div class="form-field">
+                    <label>Tipo</label>
+                    <select id="f-tipo">
+                        <option value="factura">Factura</option>
+                        <option value="boleta">Boleta</option>
+                        <option value="nota_credito">Nota de Crédito</option>
+                        <option value="nota_debito">Nota de Débito</option>
+                        <option value="guia_remision">Guía de Remisión</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label>Moneda</label>
+                    <select id="f-moneda">
+                        <option value="PEN">Soles (S/)</option>
+                        <option value="USD">Dólares ($)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-field">
+                    <label>Serie</label>
+                    <input type="text" id="f-serie" maxlength="10" placeholder="F001" required>
+                </div>
+                <div class="form-field">
+                    <label>Correlativo</label>
+                    <input type="text" id="f-correlativo" maxlength="15" inputmode="numeric" placeholder="12345" required>
+                </div>
+            </div>
+            <div class="form-row--full form-row">
+                <div class="form-field">
+                    <label>Fecha emisión</label>
+                    <input type="date" id="f-fecha" required>
+                </div>
+            </div>
+        </div>
+
+        <!-- Emisor -->
+        <div class="form-section">
+            <div class="form-section__title">Emisor</div>
+            <div class="form-row">
+                <div class="form-field">
+                    <label>RUC emisor</label>
+                    <input type="text" id="f-ruc-emisor" maxlength="11" inputmode="numeric" placeholder="20601234567" required>
+                </div>
+                <div class="form-field">
+                    <label>Razón social</label>
+                    <input type="text" id="f-nombre-emisor" placeholder="Empresa S.A.C.">
+                </div>
+            </div>
+        </div>
+
+        <!-- Receptor -->
+        <div class="form-section">
+            <div class="form-section__title">Receptor</div>
+            <div class="form-row">
+                <div class="form-field">
+                    <label>RUC receptor</label>
+                    <input type="text" id="f-ruc-receptor" maxlength="11" inputmode="numeric" placeholder="20601234567">
+                </div>
+                <div class="form-field">
+                    <label>Razón social</label>
+                    <input type="text" id="f-nombre-receptor">
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalle -->
+        <div class="form-section">
+            <div class="form-section__title">Detalle de ítems</div>
+            <div class="lineas" id="lineas-container"></div>
+            <button type="button" class="btn-add-linea" id="btn-add-linea">
+                <i class="ph-plus-circle"></i> Agregar ítem
+            </button>
+        </div>
+
+        <!-- Totales calculados -->
+        <div class="form-total">
+            <span class="form-total__label">Subtotal</span>
+            <span class="form-total__valor" id="calc-subtotal">S/ 0.00</span>
+        </div>
+        <div class="form-total">
+            <span class="form-total__label">IGV</span>
+            <span class="form-total__valor" id="calc-igv">S/ 0.00</span>
+        </div>
+        <div class="form-total" style="border-color:var(--accent)">
+            <span class="form-total__label" style="font-weight:600">TOTAL</span>
+            <span class="form-total__valor" id="calc-total" style="color:var(--accent)">S/ 0.00</span>
+        </div>
+
+        <button type="submit" class="btn-submit">Guardar comprobante</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let lineaCount = 0;
+
+function agregarLinea() {
+    lineaCount++;
+    const container = document.getElementById('lineas-container');
+    const div = document.createElement('div');
+    div.className = 'linea-item';
+    div.id = `linea-${lineaCount}`;
+    div.innerHTML = `
+        <div class="linea-item__header">
+            <span class="linea-item__num">Ítem ${lineaCount}</span>
+            <button type="button" class="linea-item__remove" onclick="removerLinea(${lineaCount})"><i class="ph-x"></i></button>
+        </div>
+        <div class="form-row form-row--full">
+            <div class="form-field">
+                <label>Descripción</label>
+                <input type="text" class="linea-desc" placeholder="Descripción del producto/servicio" required>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-field">
+                <label>Cantidad</label>
+                <input type="number" class="linea-cant" value="1" min="0.0001" step="0.01" oninput="calcularTotales()">
+            </div>
+            <div class="form-field">
+                <label>Precio unit. (sin IGV)</label>
+                <input type="number" class="linea-precio" step="0.01" placeholder="0.00" oninput="calcularTotales()">
+            </div>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function removerLinea(num) {
+    const el = document.getElementById(`linea-${num}`);
+    if (el) el.remove();
+    calcularTotales();
+}
+
+function calcularTotales() {
+    let subtotal = 0;
+    document.querySelectorAll('.linea-item').forEach(linea => {
+        const cant = parseFloat(linea.querySelector('.linea-cant')?.value) || 0;
+        const precio = parseFloat(linea.querySelector('.linea-precio')?.value) || 0;
+        subtotal += cant * precio;
+    });
+    const igv = subtotal * 0.18;
+    const total = subtotal + igv;
+    const moneda = document.getElementById('f-moneda').value === 'USD' ? '$' : 'S/';
+
+    document.getElementById('calc-subtotal').textContent = `${moneda} ${subtotal.toFixed(2)}`;
+    document.getElementById('calc-igv').textContent = `${moneda} ${igv.toFixed(2)}`;
+    document.getElementById('calc-total').textContent = `${moneda} ${total.toFixed(2)}`;
+}
+
+document.getElementById('btn-add-linea').addEventListener('click', agregarLinea);
+document.getElementById('f-moneda').addEventListener('change', calcularTotales);
+
+// Agregar primera línea
+agregarLinea();
+
+// Submit
+document.getElementById('form-manual').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const lineas = [];
+    let lineNum = 0;
+    document.querySelectorAll('.linea-item').forEach(linea => {
+        lineNum++;
+        const cant = parseFloat(linea.querySelector('.linea-cant')?.value) || 1;
+        const precio = parseFloat(linea.querySelector('.linea-precio')?.value) || 0;
+        const valor = cant * precio;
+        lineas.push({
+            numero_linea: lineNum,
+            descripcion: linea.querySelector('.linea-desc')?.value || '',
+            cantidad: cant,
+            precio_unitario: precio,
+            igv_monto: parseFloat((valor * 0.18).toFixed(2)),
+            total_linea: parseFloat((valor * 1.18).toFixed(2)),
+        });
+    });
+
+    let subtotal = 0, igv = 0;
+    lineas.forEach(l => { subtotal += l.cantidad * l.precio_unitario; igv += l.igv_monto; });
+
+    const body = {
+        tipo: document.getElementById('f-tipo').value,
+        serie: document.getElementById('f-serie').value.toUpperCase(),
+        correlativo: document.getElementById('f-correlativo').value,
+        ruc_emisor: document.getElementById('f-ruc-emisor').value,
+        razon_social_emisor: document.getElementById('f-nombre-emisor').value || null,
+        ruc_receptor: document.getElementById('f-ruc-receptor').value || '',
+        razon_social_receptor: document.getElementById('f-nombre-receptor').value || null,
+        moneda: document.getElementById('f-moneda').value,
+        subtotal: parseFloat(subtotal.toFixed(2)),
+        igv: parseFloat(igv.toFixed(2)),
+        total: parseFloat((subtotal + igv).toFixed(2)),
+        fecha_emision: document.getElementById('f-fecha').value,
+        detalle_lineas: lineas,
+    };
+
+    try {
+        const res = await fetch('/ingesta/formulario', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            showToast(data.es_duplicado ? 'Guardado como duplicado' : 'Comprobante guardado');
+            setTimeout(() => window.location.href = '/dashboard', 1500);
+        } else {
+            const err = await res.json();
+            showToast('Error: ' + (err.detail || 'Fallo'));
+        }
+    } catch { showToast('Error de conexión'); }
+});
+</script>
+{% endblock %}

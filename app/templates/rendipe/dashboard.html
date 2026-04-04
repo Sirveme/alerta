@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}RendiPe — alerta.pe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/rendipe.css">
+{% endblock %}
+
+{% block content %}
+<div class="rendipe">
+    <h1 class="rendipe__titulo">RendiPe</h1>
+    <p class="rendipe__subtitulo">Gestion de viaticos y rendiciones</p>
+
+    <!-- KPIs -->
+    <div class="rendipe-kpis"
+         hx-get="/rendipe/dashboard/kpis"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <div class="rendipe-kpi">
+            <div class="rendipe-kpi__valor rendipe-kpi__valor--green" id="kpi-activas">--</div>
+            <div class="rendipe-kpi__label">Comisiones activas</div>
+        </div>
+        <div class="rendipe-kpi">
+            <div class="rendipe-kpi__valor rendipe-kpi__valor--gold" id="kpi-pendientes">--</div>
+            <div class="rendipe-kpi__label">Rendiciones pendientes</div>
+        </div>
+        <div class="rendipe-kpi">
+            <div class="rendipe-kpi__valor rendipe-kpi__valor--red" id="kpi-vencidas">--</div>
+            <div class="rendipe-kpi__label">Vencidas</div>
+        </div>
+        <div class="rendipe-kpi">
+            <div class="rendipe-kpi__valor" id="kpi-total-mes">--</div>
+            <div class="rendipe-kpi__label">Total del mes</div>
+        </div>
+    </div>
+
+    <!-- Nueva comision -->
+    <a href="/rendipe/comisiones/nueva" class="rendipe-acciones__btn rendipe-acciones__btn--primary" style="display:block;text-align:center;margin-bottom:24px;text-decoration:none;">
+        <i class="ph-plus-circle"></i> Nueva Comision
+    </a>
+
+    <!-- Comisiones activas -->
+    <h2 class="rendipe__section-title">Comisiones</h2>
+    <div class="comision-list" id="comisiones-list"
+         hx-get="/rendipe/dashboard/comisiones"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <div class="rendipe-empty">
+            <i class="ph-airplane-tilt"></i>
+            Cargando comisiones...
+        </div>
+    </div>
+
+    <!-- Acceso rapido -->
+    <h2 class="rendipe__section-title">Acceso rapido</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <a href="/rendipe/comisiones/nueva" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg-glass);border:1px solid var(--border);border-radius:var(--radius);padding:20px 12px;color:var(--text-2);text-decoration:none;font-size:0.82rem;font-weight:500;transition:all 0.25s var(--ease);">
+            <i class="ph-plus-circle" style="font-size:1.5rem;color:var(--accent);"></i> Nueva comision
+        </a>
+        <a href="/rendipe/rendiciones" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg-glass);border:1px solid var(--border);border-radius:var(--radius);padding:20px 12px;color:var(--text-2);text-decoration:none;font-size:0.82rem;font-weight:500;transition:all 0.25s var(--ease);">
+            <i class="ph-file-text" style="font-size:1.5rem;color:var(--accent);"></i> Rendiciones
+        </a>
+        <a href="/rendipe/informes" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg-glass);border:1px solid var(--border);border-radius:var(--radius);padding:20px 12px;color:var(--text-2);text-decoration:none;font-size:0.82rem;font-weight:500;transition:all 0.25s var(--ease);">
+            <i class="ph-notebook" style="font-size:1.5rem;color:var(--accent);"></i> Informes
+        </a>
+        <a href="/rendipe/servidores" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg-glass);border:1px solid var(--border);border-radius:var(--radius);padding:20px 12px;color:var(--text-2);text-decoration:none;font-size:0.82rem;font-weight:500;transition:all 0.25s var(--ease);">
+            <i class="ph-users" style="font-size:1.5rem;color:var(--accent);"></i> Servidores
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/rendipe.js"></script>
+<script>
+    // Load KPIs
+    async function cargarKpis() {
+        try {
+            const res = await fetch('/rendipe/dashboard/kpis');
+            if (!res.ok) return;
+            const data = await res.json();
+            const el = (id) => document.getElementById(id);
+            if (el('kpi-activas')) el('kpi-activas').textContent = data.comisiones_activas ?? 0;
+            if (el('kpi-pendientes')) el('kpi-pendientes').textContent = data.rendiciones_pendientes ?? 0;
+            if (el('kpi-vencidas')) el('kpi-vencidas').textContent = data.vencidas ?? 0;
+            if (el('kpi-total-mes')) el('kpi-total-mes').textContent = 'S/ ' + Number(data.total_mes ?? 0).toLocaleString('es-PE', {minimumFractionDigits: 2});
+        } catch {}
+    }
+
+    // Load commission list
+    async function cargarComisiones() {
+        try {
+            const res = await fetch('/rendipe/dashboard/comisiones');
+            if (!res.ok) return;
+            const data = await res.json();
+            const list = document.getElementById('comisiones-list');
+            if (!list) return;
+
+            if (!data.items || data.items.length === 0) {
+                list.innerHTML = '<div class="rendipe-empty"><i class="ph-airplane-tilt"></i> Sin comisiones registradas</div>';
+                return;
+            }
+
+            list.innerHTML = data.items.map(c => {
+                const estadoMap = { activa: 'activa', pendiente: 'pendiente', vencida: 'vencida', rendida: 'rendida' };
+                const estado = estadoMap[c.estado] || 'pendiente';
+                return `
+                <a href="/rendipe/comisiones/${c.id}" class="comision-item">
+                    <span class="comision-item__semaforo comision-item__semaforo--${estado}"></span>
+                    <div class="comision-item__info">
+                        <div class="comision-item__destino">${c.destino}</div>
+                        <div class="comision-item__meta">${c.servidor_nombre || ''} &middot; ${c.fecha_inicio} al ${c.fecha_fin}</div>
+                    </div>
+                    <span class="comision-item__monto">S/ ${Number(c.total_viaticos).toLocaleString('es-PE', {minimumFractionDigits: 2})}</span>
+                </a>`;
+            }).join('');
+        } catch {}
+    }
+
+    cargarKpis();
+    cargarComisiones();
+</script>
+{% endblock %}

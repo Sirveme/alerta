@@ -1,0 +1,14 @@
+{# Partial HTMX: un item de alerta. Recibe: alerta (dict) #}
+<div class="alerta-item" hx-put="/alertas/{{ alerta.id }}/leer" hx-swap="none">
+    {% if alerta.origen == 'sunat' or alerta.origen == 'sunafil' %}
+    <span class="alerta-item__dot alerta-item__dot--urgente"></span>
+    {% elif 'duplicado' in alerta.titulo|lower or 'sin comprobante' in alerta.titulo|lower %}
+    <span class="alerta-item__dot alerta-item__dot--importante"></span>
+    {% else %}
+    <span class="alerta-item__dot alerta-item__dot--info"></span>
+    {% endif %}
+    <div class="alerta-item__text">
+        <div class="alerta-item__titulo">{{ alerta.titulo }}</div>
+        <div class="alerta-item__desc">{{ alerta.descripcion[:120] }}</div>
+    </div>
+</div>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estado del sistema — reenviame.pe</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/portal.css">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body class="portal">
+    <header class="p-header">
+        <a href="/" class="p-header__logo">reenviame<span>.pe</span></a>
+        <nav class="p-header__nav">
+            <a href="/">Enviar comprobante</a>
+            <a href="/comprador">Soy Comprador</a>
+        </nav>
+    </header>
+
+    <div class="p-estado">
+        <h2 style="font-size:1.3rem;margin-bottom:24px;text-align:center">
+            <span class="p-header__dot" style="display:inline-block;margin-right:6px"></span>
+            Estado del sistema
+        </h2>
+
+        <div id="estado-datos"
+             hx-get="/estado/datos"
+             hx-trigger="load, every 60s"
+             hx-swap="innerHTML">
+            <div class="p-estado__item">
+                <span class="p-estado__label">Cargando datos...</span>
+                <span class="p-estado__valor">—</span>
+            </div>
+        </div>
+    </div>
+
+    <footer class="p-footer">
+        Peru Sistemas Pro E.I.R.L. · RUC 20615446565 · Iquitos, Peru
+    </footer>
+
+    <script>
+        // Renderizar datos del endpoint /estado/datos
+        document.body.addEventListener('htmx:afterSwap', (e) => {
+            if (e.detail.target.id !== 'estado-datos') return;
+            try {
+                const data = JSON.parse(e.detail.target.textContent);
+                e.detail.target.innerHTML = `
+                    <div class="p-estado__item">
+                        <span class="p-estado__label">SUNAT API</span>
+                        <span class="p-estado__valor" style="color:${data.sunat_disponible ? 'var(--p-green)' : 'var(--p-red)'}">
+                            ${data.sunat_disponible ? 'Disponible' : 'No disponible'}
+                        </span>
+                    </div>
+                    <div class="p-estado__item">
+                        <span class="p-estado__label">Tiempo respuesta SUNAT</span>
+                        <span class="p-estado__valor">${data.sunat_ms || '—'} ms</span>
+                    </div>
+                    <div class="p-estado__item">
+                        <span class="p-estado__label">Comprobantes procesados hoy</span>
+                        <span class="p-estado__valor">${data.envios_hoy || 0}</span>
+                    </div>
+                    <div class="p-estado__item">
+                        <span class="p-estado__label">Validaciones exitosas hoy</span>
+                        <span class="p-estado__valor">${data.validaciones_ok || 0}</span>
+                    </div>
+                    <div class="p-estado__item">
+                        <span class="p-estado__label">Disponibilidad (ultimo mes)</span>
+                        <span class="p-estado__valor">${data.uptime || 99.9}%</span>
+                    </div>
+                    <div class="p-estado__item">
+                        <span class="p-estado__label">Ultima actualizacion</span>
+                        <span class="p-estado__valor">${data.actualizado ? new Date(data.actualizado).toLocaleString('es-PE') : '—'}</span>
+                    </div>
+                `;
+            } catch {}
+        });
+    </script>
+</body>
+</html>

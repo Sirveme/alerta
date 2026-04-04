@@ -1,0 +1,56 @@
+{#
+  Panel de respuesta de voz — se inyecta dinámicamente por voz.js
+  Este template es de referencia para el HTML que genera el JS.
+  No se renderiza server-side — todo el panel es client-side.
+#}
+
+<!-- El panel de voz se crea dinámicamente en voz.js -->
+<!-- Estructura de referencia: -->
+<!--
+<div class="voz-panel" id="voz-panel">
+    <div class="voz-panel__handle"></div>
+
+    <div class="voz-panel__transcripcion" id="voz-transcripcion">
+        "¿Cuánto cobramos este mes?"
+    </div>
+
+    <div class="voz-panel__respuesta" id="voz-respuesta">
+        Este mes cobraste S/ 45,200.00 en 23 pagos.
+        El 60% llegó por Yape y el 25% por BCP.
+    </div>
+
+    <div class="voz-cards" id="voz-cards">
+        <div class="voz-card">
+            <div class="voz-card__label">Total cobrado</div>
+            <div class="voz-card__valor voz-card__valor--green">S/ 45,200.00</div>
+        </div>
+        <div class="voz-card">
+            <div class="voz-card__label">Pagos</div>
+            <div class="voz-card__valor">23</div>
+        </div>
+    </div>
+
+    <div class="voz-panel__actions">
+        <button class="voz-panel__btn" onclick="voz.hablar(voz.ultimaRespuesta)">
+            <i class="ph-speaker-high"></i> Escuchar
+        </button>
+        <button class="voz-panel__btn voz-panel__btn--primary" onclick="voz.activar()">
+            <i class="ph-microphone"></i> Nueva consulta
+        </button>
+        <button class="voz-panel__btn" onclick="voz.cerrarPanel()">
+            Cerrar
+        </button>
+    </div>
+
+    <div class="voz-historial" id="voz-historial">
+        <div class="voz-historial__title" onclick="this.nextElementSibling.hidden = !this.nextElementSibling.hidden">
+            Historial reciente ▾
+        </div>
+        <div class="voz-historial__list" hidden>
+            <div class="voz-historial__item">
+                <span>"¿Cuánto cobramos este mes?"</span> → S/ 45,200.00
+            </div>
+        </div>
+    </div>
+</div>
+-->

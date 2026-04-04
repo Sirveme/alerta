@@ -1,0 +1,21 @@
+{# Partial HTMX: un pago reciente. Recibe: pago (dict) #}
+<div class="pago-item" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-glass);border:1px solid var(--border);border-radius:var(--radius);">
+    <div style="width:32px;height:32px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--accent);">
+        {% if pago.canal == 'yape' %}<i class="ph-lightning"></i>
+        {% elif pago.canal == 'plin' %}<i class="ph-lightning"></i>
+        {% else %}<i class="ph-bank"></i>{% endif %}
+    </div>
+    <div style="flex:1;min-width:0;">
+        <div style="font-size:0.88rem;color:var(--text-1);font-weight:500;">S/ {{ "%.2f"|format(pago.monto) }}</div>
+        <div style="font-size:0.72rem;color:var(--text-3);">{{ pago.canal|upper }} · {{ pago.pagador_nombre or 'Sin nombre' }}</div>
+    </div>
+    <div style="text-align:right;">
+        {% if pago.estado == 'cruzado' %}
+        <span style="font-size:0.68rem;color:var(--green);font-weight:500;">Cruzado</span>
+        {% elif pago.estado == 'pendiente_cruce' %}
+        <span style="font-size:0.68rem;color:var(--gold);font-weight:500;">Pendiente</span>
+        {% else %}
+        <span style="font-size:0.68rem;color:var(--red);font-weight:500;">{{ pago.estado|replace('_',' ')|title }}</span>
+        {% endif %}
+    </div>
+</div>

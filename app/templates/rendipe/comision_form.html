@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva Comision — RendiPe{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/rendipe.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+{% endblock %}
+
+{% block content %}
+<div class="rendipe">
+    <h1 class="rendipe__titulo">Nueva Comision</h1>
+    <p class="rendipe__subtitulo">Registra una comision de servicio</p>
+
+    <!-- Step Indicator -->
+    <div class="step-indicator">
+        <div class="step-indicator__item">
+            <span class="step-indicator__circle step-indicator__circle--active" id="step-circle-1">1</span>
+        </div>
+        <span class="step-indicator__line" id="step-line-1"></span>
+        <div class="step-indicator__item">
+            <span class="step-indicator__circle" id="step-circle-2">2</span>
+        </div>
+        <span class="step-indicator__line" id="step-line-2"></span>
+        <div class="step-indicator__item">
+            <span class="step-indicator__circle" id="step-circle-3">3</span>
+        </div>
+        <span class="step-indicator__line" id="step-line-3"></span>
+        <div class="step-indicator__item">
+            <span class="step-indicator__circle" id="step-circle-4">4</span>
+        </div>
+        <span class="step-indicator__line" id="step-line-4"></span>
+        <div class="step-indicator__item">
+            <span class="step-indicator__circle" id="step-circle-5">5</span>
+        </div>
+    </div>
+
+    <form id="comision-form" onsubmit="rendipe.submitComision(event)">
+
+        <!-- PASO 1: Servidor -->
+        <div class="step-panel step-panel--active" id="step-panel-1">
+            <h2 class="step-panel__titulo">Servidor</h2>
+
+            <div class="rendipe-form__group rendipe-autocomplete">
+                <label class="rendipe-form__label" for="servidor_dni">DNI del servidor</label>
+                <input type="text" class="rendipe-form__input" id="servidor_dni" name="servidor_dni"
+                       placeholder="Ingresa el DNI" maxlength="8" pattern="\d{8}" required
+                       autocomplete="off">
+                <div class="rendipe-autocomplete__list" id="servidor-autocomplete-list"></div>
+                <p class="rendipe-form__hint">Busca por DNI para autocompletar datos</p>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="servidor_nombre">Nombres y apellidos</label>
+                <input type="text" class="rendipe-form__input" id="servidor_nombre" name="servidor_nombre"
+                       placeholder="Se completa automaticamente" required>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="servidor_cargo">Cargo</label>
+                <input type="text" class="rendipe-form__input" id="servidor_cargo" name="servidor_cargo"
+                       placeholder="Cargo del servidor">
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="unidad_organica">Unidad organica</label>
+                <input type="text" class="rendipe-form__input" id="unidad_organica" name="unidad_organica"
+                       placeholder="Oficina o area">
+            </div>
+
+            <input type="hidden" id="servidor_id" name="servidor_id">
+
+            <div class="step-nav">
+                <button type="button" class="step-nav__btn" disabled>Anterior</button>
+                <button type="button" class="step-nav__btn step-nav__btn--primary" onclick="rendipe.nextStep()">Siguiente</button>
+            </div>
+        </div>
+
+        <!-- PASO 2: Destino y Fechas -->
+        <div class="step-panel" id="step-panel-2">
+            <h2 class="step-panel__titulo">Destino y fechas</h2>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="destino">Destino</label>
+                <input type="text" class="rendipe-form__input" id="destino" name="destino"
+                       placeholder="Ciudad o localidad de destino" required>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="motivo">Motivo de la comision</label>
+                <textarea class="rendipe-form__textarea" id="motivo" name="motivo"
+                          placeholder="Describe brevemente el motivo de la comision" required></textarea>
+            </div>
+
+            <div class="rendipe-form__row">
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="fecha_inicio">Fecha inicio</label>
+                    <input type="date" class="rendipe-form__input" id="fecha_inicio" name="fecha_inicio" required>
+                </div>
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="fecha_fin">Fecha fin</label>
+                    <input type="date" class="rendipe-form__input" id="fecha_fin" name="fecha_fin" required>
+                </div>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="dias_comision">Dias de comision</label>
+                <input type="number" class="rendipe-form__input" id="dias_comision" name="dias_comision"
+                       placeholder="Se calcula automaticamente" readonly>
+            </div>
+
+            <!-- Sesion 8: Lugar especifico con mapa -->
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="lugar_especifico">Lugar especifico (opcional)</label>
+                <input type="text" class="rendipe-form__input" id="lugar_especifico" name="lugar_especifico"
+                       placeholder="Ej: Auditorio Gobierno Regional, Av. De la Cultura 734">
+                <p class="rendipe-form__hint">Direccion exacta del lugar de la comision</p>
+            </div>
+
+            <div class="rendipe-form__row">
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="lugar_latitud">Latitud</label>
+                    <input type="number" class="rendipe-form__input" id="lugar_latitud" name="lugar_latitud"
+                           placeholder="-13.5170" step="any" min="-90" max="90">
+                </div>
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="lugar_longitud">Longitud</label>
+                    <input type="number" class="rendipe-form__input" id="lugar_longitud" name="lugar_longitud"
+                           placeholder="-71.9785" step="any" min="-180" max="180">
+                </div>
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="lugar_radio_metros">Radio tolerancia (m)</label>
+                    <input type="number" class="rendipe-form__input" id="lugar_radio_metros" name="lugar_radio_metros"
+                           placeholder="300" value="300" min="50" max="5000">
+                </div>
+            </div>
+
+            <div class="rendipe-form__group">
+                <button type="button" class="campo-btn" onclick="rendipe.geocodificarLugar()" style="margin-bottom:8px;">
+                    <i class="ph-map-pin"></i> Buscar en mapa
+                </button>
+                <div id="mapa-lugar" style="height:250px;border-radius:8px;display:none;"></div>
+            </div>
+
+            <!-- Sesion 8: Comision internacional / exterior -->
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label">
+                    <input type="checkbox" id="es_exterior" name="es_exterior" value="true"
+                           onchange="document.getElementById('exterior-fields').style.display = this.checked ? 'block' : 'none'">
+                    Comision internacional (exterior)
+                </label>
+            </div>
+
+            <div id="exterior-fields" style="display:none;">
+                <div class="rendipe-form__row">
+                    <div class="rendipe-form__group">
+                        <label class="rendipe-form__label" for="pais_destino_iso">Pais destino (ISO 3)</label>
+                        <input type="text" class="rendipe-form__input" id="pais_destino_iso" name="pais_destino_iso"
+                               placeholder="USA, BRA, COL..." maxlength="3">
+                    </div>
+                    <div class="rendipe-form__group">
+                        <label class="rendipe-form__label" for="moneda_exterior">Moneda exterior</label>
+                        <select class="rendipe-form__select" id="moneda_exterior" name="moneda_exterior">
+                            <option value="">Seleccionar</option>
+                            <option value="USD">USD - Dolar americano</option>
+                            <option value="EUR">EUR - Euro</option>
+                            <option value="BRL">BRL - Real brasileno</option>
+                            <option value="CLP">CLP - Peso chileno</option>
+                            <option value="COP">COP - Peso colombiano</option>
+                            <option value="MXN">MXN - Peso mexicano</option>
+                            <option value="ARS">ARS - Peso argentino</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sesion 8: Cobertura de invitacion -->
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label">
+                    <input type="checkbox" id="por_invitacion" name="por_invitacion" value="true"
+                           onchange="document.getElementById('invitacion-fields').style.display = this.checked ? 'block' : 'none'">
+                    Comision por invitacion
+                </label>
+            </div>
+
+            <div id="invitacion-fields" style="display:none;">
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="institucion_invitante">Institucion invitante</label>
+                    <input type="text" class="rendipe-form__input" id="institucion_invitante" name="institucion_invitante"
+                           placeholder="Nombre de la institucion que invita">
+                </div>
+
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label">Rubros que cubre el invitante</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">
+                        <label><input type="checkbox" name="cobertura_rubros" value="pasajes_aereos"> Pasajes aereos</label>
+                        <label><input type="checkbox" name="cobertura_rubros" value="pasajes_terrestres"> Pasajes terrestres</label>
+                        <label><input type="checkbox" name="cobertura_rubros" value="alojamiento"> Alojamiento</label>
+                        <label><input type="checkbox" name="cobertura_rubros" value="alimentacion"> Alimentacion</label>
+                        <label><input type="checkbox" name="cobertura_rubros" value="movilidad_local"> Movilidad local</label>
+                        <label><input type="checkbox" name="cobertura_rubros" value="otros"> Otros</label>
+                    </div>
+                </div>
+
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="viaticos_pagados_por">Viaticos pagados por</label>
+                    <select class="rendipe-form__select" id="viaticos_pagados_por" name="viaticos_pagados_por">
+                        <option value="propia">Institucion propia</option>
+                        <option value="invitante">Invitante</option>
+                        <option value="mixto">Mixto</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="step-nav">
+                <button type="button" class="step-nav__btn" onclick="rendipe.prevStep()">Anterior</button>
+                <button type="button" class="step-nav__btn step-nav__btn--primary" onclick="rendipe.nextStep()">Siguiente</button>
+            </div>
+        </div>
+
+        <!-- PASO 3: Viaticos -->
+        <div class="step-panel" id="step-panel-3">
+            <h2 class="step-panel__titulo">Viaticos</h2>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="escala_viaticos">Escala de viaticos</label>
+                <select class="rendipe-form__select" id="escala_viaticos" name="escala_viaticos" required>
+                    <option value="">Seleccionar escala</option>
+                    <option value="A">Escala A - Funcionarios</option>
+                    <option value="B">Escala B - Profesionales</option>
+                    <option value="C">Escala C - Tecnicos</option>
+                    <option value="D">Escala D - Auxiliares</option>
+                </select>
+            </div>
+
+            <div class="rendipe-form__row">
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="viaticos_por_dia">Viatico por dia (S/)</label>
+                    <input type="number" class="rendipe-form__input" id="viaticos_por_dia" name="viaticos_por_dia"
+                           placeholder="0.00" step="0.01" min="0" required>
+                </div>
+                <div class="rendipe-form__group">
+                    <label class="rendipe-form__label" for="total_viaticos">Total viaticos (S/)</label>
+                    <input type="number" class="rendipe-form__input" id="total_viaticos" name="total_viaticos"
+                           placeholder="0.00" step="0.01" readonly>
+                    <p class="rendipe-form__hint" id="total_viaticos_display"></p>
+                </div>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="fuente_financiamiento">Fuente de financiamiento</label>
+                <select class="rendipe-form__select" id="fuente_financiamiento" name="fuente_financiamiento">
+                    <option value="">Seleccionar</option>
+                    <option value="RO">Recursos Ordinarios</option>
+                    <option value="RDR">Recursos Directamente Recaudados</option>
+                    <option value="ROOC">Recursos por Operaciones Oficiales de Credito</option>
+                    <option value="DT">Donaciones y Transferencias</option>
+                    <option value="RCGL">Recursos Determinados - Canon</option>
+                </select>
+            </div>
+
+            <div class="step-nav">
+                <button type="button" class="step-nav__btn" onclick="rendipe.prevStep()">Anterior</button>
+                <button type="button" class="step-nav__btn step-nav__btn--primary" onclick="rendipe.nextStep()">Siguiente</button>
+            </div>
+        </div>
+
+        <!-- PASO 4: Resolucion -->
+        <div class="step-panel" id="step-panel-4">
+            <h2 class="step-panel__titulo">Resolucion</h2>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="tipo_resolucion">Tipo de resolucion</label>
+                <select class="rendipe-form__select" id="tipo_resolucion" name="tipo_resolucion">
+                    <option value="resolucion_directoral">Resolucion Directoral</option>
+                    <option value="resolucion_jefatural">Resolucion Jefatural</option>
+                    <option value="resolucion_gerencial">Resolucion Gerencial</option>
+                    <option value="memorando">Memorando</option>
+                    <option value="oficio">Oficio</option>
+                </select>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="numero_resolucion">Numero de resolucion</label>
+                <input type="text" class="rendipe-form__input" id="numero_resolucion" name="numero_resolucion"
+                       placeholder="Ej: RD-0123-2026" required>
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="fecha_resolucion">Fecha de resolucion</label>
+                <input type="date" class="rendipe-form__input" id="fecha_resolucion" name="fecha_resolucion">
+            </div>
+
+            <div class="rendipe-form__group">
+                <label class="rendipe-form__label" for="observaciones">Observaciones</label>
+                <textarea class="rendipe-form__textarea" id="observaciones" name="observaciones"
+                          placeholder="Observaciones adicionales (opcional)"></textarea>
+            </div>
+
+            <div class="step-nav">
+                <button type="button" class="step-nav__btn" onclick="rendipe.prevStep()">Anterior</button>
+                <button type="button" class="step-nav__btn step-nav__btn--primary" onclick="rendipe.nextStep()">Siguiente</button>
+            </div>
+        </div>
+
+        <!-- PASO 5: Confirmar -->
+        <div class="step-panel" id="step-panel-5">
+            <h2 class="step-panel__titulo">Confirmar comision</h2>
+            <p style="font-size:0.85rem;color:var(--text-3);margin-bottom:16px;">Revisa los datos antes de crear la comision.</p>
+
+            <div class="step-summary" id="step-summary"></div>
+
+            <div class="step-nav" style="margin-top:28px;">
+                <button type="button" class="step-nav__btn" onclick="rendipe.prevStep()">Anterior</button>
+                <button type="submit" class="step-nav__btn step-nav__btn--primary">Confirmar y crear</button>
+            </div>
+        </div>
+
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/rendipe.js"></script>
+{% endblock %}
