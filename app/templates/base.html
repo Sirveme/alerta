@@ -31,6 +31,8 @@
     <link rel="stylesheet" href="/static/css/voz.css">
     <link rel="stylesheet" href="/static/css/cards.css">
     <link rel="stylesheet" href="/static/css/config.css">
+    <link rel="stylesheet" href="/static/css/sidebar.css">
+    <link rel="stylesheet" href="/static/css/tablas.css">
     {% block head %}{% endblock %}
 
     <!-- HTMX -->
@@ -140,10 +142,52 @@
     </div>
     {% endif %}
 
-    <!-- Contenido principal -->
-    <main class="main {% if user %}main--auth{% endif %}">
-        {% block content %}{% endblock %}
-    </main>
+    {% if user %}
+    <!-- Layout: sidebar (desktop) + contenido -->
+    <div class="layout">
+        <!-- Sidebar desktop -->
+        <aside class="sidebar">
+            <a href="/dashboard" class="sidebar__logo"><i class="ph-bell-ringing"></i> alerta.pe</a>
+            <div class="sidebar__divider"></div>
+            <button class="sidebar__empresa" id="sidebar-empresa" onclick="document.getElementById('btn-empresa')?.click()">
+                <span class="sidebar__empresa-dot" id="sidebar-empresa-dot"></span>
+                <span class="sidebar__empresa-nombre" id="sidebar-empresa-nombre">Seleccionar empresa</span>
+                <i class="ph-caret-down"></i>
+            </button>
+            <div class="sidebar__divider"></div>
+            <nav class="sidebar__nav">
+                <a href="/dashboard" class="sidebar__item {% if request.url.path == '/dashboard' %}active{% endif %}"><i class="ph-house"></i> Dashboard</a>
+                <a href="/ventas" class="sidebar__item {% if request.url.path == '/ventas' %}active{% endif %}"><i class="ph-arrow-circle-up"></i> Ventas</a>
+                <a href="/compras" class="sidebar__item {% if request.url.path == '/compras' %}active{% endif %}"><i class="ph-arrow-circle-down"></i> Compras</a>
+                <a href="/fuentes" class="sidebar__item {% if request.url.path == '/fuentes' %}active{% endif %}"><i class="ph-arrows-clockwise"></i> Fuentes de Datos</a>
+                <a href="/comparativo" class="sidebar__item {% if request.url.path == '/comparativo' %}active{% endif %}"><i class="ph-chart-bar"></i> Comparativo</a>
+                <a href="/alertas-page" class="sidebar__item {% if request.url.path == '/alertas-page' %}active{% endif %}"><i class="ph-bell"></i> Alertas <span class="sidebar__badge" id="sidebar-alertas-badge" style="display:none">0</span></a>
+                <a href="/notificaciones-central" class="sidebar__item {% if request.url.path == '/notificaciones-central' %}active{% endif %}"><i class="ph-megaphone"></i> Notificaciones</a>
+                <a href="/directorio" class="sidebar__item {% if request.url.path == '/directorio' %}active{% endif %}"><i class="ph-address-book"></i> Directorio</a>
+            </nav>
+            <div class="sidebar__footer">
+                <a href="#" class="sidebar__item" onclick="document.getElementById('btn-config')?.click();return false"><i class="ph-gear-six"></i> Configuracion</a>
+                <a href="#" class="sidebar__item" onclick="document.getElementById('btn-logout')?.click();return false"><i class="ph-sign-out"></i> Cerrar sesion</a>
+            </div>
+        </aside>
+        <main class="main main--auth main-content">
+    {% else %}
+        <main class="main">
+    {% endif %}
+            {% block content %}{% endblock %}
+        </main>
+    {% if user %}
+    </div>
+
+    <!-- Bottom nav movil -->
+    <nav class="bottom-nav">
+        <a href="/dashboard" class="{% if request.url.path == '/dashboard' %}active{% endif %}"><span class="nav-icon"><i class="ph-house"></i></span><span>Inicio</span></a>
+        <a href="/ventas" class="{% if request.url.path == '/ventas' %}active{% endif %}"><span class="nav-icon"><i class="ph-arrow-circle-up"></i></span><span>Ventas</span></a>
+        <a href="/compras" class="{% if request.url.path == '/compras' %}active{% endif %}"><span class="nav-icon"><i class="ph-arrow-circle-down"></i></span><span>Compras</span></a>
+        <a href="/alertas-page" class="{% if request.url.path == '/alertas-page' %}active{% endif %}"><span class="nav-icon"><i class="ph-bell"></i></span><span>Alertas</span></a>
+        <a href="/fuentes" class="{% if request.url.path == '/fuentes' %}active{% endif %}"><span class="nav-icon"><i class="ph-dots-three"></i></span><span>Mas</span></a>
+    </nav>
+    {% endif %}
 
     <!-- Scripts base -->
     <script src="/static/js/temas.js"></script>
