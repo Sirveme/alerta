@@ -183,16 +183,20 @@
         btnUserMenu.addEventListener('click', () => abrirSheet(sheetUserMenu));
     }
 
-    // Logout
-    const navLogout = document.getElementById('nav-logout');
-    if (navLogout) {
-        navLogout.addEventListener('click', async (e) => {
-            e.preventDefault();
-            await fetch('/auth/logout', { method: 'POST' });
-            localStorage.removeItem('alerta_user');
-            window.location.href = '/login';
-        });
+    // Logout (shared handler for menu and header button)
+    async function doLogout(e) {
+        e.preventDefault();
+        await fetch('/auth/logout', { method: 'POST' });
+        localStorage.removeItem('alerta_user');
+        document.cookie = 'access_token=; path=/; max-age=0';
+        window.location.href = '/login';
     }
+
+    const navLogout = document.getElementById('nav-logout');
+    if (navLogout) navLogout.addEventListener('click', doLogout);
+
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) btnLogout.addEventListener('click', doLogout);
 
     // Config
     const navConfig = document.getElementById('nav-configuracion');
