@@ -43,6 +43,15 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
+  /* No interceptar navegacion ni rutas de auth/login/dashboard/registro */
+  if (e.request.mode === 'navigate' ||
+      url.pathname.startsWith('/auth/') ||
+      url.pathname === '/login' ||
+      url.pathname === '/dashboard' ||
+      url.pathname === '/registro') {
+    return;
+  }
+
   /* API y auth: network-first */
   if (url.pathname.startsWith('/api/') ||
       url.pathname.startsWith('/auth/') ||
