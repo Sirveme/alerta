@@ -112,6 +112,14 @@
 }
 .cabecera__config-btn:hover { color: var(--text-1); }
 
+.cabecera__logout-btn {
+    color: var(--text-3);
+    font-size: 1.1rem;
+    padding: 4px;
+    transition: color 0.25s var(--ease);
+}
+.cabecera__logout-btn:hover { color: var(--red); }
+
 /* Alertas */
 .cabecera__alertas {
     position: relative;
