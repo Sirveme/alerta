@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0e1526">
     <title>Iniciar sesión — alerta.pe</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+    <link rel="shortcut icon" href="/static/img/favicon.svg">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -175,6 +177,22 @@
             color: var(--red);
             font-size: 0.85rem;
             display: none;
+        }
+        /* Fix visibilidad móvil — texto login más claro */
+        .login-subtitle,
+        .input-group label,
+        .login-link,
+        .login-bio {
+            color: rgba(226, 232, 244, 0.82) !important;
+        }
+
+        .input-group input::placeholder {
+            color: rgba(226, 232, 244, 0.42) !important;
+        }
+
+        /* El subtítulo "Verificación inteligente de pagos..." */
+        .login-subtitle {
+            color: rgba(226, 232, 244, 0.78) !important;
         }
     </style>
 </head>
