@@ -29,6 +29,7 @@
     <link rel="stylesheet" href="/static/css/cabecera.css">
     <link rel="stylesheet" href="/static/css/voz.css">
     <link rel="stylesheet" href="/static/css/cards.css">
+    <link rel="stylesheet" href="/static/css/config.css">
     {% block head %}{% endblock %}
 
     <!-- HTMX -->
@@ -39,6 +40,12 @@
     {% if user %}
     <header class="cabecera cabecera--expanded" id="cabecera">
         <div class="cabecera__row cabecera__row--top">
+            <!-- Botón atrás (solo si hay historial y no estamos en dashboard) -->
+            <button class="cabecera__back" id="btn-back" title="Volver" style="display:none"
+                    onclick="history.back()">
+                <i class="ph-arrow-left"></i>
+            </button>
+
             <!-- Logo / Home -->
             <a href="/dashboard" class="cabecera__logo" title="Inicio">
                 <span class="cabecera__logo-icon"><i class="ph-bell-ringing"></i></span>
@@ -143,6 +150,16 @@
     <script src="/static/js/cards.js"></script>
     {% endif %}
     {% block scripts %}{% endblock %}
+
+    <!-- Botón atrás: visible solo si hay historial y no estamos en dashboard -->
+    <script>
+    (function() {
+        var btn = document.getElementById('btn-back');
+        if (btn && window.location.pathname !== '/dashboard') {
+            if (window.history.length > 1) btn.style.display = '';
+        }
+    })();
+    </script>
 
     <!-- Service Worker -->
     <script>
