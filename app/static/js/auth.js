@@ -49,13 +49,6 @@
                     return;
                 }
 
-                // Guardar tema/fuente del usuario
-                if (data.user) {
-                    localStorage.setItem('alerta_tema', data.user.tema || 'semi');
-                    localStorage.setItem('alerta_fuente_size', data.user.fuente_size || 'md');
-                    localStorage.setItem('alerta_user', JSON.stringify(data.user));
-                }
-
                 // Sonido de éxito
                 if (soundLogin) {
                     soundLogin.volume = 0.3;
@@ -63,9 +56,11 @@
                 }
 
                 // Redirigir al dashboard
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 400);
+                if (data.ok) {
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/dashboard';
+                    }, 400);
+                }
 
             } catch {
                 errorEl.textContent = 'Error de conexión';
