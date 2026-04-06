@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RendiPe — Demo Contador Público</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
+body{background:#f5f5f5;padding:16px;color:#1a1a2e}
+.rp-wrap{max-width:420px;margin:0 auto;padding:12px}
+.rp-header{background:#1565c0;border-radius:12px;padding:16px;margin-bottom:12px}
+.rp-header-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.rp-logo{background:#fff;border-radius:8px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#1565c0;flex-shrink:0}
+.rp-header-text h2{color:#fff;font-size:16px;font-weight:500}
+.rp-header-text p{color:#bbdefb;font-size:12px}
+.rp-progress{background:rgba(255,255,255,.2);border-radius:20px;height:6px;margin-top:4px}
+.rp-progress-bar{background:#fff;border-radius:20px;height:6px;width:65%}
+.rp-progress-label{display:flex;justify-content:space-between;margin-top:4px}
+.rp-progress-label span{color:#bbdefb;font-size:11px}
+.rp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.rp-stat{background:#fff;border:0.5px solid #ddd;border-radius:10px;padding:10px}
+.rp-stat .num{font-size:20px;font-weight:500;color:#1a1a2e}
+.rp-stat .lbl{font-size:11px;color:#666;margin-top:2px}
+.rp-stat .sub{font-size:11px;color:#10b981;margin-top:2px}
+.tab-row{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tab{padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;border:0.5px solid #ddd;background:#fff;color:#555}
+.tab.active{background:#1565c0;color:#fff;border-color:#1565c0}
+.rp-card{background:#fff;border:0.5px solid #ddd;border-radius:10px;padding:12px;margin-bottom:8px}
+.rp-card .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.rp-card .nombre{font-size:14px;font-weight:500}
+.rp-card .detalle{font-size:12px;color:#666}
+.rp-card .monto{font-size:16px;font-weight:500;color:#1565c0}
+.badge{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500}
+.badge-pend{background:#fff3e0;color:#e65100}
+.badge-aprob{background:#e8f5e9;color:#1b5e20}
+.badge-obs{background:#fce8e8;color:#b71c1c}
+.badge-borr{background:#f3e5f5;color:#4a148c}
+.rp-concepto-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.rp-concepto{background:#f5f5f5;border-radius:8px;padding:8px;display:flex;align-items:center;gap:8px}
+.rp-concepto .icon{font-size:16px}
+.rp-concepto .info .name{font-size:12px;font-weight:500}
+.rp-concepto .info .limit{font-size:11px;color:#666}
+.rp-divider{height:0.5px;background:#ddd;margin:12px 0}
+.rp-step{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+.rp-step .num{width:24px;height:24px;border-radius:50%;background:#1565c0;color:#fff;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.rp-step .txt .title{font-size:13px;font-weight:500}
+.rp-step .txt .desc{font-size:12px;color:#666;margin-top:2px}
+.rp-cta{background:#1565c0;color:#fff;border:none;border-radius:10px;padding:13px;width:100%;font-size:14px;font-weight:500;cursor:pointer;margin-top:4px}
+.ocr-box{background:#f0f4ff;border:0.5px solid #b8caf8;border-radius:10px;padding:12px;margin-bottom:8px;text-align:center}
+.ocr-box .icon{font-size:28px;margin-bottom:6px}
+.ocr-box .title{font-size:13px;font-weight:500;color:#1565c0}
+.ocr-box .desc{font-size:12px;color:#555;margin-top:4px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="rp-wrap">
+  <div class="rp-header">
+    <div class="rp-header-top">
+      <div class="rp-logo">R</div>
+      <div class="rp-header-text">
+        <h2>RendiPe</h2>
+        <p>Gestión de viáticos — Inst. Pública</p>
+      </div>
+    </div>
+    <div class="rp-progress"><div class="rp-progress-bar"></div></div>
+    <div class="rp-progress-label">
+      <span>Presupuesto consumido: 65%</span>
+      <span>S/ 13,000 / S/ 20,000</span>
+    </div>
+  </div>
+  <div class="rp-stats">
+    <div class="rp-stat"><div class="num">8</div><div class="lbl">Comisiones activas</div><div class="sub">3 en campo ahora</div></div>
+    <div class="rp-stat"><div class="num">S/ 4,200</div><div class="lbl">Por rendir</div><div class="sub">Vence en 5 días</div></div>
+    <div class="rp-stat"><div class="num">94%</div><div class="lbl">Comprobantes válidos</div><div class="sub">SUNAT verificado</div></div>
+    <div class="rp-stat"><div class="num">2.1 hrs</div><div class="lbl">Tiempo promedio rend.</div><div class="sub">Antes: 3 días</div></div>
+  </div>
+  <div class="tab-row">
+    <div class="tab active" onclick="showTab('rendiciones',this)">Rendiciones</div>
+    <div class="tab" onclick="showTab('ocr',this)">OCR comprobantes</div>
+    <div class="tab" onclick="showTab('flujo',this)">Cómo funciona</div>
+  </div>
+
+  <div id="tab-rendiciones">
+    <div style="font-size:12px;color:#666;margin-bottom:8px">Abril 2026 — 12 rendiciones</div>
+    <div class="rp-card">
+      <div class="row"><span class="nombre">Lic. Carlos Flores</span><span class="badge badge-pend">Pendiente</span></div>
+      <div class="row"><span class="detalle">Comisión Yurimaguas — 3 días</span><span class="monto">S/ 850</span></div>
+      <div style="font-size:11px;color:#666">4 comprobantes adjuntos · Vence mañana</div>
+    </div>
+    <div class="rp-card">
+      <div class="row"><span class="nombre">Ing. María Ríos</span><span class="badge badge-aprob">Aprobado</span></div>
+      <div class="row"><span class="detalle">Comisión Nauta — 2 días</span><span class="monto">S/ 620</span></div>
+      <div style="font-size:11px;color:#10b981">Aprobado por Jefe Administ. · hace 2 horas</div>
+    </div>
+    <div class="rp-card">
+      <div class="row"><span class="nombre">Prof. Juan Tapullima</span><span class="badge badge-obs">Observado</span></div>
+      <div class="row"><span class="detalle">Comisión Requena — 4 días</span><span class="monto">S/ 1,240</span></div>
+      <div style="font-size:11px;color:#e53935">1 comprobante inválido en SUNAT · Subsanar</div>
+    </div>
+    <div class="rp-card">
+      <div class="row"><span class="nombre">Lic. Rosa Pacaya</span><span class="badge badge-borr">Borrador</span></div>
+      <div class="row"><span class="detalle">Comisión Contamana — 5 días</span><span class="monto">S/ 1,490</span></div>
+      <div style="font-size:11px;color:#666">Completando documentos · 6/6 comprobantes</div>
+    </div>
+    <div style="margin-top:6px">
+      <div style="font-size:12px;font-weight:500;color:#666;margin-bottom:6px">Límites por concepto (Escala vigente)</div>
+      <div class="rp-concepto-grid">
+        <div class="rp-concepto"><span class="icon">🏨</span><div class="info"><div class="name">Hospedaje</div><div class="limit">Máx S/ 220/día</div></div></div>
+        <div class="rp-concepto"><span class="icon">🍽</span><div class="info"><div class="name">Alimentación</div><div class="limit">Máx S/ 120/día</div></div></div>
+        <div class="rp-concepto"><span class="icon">🚌</span><div class="info"><div class="name">Movilidad</div><div class="limit">Real · con boleto</div></div></div>
+        <div class="rp-concepto"><span class="icon">📋</span><div class="info"><div class="name">Otros gastos</div><div class="limit">Con sustento</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-ocr" class="hidden">
+    <div class="ocr-box">
+      <div class="icon">📸</div>
+      <div class="title">Foto al comprobante → datos automáticos</div>
+      <div class="desc">El comisionado saca foto con su celular. RendiPe lee RUC, monto, fecha y valida en SUNAT en segundos.</div>
+    </div>
+    <div class="rp-card">
+      <div class="row"><span style="font-size:13px;font-weight:500">Resultado del OCR</span><span class="badge badge-aprob">Válido SUNAT</span></div>
+      <div style="font-size:12px;color:#666;margin-top:6px;display:grid;gap:4px">
+        <div style="display:flex;justify-content:space-between"><span>RUC emisor</span><span style="font-weight:500;color:#1a1a2e">20123456789</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Tipo</span><span style="font-weight:500;color:#1a1a2e">Factura F001-00234</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Monto</span><span style="font-weight:500;color:#1565c0">S/ 220.00</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Concepto detectado</span><span style="font-weight:500;color:#1a1a2e">Hospedaje</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Dentro del límite</span><span style="font-weight:500;color:#10b981">Sí — S/ 220 / S/ 220</span></div>
+      </div>
+    </div>
+    <div class="rp-card">
+      <div style="font-size:13px;font-weight:500;margin-bottom:6px">Sin OCR (flujo actual)</div>
+      <div style="font-size:12px;color:#666;display:grid;gap:4px">
+        <div>1. Comisionado guarda boletas físicas</div>
+        <div>2. Llega a oficina, las entrega</div>
+        <div>3. Asistente digita todo a mano</div>
+        <div>4. Jefe revisa en papel</div>
+        <div style="color:#e53935;font-weight:500">→ 3 días promedio, errores frecuentes</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-flujo" class="hidden">
+    <div style="font-size:12px;color:#666;margin-bottom:10px">Desde que viajan hasta que cobran</div>
+    <div class="rp-step"><div class="num">1</div><div class="txt"><div class="title">Comisión autorizada</div><div class="desc">Jefe aprueba en sistema, comisionado recibe notificación con límites</div></div></div>
+    <div class="rp-step"><div class="num">2</div><div class="txt"><div class="title">Gastos en campo</div><div class="desc">Fotos a comprobantes desde el celular — OCR automático al instante</div></div></div>
+    <div class="rp-step"><div class="num">3</div><div class="txt"><div class="title">Validación SUNAT</div><div class="desc">Cada comprobante verificado — inválidos marcados de inmediato</div></div></div>
+    <div class="rp-step"><div class="num">4</div><div class="txt"><div class="title">Rendición enviada</div><div class="desc">Comisionado envía desde su celular, sin volver a oficina a entregar papeles</div></div></div>
+    <div class="rp-step"><div class="num">5</div><div class="txt"><div class="title">Aprobación y pago</div><div class="desc">Jefe aprueba en un clic — genera reporte para SIGA/SIAF con un botón</div></div></div>
+    <div style="background:#e8f5e9;border-radius:8px;padding:10px;font-size:12px;color:#1b5e20;text-align:center;margin-top:4px">
+      3 días → 2 horas. Cero comprobantes perdidos.
+    </div>
+  </div>
+
+  <div class="rp-divider"></div>
+  <button class="rp-cta">Solicitar demo personalizada — rendipe.pe</button>
+</div>
+<script>
+function showTab(name, el) {
+  ['rendiciones','ocr','flujo'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t !== name);
+  });
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
