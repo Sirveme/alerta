@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>alerta.pe — Demo Contador Privado</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,sans-serif}
+body{background:#f5f5f5;padding:16px;color:#1a1a2e}
+.ap-wrap{max-width:420px;margin:0 auto;padding:12px}
+.ap-header{background:#1a1a2e;border-radius:12px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:12px}
+.ap-logo{background:#e53935;border-radius:8px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;flex-shrink:0}
+.ap-header-text h2{color:#fff;font-size:16px;font-weight:500}
+.ap-header-text p{color:#aaa;font-size:12px}
+.ap-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.ap-stat{background:#fff;border:0.5px solid #ddd;border-radius:10px;padding:10px;text-align:center}
+.ap-stat .num{font-size:22px;font-weight:500}
+.ap-stat .lbl{font-size:11px;color:#666;margin-top:2px}
+.ap-stat.red .num{color:#e53935}
+.ap-stat.amber .num{color:#f59e0b}
+.ap-stat.green .num{color:#10b981}
+.tab-row{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tab{padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;border:0.5px solid #ddd;background:#fff;color:#555}
+.tab.active{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+.ap-alert-card{background:#fff;border:0.5px solid #ddd;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:background .15s}
+.ap-alert-card:hover{background:#f9f9f9}
+.ap-badge{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.badge-red{background:#fce8e8}
+.badge-amber{background:#fef3cd}
+.badge-green{background:#e8f5e9}
+.ap-alert-body{flex:1}
+.ap-alert-body .cliente{font-size:14px;font-weight:500;color:#1a1a2e}
+.ap-alert-body .detalle{font-size:12px;color:#666;margin-top:2px}
+.ap-alert-body .tiempo{font-size:11px;color:#e53935;margin-top:4px}
+.ap-alert-body .tiempo.warn{color:#f59e0b}
+.ap-alert-body .tiempo.ok{color:#10b981}
+.ap-section-title{font-size:13px;font-weight:500;color:#666;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em}
+.ap-xml-card{background:#f0f4ff;border:0.5px solid #b8caf8;border-radius:10px;padding:12px;margin-bottom:8px}
+.ap-xml-card .xml-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.ap-xml-card .xml-name{font-size:13px;font-weight:500;color:#1a1a2e}
+.ap-xml-card .xml-badge{font-size:11px;background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:20px}
+.ap-xml-card .xml-badge.proc{background:#fce8e8;color:#b71c1c}
+.ap-xml-card .xml-detail{font-size:12px;color:#555;display:flex;gap:12px}
+.ap-divider{height:0.5px;background:#ddd;margin:12px 0}
+.ap-cta{background:#e53935;color:#fff;border:none;border-radius:10px;padding:13px;width:100%;font-size:14px;font-weight:500;cursor:pointer;margin-top:4px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="ap-wrap">
+  <div class="ap-header">
+    <div class="ap-logo">A</div>
+    <div class="ap-header-text">
+      <h2>alerta.pe</h2>
+      <p>Panel del Contador — 12 clientes activos</p>
+    </div>
+  </div>
+  <div class="ap-stats">
+    <div class="ap-stat red"><div class="num">3</div><div class="lbl">Urgentes</div></div>
+    <div class="ap-stat amber"><div class="num">7</div><div class="lbl">Por vencer</div></div>
+    <div class="ap-stat green"><div class="num">41</div><div class="lbl">XML hoy</div></div>
+  </div>
+  <div class="tab-row">
+    <div class="tab active" onclick="showTab('alertas',this)">Alertas</div>
+    <div class="tab" onclick="showTab('xml',this)">XML automáticos</div>
+    <div class="tab" onclick="showTab('clientes',this)">Clientes</div>
+  </div>
+
+  <div id="tab-alertas">
+    <div class="ap-section-title">Hoy — requieren acción</div>
+    <div class="ap-alert-card">
+      <div class="ap-badge badge-red">⚠</div>
+      <div class="ap-alert-body">
+        <div class="cliente">Ferretería Los Andes</div>
+        <div class="detalle">IGV mensual — vence en 2 días</div>
+        <div class="tiempo">URGENTE — 28/abr/2026</div>
+      </div>
+    </div>
+    <div class="ap-alert-card">
+      <div class="ap-badge badge-red">⚠</div>
+      <div class="ap-alert-body">
+        <div class="cliente">Bodega Tucandela</div>
+        <div class="detalle">Boletas sin enviar a SUNAT — 14 pendientes</div>
+        <div class="tiempo">URGENTE — sincronizar hoy</div>
+      </div>
+    </div>
+    <div class="ap-alert-card">
+      <div class="ap-badge badge-amber">!</div>
+      <div class="ap-alert-body">
+        <div class="cliente">Distribuidora Loreto SAC</div>
+        <div class="detalle">Renta anual — preparar declaración</div>
+        <div class="tiempo warn">Vence en 12 días — 08/may/2026</div>
+      </div>
+    </div>
+    <div class="ap-alert-card">
+      <div class="ap-badge badge-green">✓</div>
+      <div class="ap-alert-body">
+        <div class="cliente">Pollería El Buen Sabor</div>
+        <div class="detalle">PDT 621 presentado correctamente</div>
+        <div class="tiempo ok">Completado — hace 2 horas</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-xml" class="hidden">
+    <div class="ap-section-title">Recibidos hoy — procesados automáticamente</div>
+    <div class="ap-xml-card">
+      <div class="xml-row"><span class="xml-name">Ferretería Los Andes</span><span class="xml-badge">Válido SUNAT</span></div>
+      <div class="xml-detail"><span>F001-00000234</span><span>S/ 1,240.00</span><span>hace 14 min</span></div>
+    </div>
+    <div class="ap-xml-card">
+      <div class="xml-row"><span class="xml-name">Bodega Tucandela</span><span class="xml-badge">Válido SUNAT</span></div>
+      <div class="xml-detail"><span>B001-00000099</span><span>S/ 3.00</span><span>hace 31 min</span></div>
+    </div>
+    <div class="ap-xml-card">
+      <div class="xml-row"><span class="xml-name">Distribuidora Loreto SAC</span><span class="xml-badge proc">Observado</span></div>
+      <div class="xml-detail"><span>F002-00000011</span><span>S/ 8,500.00</span><span>hace 1 hora</span></div>
+    </div>
+    <div style="font-size:12px;color:#666;text-align:center;padding:8px">
+      +38 comprobantes más procesados hoy sin intervención manual
+    </div>
+  </div>
+
+  <div id="tab-clientes" class="hidden">
+    <div class="ap-section-title">Estado de tus clientes</div>
+    <div class="ap-alert-card">
+      <div class="ap-badge badge-green">✓</div>
+      <div class="ap-alert-body"><div class="cliente">Pollería El Buen Sabor</div><div class="detalle">Al día — 0 alertas</div><div class="tiempo ok">Sin pendientes</div></div>
+    </div>
+    <div class="ap-alert-card">
+      <div class="ap-badge badge-red">⚠</div>
+      <div class="ap-alert-body"><div class="cliente">Ferretería Los Andes</div><div class="detalle">2 obligaciones próximas</div><div class="tiempo">Requiere atención hoy</div></div>
+    </div>
+    <div class="ap-alert-card">
+      <div class="ap-badge badge-amber">!</div>
+      <div class="ap-alert-body"><div class="cliente">Distribuidora Loreto SAC</div><div class="detalle">1 comprobante observado por SUNAT</div><div class="tiempo warn">Revisar esta semana</div></div>
+    </div>
+    <div class="ap-alert-card">
+      <div class="ap-badge badge-green">✓</div>
+      <div class="ap-alert-body"><div class="cliente">Bodega Doña María</div><div class="detalle">Al día — sincronizado hace 2h</div><div class="tiempo ok">Sin pendientes</div></div>
+    </div>
+  </div>
+
+  <div class="ap-divider"></div>
+  <button class="ap-cta">Solicitar acceso — alerta.pe</button>
+</div>
+<script>
+function showTab(name, el) {
+  ['alertas','xml','clientes'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t !== name);
+  });
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
