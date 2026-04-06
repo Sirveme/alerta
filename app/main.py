@@ -214,6 +214,11 @@ async def pioneros(request: Request):
     return templates.TemplateResponse("pioneros/index.html", {"request": request})
 
 
+@app.get("/rindeya", response_class=HTMLResponse)
+async def rindeya(request: Request):
+    return templates.TemplateResponse("rindeYa.html", {"request": request})
+
+
 # ── PÁGINAS AUTENTICADAS ─────────────────────────────────────
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
