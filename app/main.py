@@ -219,6 +219,11 @@ async def rindeya(request: Request):
     return templates.TemplateResponse("rindeYa.html", {"request": request})
 
 
+@app.get("/contables", response_class=HTMLResponse)
+async def contables(request: Request):
+    return templates.TemplateResponse("alertaContable.html", {"request": request})
+
+
 # ── PÁGINAS AUTENTICADAS ─────────────────────────────────────
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
