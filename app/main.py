@@ -15,10 +15,10 @@ from app.routers import (
     home,
     mensajes,
     push,
+    robots,
     sw,
     ui,
 )
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,7 +49,49 @@ app.include_router(clientes_ruc.router)
 app.include_router(mensajes.router)
 app.include_router(configuracion.router)
 app.include_router(push.router)
+app.include_router(robots.router)
 app.include_router(sw.router)
+
+
+
+# ============================================================
+# Filtro de URLs heredadas (proyectos anteriores en este dominio)
+# Bots siguen pidiendo URLs de WordPress de algún sitio anterior
+# que usó alerta.pe. Devolver 410 inmediato libera el servidor.
+# ============================================================
+import re
+
+PATRONES_LEGACY = [
+    re.compile(r"^/\d{4}/\d{2}/\d{2}/"),  # /2022/05/13/...
+    re.compile(r"^/\d{4}/\d{2}/"),         # /2022/05/
+    re.compile(r"^/\d{4}/$"),              # /2022/
+    re.compile(r"^/category/"),
+    re.compile(r"^/tag/"),
+    re.compile(r"^/wp-"),                  # /wp-admin, /wp-content, etc.
+    re.compile(r"^/wprss"),
+    re.compile(r"^/feed"),
+    re.compile(r"^/comments/"),
+    re.compile(r"^/author/"),
+    re.compile(r"^/page/"),
+]
+
+
+@app.middleware("http")
+async def filtrar_urls_legacy(request: Request, call_next):
+    """Devuelve 410 Gone instantáneo a URLs heredadas de proyectos previos
+    en este dominio. Libera al servidor de procesarlas.
+    """
+    from fastapi.responses import PlainTextResponse
+    path = request.url.path
+    for patron in PATRONES_LEGACY:
+        if patron.match(path):
+            return PlainTextResponse(
+                "Esta URL no existe en alerta.pe.\n"
+                "Visite https://alerta.pe para el sistema de alertas SUNAT.",
+                status_code=410,
+            )
+    return await call_next(request)
+
 
 
 @app.exception_handler(404)
