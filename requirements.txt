@@ -20,7 +20,8 @@ asyncpg>=0.29.0
 
 # Auth + security
 pyjwt[crypto]>=2.8.0
-passlib[bcrypt]>=1.7.4
+passlib==1.7.4
+bcrypt==4.0.1
 cryptography>=42.0.0
 
 # Scheduler (para 13b)
