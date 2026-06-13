@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     sunat_dni: str = ""
     sunat_usuario: str = ""
     sunat_clave: str = ""
-    sunat_timeout_segundos: int = 30
+    sunat_timeout_segundos: int = 60  # Compatibilidad: aún se usa en algunos lugares
     sunat_reintentos: int = 2
 
     # === APLICACIÓN ===
