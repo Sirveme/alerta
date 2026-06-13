@@ -1,19 +1,30 @@
-"""
-core/database.py — Engine y SessionLocal canonicos para toda la app.
+"""Engine y sesiones SQLAlchemy async."""
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
-Cualquier script o modulo que necesite acceso a BD debe importar de aqui:
-    from app.core.database import SessionLocal, engine
-"""
+from app.config import settings
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+engine = create_async_engine(
+    settings.database_url,
+    echo=settings.debug,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+)
 
-from app.core.config import settings
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
 
-# Railway usa postgres:// pero SQLAlchemy necesita postgresql://
-_url = settings.DATABASE_URL_SYNC
-if _url.startswith("postgres://"):
-    _url = _url.replace("postgres://", "postgresql://", 1)
+Base = declarative_base()
 
-engine = create_engine(_url, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+async def get_db() -> AsyncSession:
+    """FastAPI dependency."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
