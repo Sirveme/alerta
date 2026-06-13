@@ -61,11 +61,49 @@ async function suscribirsePush() {
 }
 
 async function enviarPushPrueba() {
-    const resp = await fetch('/push/test', { method: 'POST' });
-    if (!resp.ok) {
-        alert('Error enviando push de prueba.');
-        return;
+    const btn = document.getElementById('btn-push-prueba');
+    const txtOriginal = btn ? btn.textContent : '';
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Enviando...';
     }
-    const data = await resp.json();
-    alert(`Push enviadas: ${data.enviadas} | Fallidas: ${data.fallidas} | Desactivadas: ${data.desactivadas}`);
+    
+    try {
+        const resp = await fetch('/push/test', { method: 'POST' });
+        if (!resp.ok) {
+            alert('❌ Error al enviar push de prueba.');
+            return;
+        }
+        const data = await resp.json();
+        
+        // Mostrar resultado en el div de status, no en alert
+        const status = document.getElementById('push-status');
+        if (data.enviadas > 0 && data.fallidas === 0) {
+            // Éxito silencioso - solo mensaje suave en el div
+            if (status) {
+                status.innerHTML = '✓ Push enviado. Revisa la notificación del sistema.';
+                status.style.color = '#66bb6a';
+                // Limpiar mensaje después de 5 seg
+                setTimeout(() => {
+                    if (status) status.innerHTML = '';
+                }, 5000);
+            }
+        } else {
+            // Solo alertar si HUBO problemas
+            alert(
+                `⚠ Push con problemas:\n\n` +
+                `Enviadas: ${data.enviadas}\n` +
+                `Fallidas: ${data.fallidas}\n` +
+                `Desactivadas: ${data.desactivadas}`
+            );
+        }
+    } catch (err) {
+        alert('❌ Error: ' + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = txtOriginal;
+        }
+    }
 }
