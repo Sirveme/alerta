@@ -1,142 +1,27 @@
-"""
-__init__.py — Índice central de todos los modelos de alerta.pe / notificado.pro.
-
-Importar desde aquí para que Alembic y FastAPI descubran todos los modelos:
-    from app.models import Base, Usuario, Tenant, ...
-
-Todos los modelos se importan explícitamente para que SQLAlchemy registre
-las tablas en Base.metadata al momento del import.
-"""
-
-# Base y mixins
-from app.models.base import Base, TimestampMixin, SoftDeleteMixin
-
-# Tenants
-from app.models.tenants import Tenant, TipoServicio, PlanTenant, Invitacion
-
-# Usuarios
-from app.models.usuarios import (
-    Usuario,
-    UsuarioTenant,
-    WebAuthnCredential,
-    RecuperacionClave,
-    RolUsuario,
-)
-
-# Empresas
-from app.models.empresas import EmpresaCliente
-
-# Pagos
-from app.models.pagos import Pago, EstadoPago, CanalPago
-
-# Documentos (productos no deducibles)
-from app.models.documentos import ProductoNoDeducible
-
-# Comprobantes
-from app.models.comprobantes import (
-    Comprobante,
-    DetalleComprobante,
-    TipoComprobante,
-    EstadoComprobante,
-    ClasificadoPor,
-)
-
-# Acumulados
-from app.models.acumulados import (
-    AcumBancos,
-    AcumSIRE,
-    AcumMensual,
-    TipoRegistroSIRE,
-)
-
-# Deudas (notificado.pro)
-from app.models.deudas import Deuda, DeudaPago, CicloDeuda, EstadoDeuda, NivelEscalamiento
-
-# Notificaciones
-from app.models.notificaciones import (
-    Notificacion,
-    CanalNotificacion,
-    EstadoNotificacion,
-    NivelAlertaNotificacion,
-)
-
-# Alertas
-from app.models.alertas import Alerta, OrigenAlerta, EstadoAlerta
-
-# Correos
-from app.models.correos import CorreoCapturado
-
-# Configuración
-from app.models.configuracion import (
-    ConfigUsuario,
-    ConfigEmpresa,
-    TemaUI,
-    FuenteSize,
-    CanalPreferido,
-    TonoIA,
-    VelocidadVoz,
-    RegimenTributario,
-)
-
-# Voz
-from app.models.voz import ConsultaVoz
-
-# Auditoría
-from app.models.auditoria import RegistroAuditoria
-
-# Notificaciones manuales (sesión 5)
-from app.models.notif_manual import NotifManual
-
-# Contabilidad (sesión 5)
-from app.models.contabilidad import (
-    PlanContable, AsientoContable, LineaAsiento,
-    TipoCambioHistorico, CronogramaSunat, SeguimientoCorreccion,
-)
-
-# Portal público (sesión 6)
-from app.models.portal import EnvioPortal, EstadoSistema
-
-# Directorio RUC (sesion C)
-from app.models.directorio import DirectorioRUC
-
-# RendiPe — Rendicion de Gastos (sesion 7a)
-from app.models.rendipe import (
-    InstitucionConfig, Servidor, Comision,
-    GastoComision, InformeComision, SaldoComision,
-)
+"""Re-exports de modelos."""
+from app.models.base import TimestampMixin
+from app.models.cliente_ruc import ClienteRuc
+from app.models.configuracion import ConfiguracionPolling, ConfiguracionUI
+from app.models.credencial_sol import CredencialSol
+from app.models.log import LogAuditoria, LogPolling
+from app.models.mensaje import MensajeBuzon
+from app.models.plan import Plan, PlanCodigo, Suscripcion
+from app.models.push_suscripcion import PushSuscripcion
+from app.models.usuario import RolEnum, Usuario
 
 __all__ = [
-    # Base
-    "Base", "TimestampMixin", "SoftDeleteMixin",
-    # Tenants
-    "Tenant", "TipoServicio", "PlanTenant", "Invitacion",
-    # Usuarios
-    "Usuario", "UsuarioTenant", "WebAuthnCredential", "RecuperacionClave", "RolUsuario",
-    # Empresas
-    "EmpresaCliente",
-    # Pagos
-    "Pago", "EstadoPago", "CanalPago",
-    # Documentos
-    "ProductoNoDeducible",
-    # Comprobantes
-    "Comprobante", "DetalleComprobante", "TipoComprobante", "EstadoComprobante", "ClasificadoPor",
-    # Acumulados
-    "AcumBancos", "AcumSIRE", "AcumMensual", "TipoRegistroSIRE",
-    # Deudas
-    "Deuda", "DeudaPago", "CicloDeuda", "EstadoDeuda", "NivelEscalamiento",
-    # Notificaciones
-    "Notificacion", "CanalNotificacion", "EstadoNotificacion", "NivelAlertaNotificacion",
-    # Alertas
-    "Alerta", "OrigenAlerta", "EstadoAlerta",
-    # Correos
-    "CorreoCapturado",
-    # Configuración
-    "ConfigUsuario", "ConfigEmpresa", "TemaUI", "FuenteSize",
-    "CanalPreferido", "TonoIA", "VelocidadVoz", "RegimenTributario",
-    # Voz
-    "ConsultaVoz",
-    # Auditoria
-    "RegistroAuditoria",
-    # Directorio
-    "DirectorioRUC",
+    "ClienteRuc",
+    "ConfiguracionPolling",
+    "ConfiguracionUI",
+    "CredencialSol",
+    "LogAuditoria",
+    "LogPolling",
+    "MensajeBuzon",
+    "Plan",
+    "PlanCodigo",
+    "PushSuscripcion",
+    "Suscripcion",
+    "RolEnum",
+    "TimestampMixin",
+    "Usuario",
 ]
