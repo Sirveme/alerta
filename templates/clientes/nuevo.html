@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Agregar cliente — Alerta.pe{% endblock %}
+{% block body %}
+<div class="container" style="max-width: 640px;">
+    <header style="margin-bottom: 24px;">
+        <a href="/clientes" style="color: var(--color-text-tenue); font-size: 13px;">← Volver a clientes</a>
+        <h1 style="margin-top: 8px;">Agregar cliente RUC</h1>
+    </header>
+
+    {% if limite_alcanzado %}
+    <div class="card" style="background: rgba(229,115,115,0.12); border-color: #e57373; margin-bottom: 16px;">
+        <h3 style="color: #e57373; margin-bottom: 8px;">⚠️ Límite alcanzado</h3>
+        <p style="color: var(--color-text-suave); margin-bottom: 12px;">{{ mensaje_limite }}</p>
+        <a href="/configuracion/plan" class="btn btn-primario">VER ESCALA DE PLANES</a>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <form method="POST" action="/clientes/nuevo">
+            <h3 style="margin-bottom: 16px; color: var(--color-acento);">Datos de la empresa</h3>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 4px;">RUC (11 dígitos)</label>
+                <input class="input" type="text" name="ruc" id="ruc" pattern="\d{11}" maxlength="11" required
+                       value="{{ datos_form.ruc if datos_form else '' }}"
+                       autocomplete="off">
+                <div id="ruc-info" style="font-size: 12px; margin-top: 6px; color: var(--color-text-tenue);"></div>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 4px;">Razón social</label>
+                <input class="input" type="text" name="razon_social" id="razon_social" required maxlength="255"
+                       value="{{ datos_form.razon_social if datos_form else '' }}">
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 4px;">Referencia / Alias (opcional)</label>
+                <input class="input" type="text" name="nombre_referencia" maxlength="100" placeholder="ej: Cliente VIP, Restaurante"
+                       value="{{ datos_form.nombre_referencia if datos_form else '' }}">
+            </div>
+
+            <h3 style="margin: 24px 0 16px; color: var(--color-acento);">Credenciales SOL del cliente</h3>
+            <p style="font-size: 12px; color: var(--color-text-tenue); margin-bottom: 16px;">
+                Se guardan encriptadas. Nunca se muestran después. Solo nuestro sistema las usa para consultar el buzón automáticamente.
+            </p>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 4px;">Tipo de usuario SOL</label>
+                <select class="input" name="tipo_usuario_sol" id="tipo_usuario_sol">
+                    <option value="2">DNI del titular</option>
+                    <option value="1">Usuario SOL alfanumérico</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 16px;" id="grupo_dni">
+                <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 4px;">DNI del titular</label>
+                <input class="input" type="text" name="dni_titular" pattern="\d{8}" maxlength="8" autocomplete="off">
+            </div>
+
+            <div style="margin-bottom: 16px; display: none;" id="grupo_usuario_sol">
+                <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 4px;">Usuario SOL</label>
+                <input class="input" type="text" name="usuario_sol" maxlength="20" autocomplete="off">
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 4px;">Clave SOL</label>
+                <input class="input" type="password" name="clave_sol" required autocomplete="off">
+            </div>
+
+            <button type="submit" class="btn btn-primario" style="width: 100%;">Guardar cliente</button>
+        </form>
+    </div>
+</div>
+
+<script>
+// Toggle entre DNI y Usuario SOL
+document.getElementById('tipo_usuario_sol').addEventListener('change', (e) => {
+    const tipo = e.target.value;
+    document.getElementById('grupo_dni').style.display = tipo === '2' ? 'block' : 'none';
+    document.getElementById('grupo_usuario_sol').style.display = tipo === '1' ? 'block' : 'none';
+});
+
+// Validar RUC al completar 11 dígitos
+let timeoutRuc = null;
+document.getElementById('ruc').addEventListener('input', (e) => {
+    const ruc = e.target.value.trim();
+    const info = document.getElementById('ruc-info');
+
+    if (ruc.length !== 11) {
+        info.textContent = '';
+        return;
+    }
+
+    info.textContent = 'Consultando RUC...';
+    info.style.color = 'var(--color-text-tenue)';
+
+    clearTimeout(timeoutRuc);
+    timeoutRuc = setTimeout(async () => {
+        try {
+            const resp = await fetch(`/clientes/api/validar-ruc/${ruc}`);
+            const data = await resp.json();
+            if (data.valido) {
+                document.getElementById('razon_social').value = data.razon_social || '';
+                info.style.color = 'var(--color-acento)';
+                info.innerHTML = `✓ <strong>${data.razon_social}</strong> · ${data.estado} · ${data.condicion}`;
+            } else {
+                info.style.color = '#e57373';
+                info.textContent = '⚠ RUC no encontrado o inválido';
+            }
+        } catch (err) {
+            info.style.color = '#e57373';
+            info.textContent = '⚠ Error consultando RUC';
+        }
+    }, 400);
+});
+</script>
+
+<div class="tema-selector">
+    <div class="tema-opcion" data-paleta="vino-ambar"></div>
+    <div class="tema-opcion" data-paleta="oceano-arena"></div>
+    <div class="tema-opcion" data-paleta="bosque-cobre"></div>
+    <button data-toggle-modo class="btn btn-secundario" style="padding: 4px 10px; font-size: 11px;">☀️/🌙</button>
+</div>
+{% endblock %}

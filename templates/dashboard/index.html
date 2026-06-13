@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Alerta.pe{% endblock %}
+{% block body %}
+<div class="container">
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid var(--color-borde);">
+        <div>
+            <h1 style="margin: 0;">Alerta<span style="color: var(--color-acento);">.pe</span></h1>
+            <div style="font-size: 12px; color: var(--color-text-tenue); margin-top: 4px;">
+                Plan: <strong>{{ plan.nombre if plan else "-" }}</strong>
+                {% if plan %}
+                · Hasta {{ plan.max_clientes_ruc }} clientes RUC
+                {% endif %}
+            </div>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <span style="color: var(--color-text-tenue); font-size: 14px;">{{ usuario.nombre }}</span>
+            <a href="/configuracion" class="btn btn-secundario" style="padding: 6px 12px; font-size: 12px;">⚙ Configuración</a>
+            <form method="POST" action="/auth/logout" style="display: inline;">
+                <button type="submit" class="btn btn-secundario" style="padding: 6px 12px; font-size: 12px;">Salir</button>
+            </form>
+        </div>
+    </header>
+
+    <!-- Resumen general -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px;">
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 12px; color: var(--color-text-tenue); letter-spacing: 0.1em; text-transform: uppercase;">Clientes RUC</div>
+            <div style="font-size: 36px; color: var(--color-acento); margin-top: 8px; font-weight: bold;">
+                {{ clientes|length }}
+            </div>
+        </div>
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 12px; color: var(--color-text-tenue); letter-spacing: 0.1em; text-transform: uppercase;">Mensajes nuevos</div>
+            <div style="font-size: 36px; color: {% if total_nuevos > 0 %}var(--color-acento){% else %}var(--color-text-tenue){% endif %}; margin-top: 8px; font-weight: bold;">
+                {{ total_nuevos }}
+            </div>
+        </div>
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 12px; color: var(--color-text-tenue); letter-spacing: 0.1em; text-transform: uppercase;">Plan</div>
+            <div style="font-size: 22px; color: var(--color-acento); margin-top: 8px; font-weight: bold;">
+                {{ plan.nombre if plan else "—" }}
+            </div>
+            {% if plan and plan.precio_mensual > 0 %}
+                <div style="font-size: 12px; color: var(--color-text-tenue); margin-top: 4px;">S/ {{ "%.2f"|format(plan.precio_mensual) }}/mes</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Acciones -->
+    <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+        <a href="/clientes/nuevo" class="btn btn-primario">+ Agregar cliente</a>
+        <a href="/clientes" class="btn btn-secundario">Ver todos</a>
+    </div>
+
+    <!-- Lista de clientes -->
+    {% if clientes %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+            {% for c in clientes %}
+                {% set nuevos = mensajes_nuevos_por_cliente.get(c.id, 0) %}
+                <a href="/clientes/{{ c.id }}" style="text-decoration: none;">
+                    <div class="card" style="position: relative; cursor: pointer; transition: transform 0.1s;">
+                        {% if c.es_propio_estudio %}
+                            <div style="position: absolute; top: -8px; right: 12px; background: var(--color-acento); color: var(--color-marca-1); padding: 2px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; letter-spacing: 0.05em;">
+                                TU ESTUDIO
+                            </div>
+                        {% endif %}
+                        {% if nuevos > 0 %}
+                            <div style="position: absolute; top: 12px; right: 12px; background: #e57373; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold;">
+                                {{ nuevos }}
+                            </div>
+                        {% endif %}
+                        <div style="color: var(--color-acento); font-weight: bold; font-size: 14px; margin-bottom: 6px;">
+                            {{ c.nombre_referencia or c.razon_social[:40] }}
+                        </div>
+                        <div style="color: var(--color-text-suave); font-size: 12px; margin-bottom: 4px;">
+                            RUC {{ c.ruc }}
+                        </div>
+                        <div style="color: var(--color-text-tenue); font-size: 11px;">
+                            {{ c.razon_social[:60] }}
+                        </div>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card" style="text-align: center; padding: 48px;">
+            <h3 style="color: var(--color-text-suave);">Aún no tienes clientes RUC</h3>
+            <p style="color: var(--color-text-tenue); margin: 12px 0 24px;">
+                Agrega tu primer cliente para empezar a recibir alertas SUNAT.
+            </p>
+            <a href="/clientes/nuevo" class="btn btn-primario">+ Agregar primer cliente</a>
+        </div>
+    {% endif %}
+</div>
+
+<div class="tema-selector">
+    <div class="tema-opcion" data-paleta="vino-ambar"></div>
+    <div class="tema-opcion" data-paleta="oceano-arena"></div>
+    <div class="tema-opcion" data-paleta="bosque-cobre"></div>
+    <button data-toggle-modo class="btn btn-secundario" style="padding: 4px 10px; font-size: 11px;">☀️/🌙</button>
+</div>
+{% endblock %}

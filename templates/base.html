@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="es"
+      data-tema="{{ request.cookies.get('ui_tema', 'vino-ambar') }}"
+      data-modo="{{ request.cookies.get('ui_modo', 'oscuro') }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Alerta.pe{% endblock %}</title>
+    <link rel="stylesheet" href="{{ static_url('css/temas.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/base.css') }}">
+    <link rel="stylesheet" href="{{ static_url('css/components.css') }}">
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+    {% block body %}{% endblock %}
+
+    <script src="{{ static_url('js/tema-toggle.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

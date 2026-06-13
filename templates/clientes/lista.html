@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Mis clientes — Alerta.pe{% endblock %}
+{% block body %}
+<div class="container">
+    <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <h1>Clientes RUC</h1>
+        <div style="display: flex; gap: 12px;">
+            <a href="/dashboard" class="btn btn-secundario">Dashboard</a>
+            <a href="/clientes/nuevo" class="btn btn-primario">+ Nuevo</a>
+        </div>
+    </header>
+
+    {% if request.query_params.get('alta') == 'ok' %}
+        <div class="card" style="background: rgba(102,187,106,0.15); border-color: #66bb6a; color: #66bb6a; margin-bottom: 16px;">
+            ✓ Cliente agregado correctamente
+        </div>
+    {% endif %}
+
+    {% if clientes %}
+        <div class="card" style="padding: 0; overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: var(--color-bg-elevado);">
+                        <th style="text-align: left; padding: 12px; color: var(--color-acento); font-size: 11px; text-transform: uppercase;">RUC</th>
+                        <th style="text-align: left; padding: 12px; color: var(--color-acento); font-size: 11px; text-transform: uppercase;">Razón social</th>
+                        <th style="text-align: left; padding: 12px; color: var(--color-acento); font-size: 11px; text-transform: uppercase;">Referencia</th>
+                        <th style="text-align: center; padding: 12px; color: var(--color-acento); font-size: 11px; text-transform: uppercase;">Tipo</th>
+                        <th style="padding: 12px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in clientes %}
+                    <tr style="border-bottom: 1px solid var(--color-borde);">
+                        <td style="padding: 12px; font-family: monospace;">{{ c.ruc }}</td>
+                        <td style="padding: 12px;">{{ c.razon_social[:60] }}</td>
+                        <td style="padding: 12px; color: var(--color-text-tenue);">{{ c.nombre_referencia or "—" }}</td>
+                        <td style="padding: 12px; text-align: center;">
+                            {% if c.es_propio_estudio %}
+                                <span style="background: var(--color-acento); color: var(--color-marca-1); padding: 2px 8px; border-radius: 8px; font-size: 10px;">TU ESTUDIO</span>
+                            {% else %}
+                                <span style="color: var(--color-text-tenue); font-size: 12px;">Cliente</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px; text-align: right;">
+                            <a href="/clientes/{{ c.id }}" class="btn btn-secundario" style="padding: 6px 12px; font-size: 12px;">Ver</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="card" style="text-align: center; padding: 48px;">
+            <p style="color: var(--color-text-tenue); margin-bottom: 16px;">No tienes clientes RUC todavía.</p>
+            <a href="/clientes/nuevo" class="btn btn-primario">+ Agregar primero</a>
+        </div>
+    {% endif %}
+</div>
+
+<div class="tema-selector">
+    <div class="tema-opcion" data-paleta="vino-ambar"></div>
+    <div class="tema-opcion" data-paleta="oceano-arena"></div>
+    <div class="tema-opcion" data-paleta="bosque-cobre"></div>
+    <button data-toggle-modo class="btn btn-secundario" style="padding: 4px 10px; font-size: 11px;">☀️/🌙</button>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión — Alerta.pe{% endblock %}
+{% block body %}
+<div class="container" style="max-width: 420px; padding-top: 80px;">
+    <div class="card">
+        <h1 style="text-align: center; margin-bottom: 8px;">
+            Alerta<span style="color: var(--color-acento);">.pe</span>
+        </h1>
+        <p style="text-align: center; color: var(--color-text-tenue); margin-bottom: 24px;">
+            Iniciar sesión
+        </p>
+        <form method="POST" action="/auth/login">
+            <div style="margin-bottom: 16px;">
+                <input class="input" type="email" name="email" placeholder="Email" required autofocus>
+            </div>
+            <div style="margin-bottom: 24px;">
+                <input class="input" type="password" name="password" placeholder="Contraseña" required>
+            </div>
+            <button type="submit" class="btn btn-primario" style="width: 100%;">Entrar</button>
+        </form>
+        <p style="text-align: center; margin-top: 20px; font-size: 13px; color: var(--color-text-tenue);">
+            ¿No tienes cuenta? Contáctanos por WhatsApp
+        </p>
+    </div>
+</div>
+
+<div class="tema-selector">
+    <div class="tema-opcion" data-paleta="vino-ambar"></div>
+    <div class="tema-opcion" data-paleta="oceano-arena"></div>
+    <div class="tema-opcion" data-paleta="bosque-cobre"></div>
+    <button data-toggle-modo class="btn btn-secundario" style="padding: 4px 10px; font-size: 11px;">
+        ☀️/🌙
+    </button>
+</div>
+{% endblock %}

@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Configuración — Alerta.pe{% endblock %}
+{% block body %}
+<div class="container" style="max-width: 720px;">
+    <header style="margin-bottom: 24px;">
+        <a href="/dashboard" style="color: var(--color-text-tenue); font-size: 13px;">← Dashboard</a>
+        <h1 style="margin-top: 8px;">Configuración</h1>
+    </header>
+
+    {% if request.query_params.get('ok') == 'horarios' %}
+    <div class="card" style="background: rgba(102,187,106,0.15); border-color: #66bb6a; color: #66bb6a; margin-bottom: 16px;">
+        ✓ Horarios guardados correctamente
+    </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') == 'limite' %}
+    <div class="card" style="background: rgba(229,115,115,0.15); border-color: #e57373; color: #e57373; margin-bottom: 16px;">
+        ⚠ Tu plan permite máximo {{ request.query_params.get('max', '3') }} horarios. Considera mejorar tu plan.
+    </div>
+    {% endif %}
+
+    <!-- HORARIOS DE POLLING -->
+    <div class="card" style="margin-bottom: 16px;">
+        <h2 style="margin-bottom: 8px;">⏰ Horarios de verificación</h2>
+        <p style="color: var(--color-text-tenue); font-size: 13px; margin-bottom: 16px;">
+            Plan <strong>{{ plan.nombre if plan else '-' }}</strong>:
+            hasta {{ plan.max_horarios_polling if plan else 3 }} horarios
+            {% if plan and plan.polling_cada_hora %}o cada hora todos los días{% endif %}.
+        </p>
+
+        <form method="POST" action="/configuracion/horarios" id="form-horarios">
+            <input type="hidden" name="horarios_json" id="horarios_json">
+
+            <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 8px;">
+                Días de polling
+            </label>
+            <select class="input" name="tipo_dias" style="margin-bottom: 20px;">
+                <option value="interdiario" {% if tipo_dias == 'interdiario' %}selected{% endif %}>Interdiario (lun, mié, vie)</option>
+                <option value="diario" {% if tipo_dias == 'diario' %}selected{% endif %}>Diario (lun a vie)</option>
+            </select>
+
+            <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 8px;">
+                Horarios (formato 24h, HH:MM)
+            </label>
+            <div id="horarios-container" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                {% for h in horarios_actuales %}
+                <div class="horario-row" style="display: flex; gap: 8px; align-items: center;">
+                    <input class="input" type="time" value="{{ h }}" style="flex: 1;">
+                    <button type="button" class="btn btn-secundario" onclick="eliminarHorario(this)" style="padding: 8px 12px;">×</button>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" class="btn btn-secundario" onclick="agregarHorario()" style="margin-bottom: 20px;">+ Agregar horario</button>
+
+            <button type="submit" class="btn btn-primario" style="width: 100%;">Guardar horarios</button>
+        </form>
+    </div>
+
+    <!-- NOTIFICACIONES PUSH -->
+    <div class="card" style="margin-bottom: 16px;">
+        <h2 style="margin-bottom: 8px;">🔔 Notificaciones</h2>
+        <p style="color: var(--color-text-tenue); font-size: 13px; margin-bottom: 16px;">
+            Recibe avisos en este navegador cuando se detecten mensajes nuevos en cualquiera de tus clientes.
+        </p>
+        <div style="display: flex; gap: 12px;">
+            <button onclick="activarPush()" class="btn btn-primario">Activar push en este navegador</button>
+            <button onclick="enviarPushPrueba()" class="btn btn-secundario">Enviar push de prueba</button>
+        </div>
+        <div id="push-status" style="margin-top: 12px; font-size: 13px; color: var(--color-text-tenue);"></div>
+    </div>
+</div>
+
+<script>
+function agregarHorario() {
+    const cont = document.getElementById('horarios-container');
+    const div = document.createElement('div');
+    div.className = 'horario-row';
+    div.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+    div.innerHTML = `
+        <input class="input" type="time" value="08:00" style="flex: 1;">
+        <button type="button" class="btn btn-secundario" onclick="eliminarHorario(this)" style="padding: 8px 12px;">×</button>
+    `;
+    cont.appendChild(div);
+}
+
+function eliminarHorario(btn) {
+    btn.closest('.horario-row').remove();
+}
+
+document.getElementById('form-horarios').addEventListener('submit', (e) => {
+    const inputs = document.querySelectorAll('#horarios-container input[type="time"]');
+    const horarios = Array.from(inputs).map(i => i.value).filter(v => v);
+    document.getElementById('horarios_json').value = JSON.stringify(horarios);
+});
+
+async function activarPush() {
+    const status = document.getElementById('push-status');
+    status.textContent = 'Solicitando permisos...';
+    try {
+        const ok = await suscribirsePush();
+        status.textContent = ok
+            ? '✓ Push activado correctamente en este navegador'
+            : '⚠ No se pudo activar push';
+        status.style.color = ok ? '#66bb6a' : '#e57373';
+    } catch (err) {
+        status.textContent = '✗ Error: ' + err.message;
+        status.style.color = '#e57373';
+    }
+}
+</script>
+<script src="/static/js/push-client.js"></script>
+
+<div class="tema-selector">
+    <div class="tema-opcion" data-paleta="vino-ambar"></div>
+    <div class="tema-opcion" data-paleta="oceano-arena"></div>
+    <div class="tema-opcion" data-paleta="bosque-cobre"></div>
+    <button data-toggle-modo class="btn btn-secundario" style="padding: 4px 10px; font-size: 11px;">☀️/🌙</button>
+</div>
+{% endblock %}

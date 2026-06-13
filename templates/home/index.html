@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Alerta.pe — Alertas SUNAT automatizadas para tu Estudio Contable{% endblock %}
+{% block body %}
+<div class="container" style="text-align: center; padding-top: 80px;">
+    <h1 style="font-size: 48px; margin-bottom: 16px;">
+        Alerta<span style="color: var(--color-acento);">.pe</span>
+    </h1>
+    <p style="font-size: 20px; color: var(--color-text-suave); margin-bottom: 12px;">
+        Alertas SUNAT automatizadas para tu Estudio Contable
+    </p>
+    <p style="color: var(--color-text-tenue); margin-bottom: 40px;">
+        Monitorea el Buzón SOL de todos tus clientes desde un solo panel.<br>
+        Sin perder notificaciones. Sin entrar manualmente a cada RUC.
+    </p>
+    <div style="display: flex; gap: 16px; justify-content: center;">
+        <a href="/auth/login" class="btn btn-primario">Iniciar sesión</a>
+    </div>
+</div>
+
+<div class="tema-selector">
+    <div class="tema-opcion" data-paleta="vino-ambar" title="Vino y ámbar"></div>
+    <div class="tema-opcion" data-paleta="oceano-arena" title="Océano y arena"></div>
+    <div class="tema-opcion" data-paleta="bosque-cobre" title="Bosque y cobre"></div>
+    <button data-toggle-modo class="btn btn-secundario" style="padding: 4px 10px; font-size: 11px;">
+        ☀️/🌙
+    </button>
+</div>
+{% endblock %}

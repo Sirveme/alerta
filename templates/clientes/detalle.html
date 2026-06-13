@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente.razon_social[:40] }} — Alerta.pe{% endblock %}
+{% block body %}
+<div class="container">
+    <header style="margin-bottom: 24px;">
+        <a href="/dashboard" style="color: var(--color-text-tenue); font-size: 13px;">← Volver al dashboard</a>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+            <div>
+                <h1 style="margin: 0;">{{ cliente.nombre_referencia or cliente.razon_social[:60] }}</h1>
+                <div style="color: var(--color-text-tenue); margin-top: 4px; font-size: 14px;">
+                    RUC <span style="font-family: monospace;">{{ cliente.ruc }}</span>
+                    {% if cliente.es_propio_estudio %}
+                        · <span style="color: var(--color-acento);">TU ESTUDIO</span>
+                    {% endif %}
+                </div>
+                <div style="color: var(--color-text-tenue); font-size: 13px;">{{ cliente.razon_social }}</div>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button id="btn-verificar" class="btn btn-primario">🔄 Verificar ahora</button>
+                <form method="POST" action="/clientes/{{ cliente.id }}/eliminar" onsubmit="return confirm('¿Eliminar este cliente y todos sus mensajes?');" style="display: inline;">
+                    <button type="submit" class="btn btn-secundario" style="color: #e57373;">Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <div id="resultado-verificacion" style="margin-bottom: 16px;"></div>
+
+    <h2 style="margin-bottom: 16px;">Mensajes del buzón</h2>
+
+    {% if mensajes %}
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            {% for m in mensajes %}
+            <div class="card" style="padding: 16px; {% if not m.visto %}border-left: 4px solid var(--color-acento);{% endif %}">
+                <div style="display: flex; justify-content: space-between; gap: 16px; align-items: start;">
+                    <div style="flex: 1;">
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
+                            {% if not m.visto %}
+                                <span style="background: var(--color-acento); color: var(--color-marca-1); padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">NUEVO</span>
+                            {% endif %}
+                            {% if m.tiene_adjunto %}
+                                <span style="color: var(--color-text-tenue); font-size: 12px;">📎 {{ m.cantidad_adjuntos }}</span>
+                            {% endif %}
+                            <span style="color: var(--color-text-tenue); font-size: 11px;">{{ m.nombre_carpeta }}</span>
+                        </div>
+                        <div style="color: var(--color-text); margin-bottom: 4px;">{{ m.asunto[:120] }}</div>
+                        <div style="color: var(--color-text-tenue); font-size: 12px;">
+                            Enviado: {{ m.fecha_envio_sunat|to_lima_date if m.fecha_envio_sunat else '—' }}
+                            · Detectado: {{ m.fecha_detectado|to_lima_time }}
+                        </div>
+                    </div>
+                    <div>
+                        {% if not m.visto %}
+                            <button class="btn btn-secundario" style="padding: 6px 12px; font-size: 12px;" onclick="marcarVisto({{ m.id }}, this)">Marcar visto</button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card" style="text-align: center; padding: 48px;">
+            <p style="color: var(--color-text-tenue);">No hay mensajes detectados todavía.</p>
+            <p style="color: var(--color-text-tenue); font-size: 13px; margin-top: 8px;">
+                Click en <strong>Verificar ahora</strong> para consultar el buzón SUNAT.
+            </p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+const btnVerificar = document.getElementById('btn-verificar');
+const resultado = document.getElementById('resultado-verificacion');
+
+btnVerificar.addEventListener('click', async () => {
+    btnVerificar.disabled = true;
+    btnVerificar.textContent = '⏳ Verificando...';
+    resultado.innerHTML = '<div class="card" style="background: rgba(212,165,89,0.1);">Conectando con SUNAT, esto puede tomar 10-20 segundos...</div>';
+
+    try {
+        const resp = await fetch('/clientes/{{ cliente.id }}/verificar', { method: 'POST' });
+        const data = await resp.json();
+
+        if (data.exito) {
+            resultado.innerHTML = `
+                <div class="card" style="background: rgba(102,187,106,0.15); border-color: #66bb6a; color: #66bb6a;">
+                    ✓ Verificación exitosa. ${data.mensajes_nuevos} mensaje(s) nuevo(s) detectado(s). Total en buzón: ${data.mensajes_total}.
+                </div>
+            `;
+            // Si hubo nuevos, recargar página tras 2 segundos
+            if (data.mensajes_nuevos > 0) {
+                setTimeout(() => location.reload(), 2000);
+            }
+        } else {
+            let mensaje = data.error || 'Falló la verificación';
+            let consejo = '';
+            if (mensaje.includes('Cooldown') || mensaje.includes('cooldown')) {
+                consejo = '<br><small style="color: var(--color-text-tenue);">⏱ SUNAT requiere espera entre intentos. Esto es normal.</small>';
+            } else if (mensaje.includes('en uso')) {
+                consejo = '<br><small style="color: var(--color-text-tenue);">⏱ Hay otra verificación en curso. Espera unos segundos.</small>';
+            } else if (mensaje.toLowerCase().includes('timeout') || mensaje.toLowerCase().includes('502')) {
+                consejo = '<br><small style="color: var(--color-text-tenue);">⚠ SUNAT puede estar caído o saturado. Reintentar en 5 min.</small>';
+            }
+            resultado.innerHTML = `
+                <div class="card" style="background: rgba(229,115,115,0.15); border-color: #e57373; color: #e57373;">
+                    ❌ ${mensaje}
+                    ${consejo}
+                </div>
+            `;
+        }
+    } catch (err) {
+        resultado.innerHTML = `<div class="card" style="color: #e57373;">Error: ${err.message}</div>`;
+    } finally {
+        btnVerificar.disabled = false;
+        btnVerificar.textContent = '🔄 Verificar ahora';
+    }
+});
+
+async function marcarVisto(mensajeId, btn) {
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+        await fetch(`/mensajes/${mensajeId}/marcar-visto`, { method: 'POST' });
+        location.reload();
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Marcar visto';
+    }
+}
+</script>
+
+<div class="tema-selector">
+    <div class="tema-opcion" data-paleta="vino-ambar"></div>
+    <div class="tema-opcion" data-paleta="oceano-arena"></div>
+    <div class="tema-opcion" data-paleta="bosque-cobre"></div>
+    <button data-toggle-modo class="btn btn-secundario" style="padding: 4px 10px; font-size: 11px;">☀️/🌙</button>
+</div>
+{% endblock %}

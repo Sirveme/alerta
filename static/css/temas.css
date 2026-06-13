@@ -1,0 +1,94 @@
+/* ============================================================
+   ALERTA.PE — Sistema de temas
+   3 paletas × 2 modos = 6 combinaciones
+   ============================================================ */
+
+/* === PALETA VINO-ÁMBAR (default) === */
+[data-tema="vino-ambar"][data-modo="oscuro"] {
+    --color-marca-1: #2d0e15;
+    --color-marca-2: #d4a559;
+    --color-marca-2-claro: #e3bd7a;
+    --color-bg: #2d0e15;
+    --color-bg-card: #4a1822;
+    --color-bg-elevado: #6d2230;
+    --color-text: #f5f0e8;
+    --color-text-suave: #ebe0cf;
+    --color-text-tenue: #b8a591;
+    --color-borde: #6d2230;
+    --color-acento: #d4a559;
+    --color-link: #d4a559;
+}
+[data-tema="vino-ambar"][data-modo="claro"] {
+    --color-marca-1: #6d2230;
+    --color-marca-2: #b07d1e;
+    --color-marca-2-claro: #c69638;
+    --color-bg: #faf6ef;
+    --color-bg-card: #ffffff;
+    --color-bg-elevado: #f5ede0;
+    --color-text: #2d0e15;
+    --color-text-suave: #4a1822;
+    --color-text-tenue: #6e5d4a;
+    --color-borde: #e3d5b8;
+    --color-acento: #b07d1e;
+    --color-link: #6d2230;
+}
+
+/* === PALETA OCÉANO-ARENA === */
+[data-tema="oceano-arena"][data-modo="oscuro"] {
+    --color-marca-1: #0f2942;
+    --color-marca-2: #c9a87a;
+    --color-marca-2-claro: #d9b98c;
+    --color-bg: #0f2942;
+    --color-bg-card: #1a3b5c;
+    --color-bg-elevado: #275178;
+    --color-text: #f0ece4;
+    --color-text-suave: #d9d2c5;
+    --color-text-tenue: #a8a092;
+    --color-borde: #275178;
+    --color-acento: #c9a87a;
+    --color-link: #c9a87a;
+}
+[data-tema="oceano-arena"][data-modo="claro"] {
+    --color-marca-1: #1a3b5c;
+    --color-marca-2: #8a6f47;
+    --color-marca-2-claro: #a08458;
+    --color-bg: #f7f3eb;
+    --color-bg-card: #ffffff;
+    --color-bg-elevado: #ebe2cf;
+    --color-text: #0f2942;
+    --color-text-suave: #275178;
+    --color-text-tenue: #6e6452;
+    --color-borde: #d6c8a8;
+    --color-acento: #8a6f47;
+    --color-link: #1a3b5c;
+}
+
+/* === PALETA BOSQUE-COBRE === */
+[data-tema="bosque-cobre"][data-modo="oscuro"] {
+    --color-marca-1: #1a3329;
+    --color-marca-2: #b87333;
+    --color-marca-2-claro: #c68a4f;
+    --color-bg: #1a3329;
+    --color-bg-card: #244a3b;
+    --color-bg-elevado: #2f624f;
+    --color-text: #ecebe0;
+    --color-text-suave: #d4d2c0;
+    --color-text-tenue: #a0a090;
+    --color-borde: #2f624f;
+    --color-acento: #b87333;
+    --color-link: #b87333;
+}
+[data-tema="bosque-cobre"][data-modo="claro"] {
+    --color-marca-1: #244a3b;
+    --color-marca-2: #8d531c;
+    --color-marca-2-claro: #a26635;
+    --color-bg: #f5f3e8;
+    --color-bg-card: #ffffff;
+    --color-bg-elevado: #e8e3cb;
+    --color-text: #1a3329;
+    --color-text-suave: #244a3b;
+    --color-text-tenue: #5e6552;
+    --color-borde: #cbc8a3;
+    --color-acento: #8d531c;
+    --color-link: #244a3b;
+}
