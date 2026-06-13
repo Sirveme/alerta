@@ -1,5 +1,6 @@
 """Cliente HTTP para SUNAT con login OAuth2 + manejo de sesión."""
 import re
+import time
 import urllib.parse
 from typing import Any, Optional
 
@@ -10,6 +11,22 @@ from rich.console import Console
 from app.config import settings
 
 console = Console()
+
+# ============================================================
+# DIAGNÓSTICO DE TIMEOUTS — zClaude-13e
+# ============================================================
+# Timeouts granulares:
+#   connect: 20s (TCP handshake)
+#   read:    90s (espera de respuesta SUNAT)
+#   write:   20s (envío)
+#   pool:    20s (espera de conexión libre)
+#
+# Justificación: latencia Railway USA → SUNAT Perú + SUNAT puede
+# tardar 30-60s en responder POST de login bajo carga.
+#
+# Logging detallado de tiempos en cada request para identificar
+# en qué punto exacto se producen timeouts.
+# ============================================================
 
 
 class SUNATClient:
@@ -73,8 +90,15 @@ class SUNATClient:
 
         # NOTA: follow_redirects DEBE quedar en False — el flujo captura los
         # tokens (jwt_code, hc, visor) siguiendo los redirects manualmente.
+        timeout_config = httpx.Timeout(
+            connect=20.0,
+            read=90.0,    # SUNAT puede tardar 30-60s en responder POST de login
+            write=20.0,
+            pool=20.0,
+        )
+
         self.client = httpx.Client(
-            timeout=timeout_segundos,
+            timeout=timeout_config,
             follow_redirects=False,
             headers={
                 "User-Agent": self.USER_AGENT,
@@ -132,7 +156,11 @@ class SUNATClient:
                 self.visor_token = params["token"][0]
                 self._log(f"        🎫 token visor: {self.visor_token[:40]}...", "green")
 
+            inicio_req = time.time()
+            self._log(f"  → GET redirect: {url_siguiente[:80]}...", "cyan")
             actual = self.client.get(url_siguiente)
+            duracion = round(time.time() - inicio_req, 2)
+            self._log(f"  ← Status {actual.status_code} en {duracion}s", "cyan")
         return actual
 
     def obtener_form_login(self) -> str:
@@ -201,7 +229,27 @@ class SUNATClient:
         }
 
         self._log(f"[2/6] POST j_security_check ...", "cyan")
-        respuesta = self.client.post(url_post, data=form_data, headers=headers_post)
+        # [LOGGING DETALLADO PARA DIAGNÓSTICO]
+        self._log(f"[hacer_login] Iniciando POST a {url_post}", "yellow")
+        self._log(f"[hacer_login] form_data keys: {list(form_data.keys())}", "yellow")
+        inicio_post = time.time()
+
+        try:
+            respuesta = self.client.post(url_post, data=form_data, headers=headers_post)
+            duracion = round(time.time() - inicio_post, 2)
+            self._log(f"[hacer_login] POST OK en {duracion}s, status={respuesta.status_code}", "green")
+        except httpx.ReadTimeout as exc:
+            duracion = round(time.time() - inicio_post, 2)
+            self._log(f"[hacer_login] POST ReadTimeout después de {duracion}s", "red")
+            raise
+        except httpx.ConnectTimeout as exc:
+            duracion = round(time.time() - inicio_post, 2)
+            self._log(f"[hacer_login] POST ConnectTimeout después de {duracion}s", "red")
+            raise
+        except Exception as exc:
+            duracion = round(time.time() - inicio_post, 2)
+            self._log(f"[hacer_login] POST Excepción {type(exc).__name__} después de {duracion}s: {exc}", "red")
+            raise
 
         location = respuesta.headers.get("location", "")
         if location:

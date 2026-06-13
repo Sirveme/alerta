@@ -46,9 +46,10 @@ class SunatSessionPool:
     Una sola instancia global. Cada sesión está keyed por RUC.
     """
 
-    # TTL de sesión: SUNAT mata sesiones tras ~30 min sin actividad.
-    # Conservamos margen y la matamos a los 25 min para evitar errores.
-    TTL_SEGUNDOS = 25 * 60
+    # TTL conservador era 25 min. Pruebas con BuzOne sugieren que SUNAT
+    # mantiene sesiones activas hasta 40-45 min. Subimos a 40 min para
+    # reducir frecuencia de logins (cada login agrega riesgo de cooldown).
+    TTL_SEGUNDOS = 40 * 60
 
     # Cooldown entre logins del mismo RUC. SUNAT bloquea si intentamos 2
     # logins demasiado seguidos.
