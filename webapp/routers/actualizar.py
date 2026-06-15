@@ -1,15 +1,21 @@
 """
 webapp/routers/actualizar.py — alerta.pe
 ═══════════════════════════════════════════════════════════════════════
-Botón "Actualizar ahora" (zAlerta-01 B.6): scrapea AL INSTANTE un
-contribuyente (ignora frescura) vía consulta_ahora.consultar_ahora.
+Botón "Actualizar ahora": actualización bajo demanda.
 
-NUNCA decimos "hay que esperar". Si SUNAT falla por intermitencia,
-devolvemos un mensaje amable para reintentar (no error técnico crudo).
+zAlerta-04: la WebApp es LIVIANA (no tiene Playwright a propósito), así que
+el botón NO scrapea en el proceso web. En su lugar MARCA el flag
+`actualizar_solicitado` en el contribuyente; el worker separado (worker.py,
+con Playwright) lo scrapea con prioridad en su próximo ciclo corto y limpia
+el flag. La respuesta al contador es optimista (nunca un 502 crudo).
+
+La función consulta_ahora.consultar_ahora se CONSERVA para uso directo en
+local o en el worker (scraping sincrónico real).
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -17,9 +23,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from db import get_session
-from models import Contribuyente
-from consulta_ahora import consultar_ahora, ScraperNoDisponible
+from models import Contribuyente, ahora_lima
 from ..deps import UsuarioActual, requiere_escritura
+
+logger = logging.getLogger("alertape.actualizar")
 
 router = APIRouter(tags=["actualizar"])
 
@@ -28,46 +35,28 @@ router = APIRouter(tags=["actualizar"])
 async def actualizar_ahora(
     contribuyente_id: uuid.UUID,
     user: UsuarioActual = Depends(requiere_escritura)):
-    # Verificar que el contribuyente sea del tenant ANTES de scrapear
+    # Marcar el flag de actualización (multi-tenant: filtra por estudio).
     async with get_session() as session:
-        existe = await session.scalar(
-            select(Contribuyente.id).where(
+        contrib = await session.scalar(
+            select(Contribuyente).where(
                 Contribuyente.id == contribuyente_id,
                 Contribuyente.estudio_id == user.estudio_id))
-    if not existe:
-        return JSONResponse(
-            {"exito": False, "mensaje": "Contribuyente no encontrado."},
-            status_code=404)
+        if not contrib:
+            return JSONResponse(
+                {"exito": False, "mensaje": "Contribuyente no encontrado."},
+                status_code=404)
 
-    try:
-        resultado = await consultar_ahora(user.estudio_id, contribuyente_id)
-    except ScraperNoDisponible:
-        # Entorno sin Playwright (servicio web liviano): degradar con
-        # elegancia, NO romper. El monitoreo automático sigue activo aparte.
-        return JSONResponse({
-            "exito": False,
-            "mensaje": ("La actualización en vivo no está disponible en este "
-                        "entorno. El monitoreo automático sigue activo."),
-        }, status_code=503)
-    except Exception:
-        # No exponer el error técnico crudo al contador.
-        return JSONResponse({
-            "exito": False,
-            "mensaje": "No se pudo conectar con SUNAT, reintentar.",
-        }, status_code=502)
+        contrib.actualizar_solicitado = True
+        contrib.actualizar_solicitado_at = ahora_lima()
+        await session.commit()
 
-    if not resultado.get("exito"):
-        return JSONResponse({
-            "exito": False,
-            "mensaje": "No se pudo conectar con SUNAT, reintentar.",
-        }, status_code=502)
+    logger.info("Actualización solicitada para contribuyente %s (estudio %s).",
+                contribuyente_id, user.estudio_id)
 
-    stats = resultado.get("stats") or {}
-    nuevos = stats.get("mensajes_nuevos", 0)
+    # Respuesta optimista: el worker la procesará en unos momentos.
     return JSONResponse({
         "exito": True,
-        "mensaje": (f"{nuevos} notificación(es) nueva(s)."
-                    if nuevos else "Sin novedades nuevas."),
-        "stats": stats,
-        "notificaciones": resultado.get("notificaciones", []),
+        "solicitado": True,
+        "mensaje": ("Actualización solicitada. En unos momentos verás "
+                    "los datos frescos."),
     })
