@@ -344,3 +344,21 @@ a.tarjeta-link { display:block; color:inherit; }
   animation:girar .7s linear infinite; vertical-align:-3px; }
 @keyframes girar { to { transform:rotate(360deg); } }
 [hidden] { display:none !important; }
+
+/* ── Registro (zAlerta-06): selección de tipo y plan ── */
+.paso-titulo { font-size:.95rem; color:var(--texto-suave); margin:18px 0 8px;
+  text-transform:uppercase; letter-spacing:.04em; }
+.grid-tipos, .grid-planes { display:grid; gap:10px; grid-template-columns:1fr; }
+@media (min-width:520px){ .grid-tipos { grid-template-columns:repeat(2,1fr); } }
+.tipo-card, .plan-card { display:flex; flex-direction:column; gap:4px; text-align:left;
+  cursor:pointer; background:var(--superficie); color:var(--texto);
+  border:1px solid var(--borde); border-radius:var(--radio); padding:14px; width:100%; }
+.tipo-card:hover, .plan-card:hover { border-color:var(--borde-fuerte); }
+.tipo-card.sel, .plan-card.sel { border-color:var(--marca);
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--marca) 40%, transparent); }
+
+/* ── Onboarding viral: botón WhatsApp y badges de acceso (zAlerta-06 C/D) ── */
+.btn--whatsapp { background:#25D366; color:#0B3D24; border-color:transparent; font-weight:600; }
+.btn--whatsapp:hover { filter:brightness(1.05); }
+.badge--acceso     { background:#1F9D55; color:#fff; }
+.badge--pendiente  { background:#D97706; color:#fff; }
