@@ -104,27 +104,56 @@ DESCARGAS = Path("./descargas")
 # Login
 # ─────────────────────────────────────────────────────────────────────
 def _evidencia(page: Page, etiqueta: str) -> None:
-    """Vuelca screenshot + HTML + URL actual para diagnóstico."""
+    """Vuelca screenshot + HTML + URL actual para diagnóstico.
+
+    La página puede estar navegando (redirect OAuth); esperamos brevemente a
+    que se asiente y, si aun así no se puede capturar, lo registramos sin
+    generar ruido de error (no es un fallo del scraping).
+    """
     DESCARGAS.mkdir(parents=True, exist_ok=True)
     try:
+        page.wait_for_load_state("domcontentloaded", timeout=5_000)
+    except Exception:
+        pass
+    try:
         page.screenshot(path=str(DESCARGAS / f"diag_{etiqueta}.png"), full_page=True)
+    except Exception as e:
+        log(f"   [diag] sin screenshot (página en movimiento): {e}", "INFO")
+    try:
         (DESCARGAS / f"diag_{etiqueta}.html").write_text(page.content(), encoding="utf-8")
         log(f"   [diag] URL actual: {page.url}")
         log(f"   [diag] evidencia: diag_{etiqueta}.png / diag_{etiqueta}.html")
     except Exception as e:
-        log(f"   [diag] no se pudo capturar evidencia: {e}", "WARN")
+        log(f"   [diag] sin HTML (página en movimiento): {e}", "INFO")
+
+
+def _esperar_pagina_estable(page: Page) -> None:
+    """Espera a que la página deje de navegar/redirigir antes de tocarla.
+
+    En Railway la página de SUNAT llega más lenta y sigue navegando; estas
+    esperas absorben esa latencia. En local, si ya está cargada, retornan al
+    instante (no penalizan)."""
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=30_000)
+    except Exception:
+        pass
+    try:
+        # networkidle puede no alcanzarse si SUNAT mantiene conexiones abiertas;
+        # no es fatal, es solo un margen para que el form termine de aparecer.
+        page.wait_for_load_state("networkidle", timeout=15_000)
+    except Exception:
+        pass
 
 
 def login_sol(page: Page, cfg: SunatConfig) -> bool:
     """Loguea en SOL. Chromium sigue toda la cadena OAuth automáticamente.
 
-    Versión diagnóstica: reporta la URL real en cada paso en vez de
-    fallar a ciegas, para poder ajustar selectores y regex.
+    Robustez de timing (Railway): espera explícitamente a que el formulario
+    EXISTA y sea interactuable antes de llenar cada campo, y reintenta el login
+    completo si los campos no aparecen (la página de SUNAT puede llegar lenta o
+    seguir navegando). Los selectores NO cambian; solo CUÁNDO se usan.
     """
     log("Abriendo portal de login SOL...")
-    page.goto(URL_LOGIN, wait_until="domcontentloaded", timeout=60_000)
-    log(f"   URL tras goto inicial: {page.url}")
-    _evidencia(page, "01_login_inicial")
 
     # El formulario de SOL pide RUC + Usuario + Clave.
     # Probamos varios selectores candidatos porque SUNAT cambia los IDs.
@@ -135,6 +164,18 @@ def login_sol(page: Page, cfg: SunatConfig) -> bool:
     sel_btn = ["#btnAceptar", "button[type='submit']", "input[type='submit']", "#submit"]
 
     def llenar(selectores, valor, nombre) -> bool:
+        # ESPERAR a que aparezca CUALQUIERA de los selectores candidatos (hasta
+        # 30s, Railway es lento) en vez de buscarlo de inmediato. El selector
+        # combinado espera UNA sola vez por el conjunto, no 30s por cada uno.
+        combinado = ", ".join(selectores)
+        try:
+            page.wait_for_selector(combinado, timeout=30_000, state="visible")
+        except PWTimeout:
+            log(f"   campo {nombre}: NINGÚN selector apareció en 30s {selectores}", "WARN")
+            return False
+        except Exception as e:
+            log(f"   campo {nombre}: error esperando el campo ({e})", "WARN")
+            return False
         for s in selectores:
             try:
                 el = page.query_selector(s)
@@ -147,13 +188,37 @@ def login_sol(page: Page, cfg: SunatConfig) -> bool:
         log(f"   campo {nombre}: NINGÚN selector funcionó {selectores}", "WARN")
         return False
 
-    ok_ruc = llenar(sel_ruc, cfg.ruc, "RUC")
-    ok_usr = llenar(sel_usr, cfg.usuario_sol, "usuario")
-    ok_clave = llenar(sel_clave, cfg.clave_sol, "clave")
+    # ── Reintentos del login completo: absorbe la variabilidad de Railway/SUNAT ──
+    MAX_INTENTOS = 3
+    for intento in range(1, MAX_INTENTOS + 1):
+        if intento > 1:
+            log(f"Reintentando login completo ({intento}/{MAX_INTENTOS})...", "WARN")
+        try:
+            page.goto(URL_LOGIN, wait_until="domcontentloaded", timeout=60_000)
+        except Exception as e:
+            log(f"   no se pudo abrir el login (intento {intento}): {e}", "WARN")
+            continue
+        log(f"   URL tras goto inicial: {page.url}")
 
-    if not (ok_ruc and ok_usr and ok_clave):
-        log("No se pudieron llenar todos los campos del login.", "ERROR")
-        _evidencia(page, "02_campos_fallidos")
+        # Esperar a que la página deje de navegar ANTES de llenar campos.
+        _esperar_pagina_estable(page)
+        if intento == 1:
+            _evidencia(page, "01_login_inicial")
+
+        ok_ruc = llenar(sel_ruc, cfg.ruc, "RUC")
+        ok_usr = llenar(sel_usr, cfg.usuario_sol, "usuario")
+        ok_clave = llenar(sel_clave, cfg.clave_sol, "clave")
+
+        if ok_ruc and ok_usr and ok_clave:
+            break  # campos completos → seguir con el envío
+
+        log(f"No se llenaron todos los campos (intento {intento}/{MAX_INTENTOS}).",
+            "WARN")
+        _evidencia(page, f"02_campos_fallidos_intento{intento}")
+    else:
+        # El for terminó sin break: nunca se llenaron los campos.
+        log("No se pudieron llenar todos los campos del login tras varios "
+            "intentos.", "ERROR")
         return False
 
     log(f"Credenciales ingresadas (RUC {cfg.ruc}, usuario {cfg.usuario_sol})")
@@ -458,7 +523,8 @@ def scrapear_ruc(cfg: SunatConfig) -> dict:
     with sync_playwright() as p:
         navegador = p.chromium.launch(
             headless=cfg.headless,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
+            # --disable-gpu ayuda en entornos headless de servidor (Railway).
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
         )
         contexto = navegador.new_context(
             locale="es-PE",
