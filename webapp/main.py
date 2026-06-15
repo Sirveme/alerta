@@ -25,7 +25,10 @@ from fastapi.staticfiles import StaticFiles
 from .core import STATIC_DIR, templates
 from .deps import RedirigirALogin
 from . import auth
-from .routers import dashboard, notificaciones, voz, actualizar, push, clientes
+from .routers import (
+    dashboard, notificaciones, voz, actualizar, push, clientes, registro,
+    superadmin,
+)
 
 app = FastAPI(title="alerta.pe", docs_url=None, redoc_url=None)
 
@@ -33,12 +36,14 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Routers
 app.include_router(auth.router)
+app.include_router(registro.router)
 app.include_router(dashboard.router)
 app.include_router(notificaciones.router)
 app.include_router(voz.router)
 app.include_router(actualizar.router)
 app.include_router(push.router)
 app.include_router(clientes.router)
+app.include_router(superadmin.router)
 
 
 # Sin sesión → al login (para vistas HTML); JSON para llamadas API.

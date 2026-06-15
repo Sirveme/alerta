@@ -8,6 +8,7 @@ filtros en español (fechas dd/MM/YYYY, hora Lima) y helpers de presentación
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -20,6 +21,10 @@ TZ_LIMA = ZoneInfo("America/Lima")
 _DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = _DIR / "templates"
 STATIC_DIR = _DIR / "static"
+
+# WhatsApp de SOPORTE (Perú Sistemas Pro) al que el empresario escribe para
+# pedir su clave (zAlerta-06 C.3). CONFIGURABLE por env, no hardcodeado disperso.
+WHATSAPP_SOPORTE = os.getenv("WHATSAPP_SOPORTE", "51967317946")
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -70,3 +75,4 @@ templates.env.filters["fecha_hora_lima"] = fecha_hora_lima
 templates.env.filters["urgencia_meta"] = urgencia_meta
 templates.env.filters["etiqueta_tipo_doc"] = etiqueta_tipo_doc
 templates.env.globals["ETIQUETA_TIPO_DOCUMENTO"] = ETIQUETA_TIPO_DOCUMENTO
+templates.env.globals["WHATSAPP_SOPORTE"] = WHATSAPP_SOPORTE

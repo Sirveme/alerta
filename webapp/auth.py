@@ -30,8 +30,10 @@ from sqlalchemy import select
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, InvalidHashError
 
+from sqlalchemy import or_
+
 from db import get_session
-from models import Usuario, RolUsuario, ahora_lima
+from models import Usuario, EstudioContable, RolUsuario, ahora_lima
 
 from .core import templates
 
@@ -82,11 +84,12 @@ def leer_sesion(token: str | None) -> dict | None:
     return payload
 
 
-def crear_token_usuario(usuario: Usuario) -> str:
+def crear_token_usuario(usuario: Usuario, tipo_cuenta: str = "estudio") -> str:
     return firmar_sesion({
         "uid": str(usuario.id),
         "eid": str(usuario.estudio_id),
         "rol": usuario.rol.value,
+        "tc": tipo_cuenta,            # tipo de cuenta (estudio | empresario)
         "nombre": usuario.nombre,
         "exp": int(time.time()) + DURACION_SESION,
     })
@@ -133,25 +136,34 @@ async def login_post(
     dni: str = Form(...),
     clave: str = Form(...),
 ):
-    dni = (dni or "").strip()
+    ident = (dni or "").strip()
     async with get_session() as session:
+        # Login por DNI (estudio) o por WhatsApp (empresario, zAlerta-06).
         usuario = await session.scalar(
-            select(Usuario).where(Usuario.dni == dni, Usuario.activo == True))  # noqa: E712
+            select(Usuario).where(
+                or_(Usuario.dni == ident, Usuario.whatsapp == ident),
+                Usuario.activo == True))  # noqa: E712
 
         if not usuario or not verificar_clave(usuario.access_code, clave):
             return templates.TemplateResponse(
                 request, "login.html",
-                {"error": "DNI o clave incorrectos."}, status_code=401)
+                {"error": "Datos incorrectos o clave aún no activada."},
+                status_code=401)
 
         usuario.ultimo_acceso_at = ahora_lima()
         await session.commit()
+
+        # Tipo de cuenta (para enrutar/escopar al empresario en la sesión).
+        tipo_cuenta = await session.scalar(
+            select(EstudioContable.tipo_cuenta).where(
+                EstudioContable.id == usuario.estudio_id)) or "estudio"
 
         # ¿Forzar cambio de clave?
         if usuario.debe_cambiar_clave:
             resp = RedirectResponse("/cambiar-clave", status_code=303)
         else:
             resp = RedirectResponse("/", status_code=303)
-        set_cookie_sesion(resp, crear_token_usuario(usuario))
+        set_cookie_sesion(resp, crear_token_usuario(usuario, tipo_cuenta))
         return resp
 
 
