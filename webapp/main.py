@@ -9,8 +9,8 @@ Arranque local:
     uvicorn webapp.main:app --reload
 """
 
-import sys
 from __future__ import annotations
+import sys
 
 from pathlib import Path
 
