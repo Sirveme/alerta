@@ -132,6 +132,61 @@ class TipoReaccion(str, enum.Enum):
     DESTACADA = "destacada"
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Cuentas: tipo de cuenta, planes comerciales y suscripción (zAlerta-06)
+# ─────────────────────────────────────────────────────────────────────
+class TipoCuenta(str, enum.Enum):
+    """Una organización (estudios_contables) puede ser de dos tipos."""
+    EMPRESARIO = "empresario"   # dueño que vigila su propio RUC
+    ESTUDIO = "estudio"         # contador que vigila RUCs de clientes
+
+
+class PlanComercial(str, enum.Enum):
+    """Planes comerciales (zAlerta-06 A.2). El precio/límites viven en
+    LIMITES_PLAN (código, no BD), para validar y mostrar sin tocar el esquema."""
+    EMPRESARIO = "empresario"                 # S/5 · 1 RUC · 2 usuarios
+    INICIA = "inicia"                         # S/15 · 4 RUCs · 2 usuarios
+    PEQUENO = "pequeno"                        # S/25 · 10 RUCs · 3 usuarios
+    MEDIANO = "mediano"                        # S/45 · 25 RUCs · 5 usuarios
+    GRANDE = "grande"                          # S/85 · 50 RUCs · 10 usuarios
+    CORPORATIVO = "corporativo"                # a medida · 51+
+    CLIENTE_DE_ESTUDIO = "cliente_de_estudio"  # GRATIS · cuenta del empresario
+
+
+class EstadoSuscripcion(str, enum.Enum):
+    """Estado de la suscripción. En modo testers todos quedan en PRUEBA."""
+    PRUEBA = "prueba"
+    ACTIVA = "activa"
+    VENCIDA = "vencida"
+
+
+# Mapa plan → límites y precio (S/). Vive en código, NO en BD (zAlerta-06 A.2).
+# precio_soles None = "a medida"; 0 = gratis. nombre = etiqueta para la UI.
+LIMITES_PLAN: dict[str, dict] = {
+    "empresario":         {"nombre": "Empresario",        "max_contribuyentes": 1,    "max_usuarios": 2,   "precio_soles": 5},
+    "inicia":             {"nombre": "Inicia",            "max_contribuyentes": 4,    "max_usuarios": 2,   "precio_soles": 15},
+    "pequeno":            {"nombre": "Pequeño",           "max_contribuyentes": 10,   "max_usuarios": 3,   "precio_soles": 25},
+    "mediano":            {"nombre": "Mediano",           "max_contribuyentes": 25,   "max_usuarios": 5,   "precio_soles": 45},
+    "grande":             {"nombre": "Grande",            "max_contribuyentes": 50,   "max_usuarios": 10,  "precio_soles": 85},
+    "corporativo":        {"nombre": "Corporativo",       "max_contribuyentes": 1000, "max_usuarios": 100, "precio_soles": None},
+    "cliente_de_estudio": {"nombre": "Cliente de estudio", "max_contribuyentes": 1,  "max_usuarios": 2,   "precio_soles": 0},
+}
+
+# Planes ofrecidos en /registro según el tipo elegido (zAlerta-06 B.1).
+# cliente_de_estudio NO se ofrece (lo crea el contador, no se auto-registra).
+PLANES_POR_TIPO: dict[str, list[str]] = {
+    "empresario": ["empresario"],
+    "estudio": ["inicia", "pequeno", "mediano", "grande", "corporativo"],
+}
+
+
+def limites_de(plan: str | None) -> dict:
+    """Límites del plan; fallback permisivo para planes legados (ej. 'basico')."""
+    return LIMITES_PLAN.get(
+        plan or "", {"nombre": plan or "—", "max_contribuyentes": 50,
+                     "max_usuarios": 10, "precio_soles": None})
+
+
 # ═════════════════════════════════════════════════════════════════════
 # 1. EstudioContable — el tenant
 # ═════════════════════════════════════════════════════════════════════
@@ -146,14 +201,40 @@ class EstudioContable(Base, TimestampMixin):
     telefono: Mapped[str | None] = mapped_column(String(30))
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # Plan comercial (S/) — palanca de monetización
+    # Tipo de cuenta (zAlerta-06 A.1): "estudio" (contador) | "empresario".
+    # Guardamos el .value de TipoCuenta como String (sin enum Postgres, para
+    # que la migración sea un simple ADD COLUMN idempotente).
+    tipo_cuenta: Mapped[str] = mapped_column(
+        String(20), default=TipoCuenta.ESTUDIO.value, nullable=False)
+
+    # Plan comercial (S/) — palanca de monetización. Guarda un PlanComercial.value.
     plan: Mapped[str] = mapped_column(String(50), default="basico", nullable=False)
     max_contribuyentes: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    max_usuarios: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+
+    # Suscripción (zAlerta-06 B.1) — modo testers: todos en "prueba", sin pago.
+    estado_suscripcion: Mapped[str] = mapped_column(
+        String(20), default=EstadoSuscripcion.PRUEBA.value, nullable=False)
+    suscripcion_vence_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # WhatsApp de contacto (con código país). Clave para el onboarding viral
+    # del empresario (zAlerta-06 A.4 / C).
+    whatsapp: Mapped[str | None] = mapped_column(String(20))
+
+    # Si es una cuenta-empresario creada por un estudio: qué estudio la creó
+    # (su contador/proveedor). NULL si se auto-registró (zAlerta-06 A.3).
+    creado_por_estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("estudios_contables.id", ondelete="SET NULL"), nullable=True)
 
     usuarios: Mapped[list["Usuario"]] = relationship(
         back_populates="estudio", cascade="all, delete-orphan")
+    # foreign_keys explícito: Contribuyente tiene 2 FKs a estudios_contables
+    # (estudio_id = quién vigila; cuenta_empresario_id = dueño). Esta relación
+    # es por estudio_id.
     contribuyentes: Mapped[list["Contribuyente"]] = relationship(
-        back_populates="estudio", cascade="all, delete-orphan")
+        back_populates="estudio", cascade="all, delete-orphan",
+        foreign_keys="Contribuyente.estudio_id")
     grupos: Mapped[list["Grupo"]] = relationship(
         back_populates="estudio", cascade="all, delete-orphan")
 
@@ -175,8 +256,11 @@ class Usuario(Base, TimestampMixin):
         nullable=False, index=True)
 
     nombre: Mapped[str] = mapped_column(String(255), nullable=False)
-    # LOGIN POR DNI (no por correo). El correo queda como dato de contacto opcional.
-    dni: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
+    # LOGIN POR DNI (no por correo). nullable: el empresario (zAlerta-06) se
+    # identifica por WhatsApp, no por DNI; el login acepta DNI o WhatsApp.
+    dni: Mapped[str | None] = mapped_column(String(8), nullable=True, index=True)
+    # Identificador de login alternativo del empresario (con código país).
+    whatsapp: Mapped[str | None] = mapped_column(String(20), index=True)
     correo: Mapped[str | None] = mapped_column(String(255))  # contacto/notificaciones
     # Hash de la clave de acceso al sistema (Argon2, como en CCPL — NO bcrypt)
     access_code: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -184,6 +268,8 @@ class Usuario(Base, TimestampMixin):
         Enum(RolUsuario), default=RolUsuario.CONTADOR, nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     debe_cambiar_clave: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Empresario cuya clave aún la entrega Soporte manualmente (zAlerta-06 C.4).
+    clave_pendiente: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ultimo_acceso_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     estudio: Mapped["EstudioContable"] = relationship(back_populates="usuarios")
@@ -220,6 +306,14 @@ class Contribuyente(Base, TimestampMixin):
     estado: Mapped[EstadoContribuyente] = mapped_column(
         Enum(EstadoContribuyente), default=EstadoContribuyente.ACTIVO, nullable=False)
 
+    # Cuenta-empresario dueña de este RUC (zAlerta-06 A.3). El estudio que lo
+    # VIGILA sigue en estudio_id; este campo es la VISTA del dueño (solo lectura).
+    # NULL si el estudio aún no creó la cuenta del empresario.
+    cuenta_empresario_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("estudios_contables.id", ondelete="SET NULL"),
+        nullable=True, index=True)
+
     # Control de scraping
     ultimo_scrapeo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ultimo_scrapeo_ok: Mapped[bool | None] = mapped_column(Boolean)
@@ -233,7 +327,8 @@ class Contribuyente(Base, TimestampMixin):
     actualizar_solicitado_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True))
 
-    estudio: Mapped["EstudioContable"] = relationship(back_populates="contribuyentes")
+    estudio: Mapped["EstudioContable"] = relationship(
+        back_populates="contribuyentes", foreign_keys=[estudio_id])
     credencial: Mapped["CredencialSol"] = relationship(
         back_populates="contribuyente", uselist=False, cascade="all, delete-orphan")
     notificaciones: Mapped[list["Notificacion"]] = relationship(
