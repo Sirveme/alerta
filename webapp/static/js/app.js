@@ -67,15 +67,17 @@ document.addEventListener('click', async (e) => {
   const id = btn.dataset.id;
   const out = document.querySelector(`.resultado-actualizar[data-for="${id}"]`);
   const original = btn.innerHTML;
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Actualizando…';
-  if (out) out.textContent = 'Consultando a SUNAT (puede tardar ~30s)…';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Solicitando…';
+  if (out) out.textContent = 'Solicitando actualización…';
   try {
     const r = await fetch(`/contribuyentes/${id}/actualizar`, { method: 'POST' });
     const j = await r.json();
     if (out) out.textContent = j.mensaje || (j.exito ? 'Listo.' : 'No se pudo, reintentar.');
-    if (j.exito && j.stats?.mensajes_nuevos > 0) setTimeout(() => location.reload(), 900);
+    // El worker procesa el scraping en segundo plano: recargamos en ~60s
+    // para mostrar los datos frescos cuando termine.
+    if (j.exito && j.solicitado) setTimeout(() => location.reload(), 60000);
   } catch (_) {
-    if (out) out.textContent = 'No se pudo conectar con SUNAT, reintentar.';
+    if (out) out.textContent = 'No se pudo solicitar la actualización, reintentar.';
   } finally { btn.disabled = false; btn.innerHTML = original; }
 });
 
