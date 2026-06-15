@@ -18,7 +18,7 @@ from sqlalchemy import select
 
 from db import get_session
 from models import Contribuyente
-from consulta_ahora import consultar_ahora
+from consulta_ahora import consultar_ahora, ScraperNoDisponible
 from ..deps import UsuarioActual, requiere_escritura
 
 router = APIRouter(tags=["actualizar"])
@@ -41,6 +41,14 @@ async def actualizar_ahora(
 
     try:
         resultado = await consultar_ahora(user.estudio_id, contribuyente_id)
+    except ScraperNoDisponible:
+        # Entorno sin Playwright (servicio web liviano): degradar con
+        # elegancia, NO romper. El monitoreo automático sigue activo aparte.
+        return JSONResponse({
+            "exito": False,
+            "mensaje": ("La actualización en vivo no está disponible en este "
+                        "entorno. El monitoreo automático sigue activo."),
+        }, status_code=503)
     except Exception:
         # No exponer el error técnico crudo al contador.
         return JSONResponse({
