@@ -22,9 +22,20 @@ from models import (
     TipoDocumento, ETIQUETA_TIPO_DOCUMENTO, ahora_lima,
 )
 from ..core import templates
-from ..deps import UsuarioActual, usuario_actual, requiere_escritura
+from ..deps import (
+    UsuarioActual, usuario_actual, requiere_escritura, contribuyente_accesible,
+)
 
 router = APIRouter(tags=["notificaciones"])
+
+
+def _puede_ver_notif(user: UsuarioActual, notif) -> bool:
+    """True si el usuario puede ver esta notificación (multi-tenant + empresario)."""
+    if notif.estudio_id == user.estudio_id:
+        return True
+    if user.es_empresario and notif.contribuyente is not None:
+        return notif.contribuyente.cuenta_empresario_id == user.estudio_id
+    return False
 
 
 @router.get("/contribuyentes/{contribuyente_id}/notificaciones",
@@ -34,16 +45,16 @@ async def lista_notificaciones(
     tipo: str | None = None,
     user: UsuarioActual = Depends(usuario_actual)):
     async with get_session() as session:
-        contrib = await session.scalar(
-            select(Contribuyente).where(
-                Contribuyente.id == contribuyente_id,
-                Contribuyente.estudio_id == user.estudio_id))
+        # Acceso multi-tenant + empresario (solo su RUC vía cuenta_empresario_id).
+        contrib = await contribuyente_accesible(session, user, contribuyente_id)
         if not contrib:
             return RedirectResponse("/", status_code=303)
 
+        # Filtramos por el estudio REAL del RUC (para el empresario es el del
+        # contador; para el estudio es el suyo). El acceso ya fue validado.
         q = (select(Notificacion).where(
                 Notificacion.contribuyente_id == contribuyente_id,
-                Notificacion.estudio_id == user.estudio_id))
+                Notificacion.estudio_id == contrib.estudio_id))
 
         tipo_sel = None
         if tipo and tipo in ETIQUETA_TIPO_DOCUMENTO:
@@ -70,9 +81,8 @@ async def detalle_notificacion(
             .options(selectinload(Notificacion.adjuntos),
                      selectinload(Notificacion.contribuyente),
                      selectinload(Notificacion.reacciones))
-            .where(Notificacion.id == notif_id,
-                   Notificacion.estudio_id == user.estudio_id))
-        if not notif:
+            .where(Notificacion.id == notif_id))
+        if not notif or not _puede_ver_notif(user, notif):
             return RedirectResponse("/", status_code=303)
 
         # Marcar como leída (no es escritura sensible; lo hace cualquier rol)
@@ -135,11 +145,13 @@ async def ver_adjunto(
     user: UsuarioActual = Depends(usuario_actual)):
     async with get_session() as session:
         adj = await session.scalar(
-            select(Adjunto).where(
-                Adjunto.id == adjunto_id,
-                Adjunto.notificacion_id == notif_id,
-                Adjunto.estudio_id == user.estudio_id))   # filtro tenant
-        if not adj:
+            select(Adjunto)
+            .options(selectinload(Adjunto.notificacion)
+                     .selectinload(Notificacion.contribuyente))
+            .where(Adjunto.id == adjunto_id,
+                   Adjunto.notificacion_id == notif_id))
+        # Acceso: estudio dueño, o empresario vinculado al RUC de la notificación.
+        if not adj or adj.notificacion is None or not _puede_ver_notif(user, adj.notificacion):
             return Response("Adjunto no encontrado.", status_code=404)
 
         if adj.bytea_temporal:

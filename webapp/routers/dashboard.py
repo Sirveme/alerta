@@ -20,7 +20,7 @@ from sqlalchemy import select, func
 
 from db import get_session
 from models import (
-    Grupo, Contribuyente, ContribuyenteGrupo, Notificacion, Urgencia,
+    Grupo, Contribuyente, ContribuyenteGrupo, Notificacion, Urgencia, Usuario,
 )
 from ..core import templates
 from ..deps import UsuarioActual, usuario_actual, requiere_escritura
@@ -66,8 +66,50 @@ async def _resumen_grupos(session, estudio_id: uuid.UUID) -> list[dict]:
     return resumen
 
 
+async def _acceso_empresario(session, contrib) -> str:
+    """Estado del acceso del dueño del RUC (badge, zAlerta-06 D).
+
+    'con_acceso'  = ya tiene cuenta-empresario con clave activada.
+    'pendiente'   = sin cuenta aún, o clave todavía no entregada por Soporte.
+    """
+    if not contrib.cuenta_empresario_id:
+        return "pendiente"
+    activo = await session.scalar(
+        select(Usuario.id).where(
+            Usuario.estudio_id == contrib.cuenta_empresario_id,
+            Usuario.clave_pendiente == False))  # noqa: E712
+    return "con_acceso" if activo else "pendiente"
+
+
+async def _vista_empresario(request: Request, session, user: UsuarioActual):
+    """Dashboard del EMPRESARIO: solo su(s) RUC(s) vinculado(s), solo lectura."""
+    contribs = (await session.scalars(
+        select(Contribuyente).where(
+            Contribuyente.cuenta_empresario_id == user.estudio_id)
+        .order_by(Contribuyente.razon_social))).all()
+    tarjetas = []
+    for c in contribs:
+        urgencias = (await session.scalars(
+            select(Notificacion.urgencia).where(
+                Notificacion.contribuyente_id == c.id))).all()
+        no_leidas = await session.scalar(
+            select(func.count(Notificacion.id)).where(
+                Notificacion.contribuyente_id == c.id,
+                Notificacion.leida == False)) or 0  # noqa: E712
+        tarjetas.append({
+            "id": str(c.id), "ruc": c.ruc,
+            "razon_social": c.razon_social or c.ruc,
+            "urgencia": _urgencia_max(urgencias), "no_leidas": no_leidas,
+        })
+    return templates.TemplateResponse(request, "empresario.html", {
+        "user": user, "tarjetas": tarjetas})
+
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, user: UsuarioActual = Depends(usuario_actual)):
+    if user.es_empresario:
+        async with get_session() as session:
+            return await _vista_empresario(request, session, user)
     async with get_session() as session:
         grupos = await _resumen_grupos(session, user.estudio_id)
         total_clientes = await session.scalar(
@@ -162,6 +204,7 @@ async def ver_grupo(
                 "urgencia": _urgencia_max(urgencias),
                 "no_leidas": no_leidas or 0,
                 "estado": c.estado.value,
+                "acceso": await _acceso_empresario(session, c),
             })
 
         # Contribuyentes que NO están en este grupo (para agregar)
@@ -247,6 +290,7 @@ async def lista_contribuyentes(
                 "urgencia": _urgencia_max(urgencias),
                 "estado": c.estado.value,
                 "ultimo_scrapeo_at": c.ultimo_scrapeo_at,
+                "acceso": await _acceso_empresario(session, c),
             })
     return templates.TemplateResponse(request, "contribuyentes.html", {
         "user": user, "filas": filas})
