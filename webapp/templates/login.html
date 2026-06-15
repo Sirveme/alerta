@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block titulo %}Ingresar · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="login-wrap">
+  <div class="tarjeta login-card">
+    <div class="fila" style="gap:10px; margin-bottom:6px;">
+      <span class="marca-punto"></span>
+      <h1 class="titulo-pagina" style="margin:0;">alerta.pe</h1>
+    </div>
+    <p class="subtitulo">Buzón SUNAT para tu estudio contable.</p>
+
+    {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+
+    <form method="post" action="/login" autocomplete="off">
+      <div class="campo">
+        <label for="dni">DNI</label>
+        <input id="dni" name="dni" type="text" inputmode="numeric"
+          pattern="[0-9]{8}" maxlength="8" autocomplete="off"
+          required placeholder="8 dígitos">
+      </div>
+      <div class="campo">
+        <label for="clave">Clave</label>
+        <input id="clave" name="clave" type="password"
+               autocomplete="current-password" required
+               placeholder="Tu clave (inicial = tu DNI)">
+      </div>
+      <button class="btn btn--bloque" type="submit">Ingresar</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

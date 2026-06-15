@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block titulo %}{{ notif.asunto or "Notificación" }} · alerta.pe{% endblock %}
+{% block contenido %}
+{% set m = notif.urgencia | urgencia_meta %}
+<a href="/contribuyentes/{{ notif.contribuyente_id }}/notificaciones" class="muted">‹ Volver</a>
+
+<div class="tarjeta acento acento--{{ notif.urgencia.value }} mt">
+  <div class="fila spread">
+    <span class="badge badge--{{ notif.urgencia.value }}">{{ m.label }}</span>
+    {% if notif.tipo_documento_enum %}
+      <span class="chip-tipo">{{ notif.tipo_documento_enum | etiqueta_tipo_doc }}</span>
+    {% elif notif.tipo_documento %}
+      <span class="chip-tipo">{{ notif.tipo_documento }}</span>
+    {% endif %}
+  </div>
+  <h1 class="titulo-pagina mt">{{ notif.asunto or "(sin asunto)" }}</h1>
+  <div class="notif-linea">
+    <span>Publicada: {{ notif.fecha_publica_sunat | fecha_hora_lima }}</span>
+    {% if notif.plazo_vencimiento %}
+      · <strong>Vence: {{ notif.plazo_vencimiento | fecha_lima }}</strong>
+    {% endif %}
+  </div>
+
+  {% if notif.resumen_ia %}
+  <div class="tarjeta mt" style="background:var(--superficie-2);">
+    <strong>Resumen:</strong> {{ notif.resumen_ia }}
+  </div>
+  {% endif %}
+
+  {% if notif.texto_html %}
+  <div class="mt" style="overflow-wrap:anywhere;">{{ notif.texto_html | safe }}</div>
+  {% endif %}
+
+  {% if notif.adjuntos %}
+  <div class="mt">
+    <strong>Adjuntos</strong>
+    {% for a in notif.adjuntos %}
+    <div class="fila mt">
+      <span>📎 {{ a.nombre_archivo }}</span>
+      <a class="btn btn--sec" target="_blank"
+         href="/notificaciones/{{ notif.id }}/adjunto/{{ a.id }}">Ver PDF</a>
+      <a class="btn btn--sec"
+         href="/notificaciones/{{ notif.id }}/adjunto/{{ a.id }}?descargar=true">Descargar</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not user.solo_lectura %}
+  <div class="fila mt" id="reacciones" data-notif="{{ notif.id }}">
+    <button class="btn btn--sec rx {% if mi_reaccion == 'util' %}activa{% endif %}" data-tipo="util">👍 Útil</button>
+    <button class="btn btn--sec rx {% if mi_reaccion == 'no_util' %}activa{% endif %}" data-tipo="no_util">👎 No útil</button>
+    <button class="btn btn--sec rx {% if mi_reaccion == 'destacada' %}activa{% endif %}" data-tipo="destacada">⭐ Destacar</button>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const cont = document.getElementById('reacciones');
+  cont?.querySelectorAll('.rx').forEach((b) => b.addEventListener('click', async () => {
+    const r = await fetch(`/notificaciones/${cont.dataset.notif}/reaccion`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo: b.dataset.tipo })
+    });
+    const j = await r.json();
+    if (j.ok) {
+      cont.querySelectorAll('.rx').forEach((x) => x.classList.remove('activa'));
+      if (j.tipo) cont.querySelector(`[data-tipo="${j.tipo}"]`)?.classList.add('activa');
+    }
+  }));
+</script>
+{% endblock %}

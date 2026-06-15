@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titulo %}Mis grupos · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="fila spread">
+  <h1 class="titulo-pagina">Mis grupos</h1>
+  <span class="muted">{{ total_clientes }} cliente(s)</span>
+</div>
+
+{% if not grupos %}
+  <div class="tarjeta">
+    <p>Aún no tenés grupos. Empezá creando los grupos por régimen tributario.</p>
+    {% if not user.solo_lectura %}
+    <form method="post" action="/grupos/plantilla">
+      <button class="btn btn--bloque" type="submit">Crear grupos por régimen</button>
+    </form>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="grid">
+  {% for g in grupos %}
+  <a class="tarjeta grupo-card acento tarjeta-link" href="/grupos/{{ g.id }}"
+     style="--acento: {{ g.color }};">
+    <span class="grupo-punto"></span>
+    <span class="grupo-info">
+      <span class="grupo-nombre">{{ g.nombre }}</span><br>
+      <span class="grupo-meta">{{ g.n_clientes }} cliente(s)</span>
+    </span>
+    {% if g.n_urgentes > 0 %}
+      <span class="badge badge--urgente">{{ g.n_urgentes }} urgente(s)</span>
+    {% else %}
+      <span class="badge badge--al_dia">al día</span>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+{% if not user.solo_lectura %}
+<button class="grupo-nuevo mt" onclick="formNuevoGrupo()">+ Nuevo grupo</button>
+{% if grupos %}
+<form method="post" action="/grupos/plantilla" class="mt">
+  <button class="btn btn--sec btn--bloque" type="submit">Crear grupos por régimen</button>
+</form>
+{% endif %}
+{% endif %}
+
+{% if sin_grupo > 0 %}
+<p class="muted mt">{{ sin_grupo }} cliente(s) sin grupo —
+  <a href="/contribuyentes">verlos todos</a>.</p>
+{% endif %}
+{% endblock %}

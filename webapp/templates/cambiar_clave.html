@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Cambiar clave · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="login-wrap">
+  <div class="tarjeta login-card">
+    <h1 class="titulo-pagina">Definí tu clave</h1>
+    <p class="subtitulo">Por seguridad, cambiá la clave inicial antes de continuar.</p>
+
+    {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+
+    <form method="post" action="/cambiar-clave">
+      <div class="campo">
+        <label for="clave_nueva">Nueva clave</label>
+        <input id="clave_nueva" name="clave_nueva" type="password"
+               autocomplete="new-password" required minlength="6"
+               placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="campo">
+        <label for="clave_repetir">Repetir clave</label>
+        <input id="clave_repetir" name="clave_repetir" type="password"
+               autocomplete="new-password" required minlength="6">
+      </div>
+      <button class="btn btn--bloque" type="submit">Guardar clave</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

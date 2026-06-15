@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es" data-color="dark" data-borde="recto" data-franja="si">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0E1117">
+  <title>{% block titulo %}alerta.pe{% endblock %}</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+
+  <!-- Anti-flash: aplicar el tema ANTES del primer render (lee localStorage) -->
+  <script>
+    (function () {
+      try {
+        var t = JSON.parse(localStorage.getItem('alertape_tema') || '{}');
+        var el = document.documentElement;
+        if (t.color)  el.setAttribute('data-color',  t.color);
+        if (t.borde)  el.setAttribute('data-borde',  t.borde);
+        if (t.franja) el.setAttribute('data-franja', t.franja);
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap"
+        media="all" onerror="this.media='none'">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+  {% if user %}
+  <header class="barra">
+    <a href="/" class="marca"><span class="marca-punto"></span> alerta.pe</a>
+    <span class="barra-sep"></span>
+    <nav class="barra-nav">
+      <a href="/" class="nav-link nav-pc">Grupos</a>
+      <a href="/contribuyentes" class="nav-link nav-pc">Clientes</a>
+      {% if not user.solo_lectura %}
+      <button id="btn-mas" class="btn-icono" title="Acciones rápidas" aria-label="Acciones rápidas">+</button>
+      {% endif %}
+      <button id="btn-tema" class="btn-icono" title="Tema" aria-label="Cambiar tema">◐</button>
+      <span class="usuario-chip nav-pc">{{ user.nombre }}</span>
+      <a href="/logout" class="nav-link">Salir</a>
+    </nav>
+  </header>
+
+  <!-- Menú acciones rápidas "+" -->
+  {% if not user.solo_lectura %}
+  <div id="menu-mas" class="menu-flotante" hidden>
+    <button data-accion="nuevo-cliente">🧾 Nuevo cliente (RUC)</button>
+    <button data-accion="nuevo-grupo">📁 Nuevo grupo</button>
+    <button data-accion="importar">📥 Importar Excel de RUCs</button>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <main class="contenido">
+    {% block contenido %}{% endblock %}
+  </main>
+
+  {% if user %}
+  <!-- ── Barra de consulta IA: FAB + bottom sheet (global) ── -->
+  <button class="fab-ia" id="fab-ia" title="Preguntar a alerta.pe" aria-label="Preguntar a alerta.pe">✦</button>
+  <div class="hoja-fondo" id="hoja-fondo" hidden></div>
+  <section class="hoja-ia" id="hoja-ia" aria-hidden="true">
+    <div class="hoja-tirador"></div>
+    <div class="hoja-titulo"><span class="marca-punto"></span> Preguntá a alerta.pe</div>
+    <div class="ia-barra">
+      <input id="ia-input" type="text" placeholder="Escribí o dictá tu consulta…"
+             autocomplete="off" enterkeyhint="send">
+      <button class="ia-btn ia-btn--mic" id="ia-mic" title="Dictar" aria-label="Dictar">🎤</button>
+      <button class="ia-btn ia-btn--enviar" id="ia-enviar" title="Enviar" aria-label="Enviar">↑</button>
+    </div>
+    <div class="ia-sugerencias">
+      <button class="ia-sug">¿Hay algo urgente hoy?</button>
+      <button class="ia-sug">Multas de esta semana</button>
+      <button class="ia-sug">¿Le llegó algo a mi cliente?</button>
+    </div>
+    <div class="ia-resultado" id="ia-resultado"></div>
+  </section>
+  {% endif %}
+
+  <!-- Modal genérico propio (NO alert/confirm/prompt nativos) -->
+  <div id="modal-fondo" class="modal-fondo" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="modal-titulo"></h3>
+      <div id="modal-texto"></div>
+      <div id="modal-acciones" class="modal-acciones"></div>
+    </div>
+  </div>
+
+  <!-- Modal selector de TEMAS -->
+  <div id="modal-tema" class="modal-fondo" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3>🎨 Tema</h3>
+      <div class="tema-grupo">
+        <span>Color</span>
+        <div class="swatches" data-eje="color">
+          <button class="swatch" data-valor="dark"><span class="swatch-punto" style="background:#5B8DEF"></span>Dark</button>
+          <button class="swatch" data-valor="light"><span class="swatch-punto" style="background:#4F6BED"></span>Light</button>
+          <button class="swatch" data-valor="femenino"><span class="swatch-punto" style="background:#C77DD6"></span>Femenino</button>
+        </div>
+      </div>
+      <div class="tema-grupo">
+        <span>Forma del borde</span>
+        <div class="swatches" data-eje="borde">
+          <button class="swatch" data-valor="recto">Recto</button>
+          <button class="swatch" data-valor="redondeado">Redondeado</button>
+          <button class="swatch" data-valor="punteado">Punteado</button>
+          <button class="swatch" data-valor="color-completo">Color completo</button>
+        </div>
+      </div>
+      <div class="tema-grupo">
+        <span>Franja de color</span>
+        <div class="swatches" data-eje="franja">
+          <button class="swatch" data-valor="si">Con franja</button>
+          <button class="swatch" data-valor="no">Sin franja</button>
+        </div>
+      </div>
+      <div class="tema-grupo tema-preview">
+        <span>Vista previa</span>
+        <div class="tarjeta acento acento--urgente">
+          <div class="fila spread">
+            <strong>Tarjeta de ejemplo</strong>
+            <span class="badge badge--urgente">Urgente</span>
+          </div>
+          <div class="muted">Así se verán los bloques con este tema.</div>
+        </div>
+      </div>
+      <div class="modal-acciones">
+        <button class="btn" id="tema-cerrar" type="button">Listo</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+  <script src="/static/js/tema.js"></script>
+  {% if user %}<script src="/static/js/ia.js"></script>{% endif %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>

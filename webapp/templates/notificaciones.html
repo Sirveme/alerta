@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titulo %}{{ contrib.razon_social or contrib.ruc }} · Notificaciones{% endblock %}
+{% block contenido %}
+<a href="/" class="muted">‹ Grupos</a>
+<h1 class="titulo-pagina mt">{{ contrib.razon_social or contrib.ruc }}</h1>
+<p class="subtitulo">RUC {{ contrib.ruc }}</p>
+
+{% if not user.solo_lectura %}
+<button class="btn btn--bloque btn-actualizar" data-id="{{ contrib.id }}">Actualizar ahora</button>
+<div class="resultado-actualizar muted mt" data-for="{{ contrib.id }}"></div>
+{% endif %}
+
+<!-- Selector de tipo de documento: chips horizontales scrolleables -->
+<div class="chips-scroll mt">
+  <a class="chip-filtro {% if not tipo_sel %}activo{% endif %}"
+     href="/contribuyentes/{{ contrib.id }}/notificaciones">Todos</a>
+  {% for clave, etiqueta in tipos.items() %}
+  <a class="chip-filtro {% if tipo_sel == clave %}activo{% endif %}"
+     href="/contribuyentes/{{ contrib.id }}/notificaciones?tipo={{ clave }}">{{ etiqueta }}</a>
+  {% endfor %}
+</div>
+
+{% for n in notifs %}
+{% set m = n.urgencia | urgencia_meta %}
+<a class="tarjeta notif-item acento tarjeta-link acento--{{ n.urgencia.value }}"
+   href="/notificaciones/{{ n.id }}">
+  <div class="fila spread">
+    <span class="notif-asunto">{{ n.asunto or "(sin asunto)" }}</span>
+    <span class="badge badge--{{ n.urgencia.value }}">{{ m.label }}</span>
+  </div>
+  <div class="notif-linea">
+    {% if n.tipo_documento_enum %}
+      <span class="chip-tipo">{{ n.tipo_documento_enum | etiqueta_tipo_doc }}</span>
+    {% elif n.tipo_documento %}
+      <span class="chip-tipo">{{ n.tipo_documento }}</span>
+    {% endif %}
+    <span>{{ n.fecha_publica_sunat | fecha_lima }}</span>
+    {% if n.cant_adjuntos %}· 📎 {{ n.cant_adjuntos }}{% endif %}
+    {% if not n.leida %}· <strong>nueva</strong>{% endif %}
+  </div>
+</a>
+{% else %}
+<div class="tarjeta"><p class="muted">
+  {% if tipo_sel %}No hay notificaciones de ese tipo.{% else %}
+  Sin notificaciones todavía. Usá "Actualizar ahora".{% endif %}
+</p></div>
+{% endfor %}
+{% endblock %}

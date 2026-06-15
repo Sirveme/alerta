@@ -1,0 +1,20 @@
+{
+  "name": "alerta.pe — Buzón SUNAT",
+  "short_name": "alerta.pe",
+  "description": "Monitor del Buzón Electrónico SUNAT para estudios contables.",
+  "lang": "es-PE",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F1F5F9",
+  "theme_color": "#1F2937",
+  "icons": [
+    {
+      "src": "/static/img/icono.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

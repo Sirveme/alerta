@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block titulo %}{{ grupo.nombre }} · alerta.pe{% endblock %}
+{% block contenido %}
+<a href="/" class="muted">‹ Grupos</a>
+<div class="fila spread mt">
+  <h1 class="titulo-pagina" style="margin:0;">
+    <span class="grupo-punto" style="--acento: {{ color }}; display:inline-block; vertical-align:middle;"></span>
+    {{ grupo.nombre }}
+  </h1>
+  <span class="muted">{{ tarjetas|length }} cliente(s)</span>
+</div>
+
+{% if sugerir_dividir %}
+<div class="tarjeta acento acento--importante">
+  <strong>Sugerencia:</strong> este grupo tiene más de 20 clientes.
+  Considerá dividirlo para navegarlo mejor desde el celular.
+</div>
+{% endif %}
+
+{% for c in tarjetas %}
+{% set m = c.urgencia | urgencia_meta %}
+<div class="tarjeta notif-item acento acento--{{ c.urgencia }}">
+  <div class="fila spread">
+    <div>
+      <div class="notif-asunto">{{ c.razon_social }}</div>
+      <div class="notif-linea">RUC {{ c.ruc }}
+        {% if c.no_leidas %}· <span class="badge-conteo">{{ c.no_leidas }} sin leer</span>{% endif %}
+      </div>
+    </div>
+    <span class="badge badge--{{ c.urgencia }}">{{ m.label }}</span>
+  </div>
+  <div class="fila mt">
+    <a class="btn btn--sec" href="/contribuyentes/{{ c.id }}/notificaciones">Ver notificaciones</a>
+    {% if not user.solo_lectura %}
+    <button class="btn btn-actualizar" data-id="{{ c.id }}">Actualizar ahora</button>
+    <button class="btn btn--sec" data-action="/grupos/{{ grupo.id }}/quitar/{{ c.id }}"
+            data-quitar="{{ c.razon_social }}">Quitar</button>
+    {% endif %}
+  </div>
+  <div class="resultado-actualizar muted" data-for="{{ c.id }}"></div>
+</div>
+{% else %}
+<div class="tarjeta"><p class="muted">Este grupo no tiene clientes todavía.</p></div>
+{% endfor %}
+
+{% if not user.solo_lectura and disponibles %}
+<button class="grupo-nuevo mt" id="btn-agregar">+ Agregar cliente al grupo</button>
+<form id="form-agregar" method="post" action="/grupos/{{ grupo.id }}/contribuyentes" hidden>
+  <div class="campo">
+    <label for="ag-c">Cliente</label>
+    <select id="ag-c" name="contribuyente_id" required>
+      {% for d in disponibles %}
+      <option value="{{ d.id }}">{{ d.razon_social }} — RUC {{ d.ruc }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById('btn-agregar')?.addEventListener('click', () =>
+    abrirModalForm('Agregar cliente', document.getElementById('form-agregar')));
+  document.querySelectorAll('[data-quitar]').forEach((b) =>
+    b.addEventListener('click', () =>
+      confirmarModal('Quitar del grupo',
+        '¿Quitar a ' + b.dataset.quitar + ' de este grupo? (no se borra el cliente)',
+        () => postRedirect(b.dataset.action))));
+</script>
+{% endblock %}
