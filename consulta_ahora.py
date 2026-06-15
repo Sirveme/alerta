@@ -32,12 +32,29 @@ from models import Contribuyente, Notificacion
 from cifrado import descifrar_clave_sol
 from ingesta import ingestar_resultado
 
-import scraper_sunat_playwgth as scraper
-
 TZ_LIMA = ZoneInfo("America/Lima")
 
 
+class ScraperNoDisponible(RuntimeError):
+    """El scraper (Playwright + Chromium) no está disponible en este entorno.
+
+    Se lanza cuando el import diferido de `scraper_sunat_playwgth` falla —
+    típicamente porque Playwright no está instalado en el servicio web. La
+    WebApp liviana NO requiere Playwright para arrancar; el scraping pesado
+    corre en un worker separado o en local.
+    """
+
+
 def _scrapear_sync(ruc: str, usuario_sol: str, clave_sol: str) -> dict:
+    # Import DIFERIDO: Playwright sólo se carga al ejecutar una actualización
+    # real, nunca al importar este módulo. Así la WebApp arranca sin Playwright.
+    try:
+        import scraper_sunat_playwgth as scraper
+    except Exception as e:  # ModuleNotFoundError u otros fallos de carga
+        raise ScraperNoDisponible(
+            "El scraper no está disponible en este entorno "
+            "(Playwright ausente).") from e
+
     cfg = scraper.SunatConfig(
         ruc=ruc, usuario_sol=usuario_sol, clave_sol=clave_sol, headless=True)
     return scraper.scrapear_ruc(cfg)
