@@ -1,5 +1,6 @@
 # HTTP client (ya estaba)
 httpx>=0.27.0
+curl_cffi>=0.7.0
 beautifulsoup4>=4.12.0
 
 # Settings (ya estaba)
@@ -22,6 +23,7 @@ asyncpg>=0.29.0
 pyjwt[crypto]>=2.8.0
 passlib==1.7.4
 bcrypt==4.0.1
+argon2-cffi>=23.1.0   # claves de usuario (Argon2) — login DNI de la webapp
 cryptography>=42.0.0
 
 # Scheduler (para 13b)
