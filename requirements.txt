@@ -31,3 +31,5 @@ apscheduler>=3.10.0
 
 # Web Push (para 13c)
 pywebpush>=2.0.0
+
+tzdata
