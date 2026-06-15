@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Mi RUC · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="fila spread">
+  <h1 class="titulo-pagina">Mi información tributaria</h1>
+</div>
+<p class="subtitulo">Tu buzón SUNAT, las 24 horas. Acceso de solo lectura.</p>
+
+{% for c in tarjetas %}
+{% set m = c.urgencia | urgencia_meta %}
+<a class="tarjeta notif-item acento tarjeta-link acento--{{ c.urgencia }}"
+   href="/contribuyentes/{{ c.id }}/notificaciones">
+  <div class="fila spread">
+    <div>
+      <div class="notif-asunto">{{ c.razon_social }}</div>
+      <div class="notif-linea">RUC {{ c.ruc }}
+        {% if c.no_leidas %}· <span class="badge-conteo">{{ c.no_leidas }} sin leer</span>{% endif %}
+      </div>
+    </div>
+    <span class="badge badge--{{ c.urgencia }}">{{ m.label }}</span>
+  </div>
+</a>
+{% else %}
+<div class="tarjeta"><p class="muted">
+  Aún no hay información para tu RUC. En cuanto tu contador active el monitoreo,
+  verás aquí tus notificaciones de SUNAT.
+</p></div>
+{% endfor %}
+{% endblock %}

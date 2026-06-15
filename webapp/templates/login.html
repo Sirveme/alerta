@@ -13,11 +13,14 @@
 
     <form method="post" action="/login" autocomplete="off">
       <div class="campo">
-        <label for="dni">DNI</label>
+        <label for="dni">DNI o WhatsApp</label>
         <input id="dni" name="dni" type="text" inputmode="numeric"
-          pattern="[0-9]{8}" maxlength="8" autocomplete="off"
-          required placeholder="8 dígitos">
+          pattern="[0-9]{8,12}" maxlength="12" autocomplete="off"
+          required placeholder="DNI (8 dígitos) o WhatsApp (51XXXXXXXXX)">
       </div>
+      <p class="muted" style="margin:-4px 0 14px; font-size:.85rem;">
+        ¿No tienes cuenta? <a href="/registro">Regístrate aquí</a>.
+      </p>
       <div class="campo">
         <label for="clave">Clave</label>
         <input id="clave" name="clave" type="password"

@@ -13,7 +13,7 @@
 {% if sugerir_dividir %}
 <div class="tarjeta acento acento--importante">
   <strong>Sugerencia:</strong> este grupo tiene más de 20 clientes.
-  Considerá dividirlo para navegarlo mejor desde el celular.
+  Considera dividirlo para navegarlo mejor desde el celular.
 </div>
 {% endif %}
 
@@ -25,6 +25,11 @@
       <div class="notif-asunto">{{ c.razon_social }}</div>
       <div class="notif-linea">RUC {{ c.ruc }}
         {% if c.no_leidas %}· <span class="badge-conteo">{{ c.no_leidas }} sin leer</span>{% endif %}
+        {% if c.acceso == 'con_acceso' %}
+        · <span class="badge badge--acceso">cliente con acceso</span>
+        {% else %}
+        · <span class="badge badge--pendiente">pendiente de invitar</span>
+        {% endif %}
       </div>
     </div>
     <span class="badge badge--{{ c.urgencia }}">{{ m.label }}</span>

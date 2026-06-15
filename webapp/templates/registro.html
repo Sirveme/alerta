@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block titulo %}Crear cuenta · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="login-wrap">
+  <div class="tarjeta login-card" style="max-width:560px;">
+    <div class="fila" style="gap:10px; margin-bottom:6px;">
+      <span class="marca-punto"></span>
+      <h1 class="titulo-pagina" style="margin:0;">Crear cuenta</h1>
+    </div>
+    <p class="subtitulo">Buzón SUNAT, las 24 horas. Empieza en modo de prueba.</p>
+
+    {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+
+    <form method="post" action="/registro" autocomplete="off" id="form-registro">
+      <input type="hidden" name="tipo_cuenta" id="f-tipo" value="">
+      <input type="hidden" name="plan" id="f-plan" value="">
+
+      <!-- Paso 1: tipo de cuenta -->
+      <h3 class="paso-titulo">1 · ¿Quién eres?</h3>
+      <div class="grid-tipos">
+        <button type="button" class="tarjeta tipo-card" data-tipo="empresario">
+          <strong>Soy Empresario</strong>
+          <span class="muted">Vigilo mi propio RUC</span>
+        </button>
+        <button type="button" class="tarjeta tipo-card" data-tipo="estudio">
+          <strong>Soy Contador / Estudio</strong>
+          <span class="muted">Vigilo los RUCs de mis clientes</span>
+        </button>
+      </div>
+      <p class="muted" id="nota-empresario" hidden style="font-size:.85rem;">
+        Tu contador también puede darte acceso gratis a tu RUC.
+      </p>
+
+      <!-- Paso 2: plan -->
+      <h3 class="paso-titulo">2 · Elige tu plan</h3>
+      <div class="grid-planes">
+        {% for p in planes %}
+        <button type="button" class="tarjeta plan-card" data-tipo="{{ p.tipo }}"
+                data-clave="{{ p.clave }}" hidden>
+          <div class="fila spread">
+            <strong>{{ p.nombre }}</strong>
+            <span class="badge badge--al_dia">
+              {% if p.precio is none %}A medida{% elif p.precio == 0 %}Gratis{% else %}S/ {{ p.precio }}/mes{% endif %}
+            </span>
+          </div>
+          <span class="muted">{{ p.max_rucs }} RUC(s) · {{ p.max_usuarios }} usuario(s)</span>
+        </button>
+        {% endfor %}
+      </div>
+      <p class="muted" id="aviso-plan" hidden style="font-size:.85rem;">
+        Elige primero qué tipo de cuenta eres.
+      </p>
+
+      <!-- Paso 3: datos -->
+      <h3 class="paso-titulo">3 · Tus datos</h3>
+      <div class="campo"><label for="r-rs">Nombre o razón social</label>
+        <input id="r-rs" name="razon_social" required maxlength="255"></div>
+      <div class="campo"><label for="r-dni">DNI (con esto inicias sesión)</label>
+        <input id="r-dni" name="dni" inputmode="numeric" pattern="[0-9]{8}"
+               maxlength="8" required placeholder="8 dígitos"></div>
+      <div class="campo"><label for="r-wa">WhatsApp (con código país, ej. 51XXXXXXXXX)</label>
+        <input id="r-wa" name="whatsapp" inputmode="numeric" maxlength="15"
+               placeholder="51XXXXXXXXX"></div>
+      <div class="campo"><label for="r-correo">Correo (opcional)</label>
+        <input id="r-correo" name="correo" type="email" placeholder="tucorreo@ejemplo.com"></div>
+      <div class="campo"><label for="r-clave">Clave (mínimo 6 caracteres)</label>
+        <input id="r-clave" name="clave" type="password" minlength="6" required
+               autocomplete="new-password"></div>
+
+      <button class="btn btn--bloque" type="submit" id="btn-registro">Crear mi cuenta</button>
+    </form>
+    <p class="muted mt" style="text-align:center;">
+      ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const fTipo = document.getElementById('f-tipo');
+    const fPlan = document.getElementById('f-plan');
+    const notaEmp = document.getElementById('nota-empresario');
+    const avisoPlan = document.getElementById('aviso-plan');
+    const tipoCards = document.querySelectorAll('.tipo-card');
+    const planCards = document.querySelectorAll('.plan-card');
+
+    function elegirTipo(tipo) {
+      fTipo.value = tipo;
+      fPlan.value = '';
+      tipoCards.forEach((c) => c.classList.toggle('sel', c.dataset.tipo === tipo));
+      planCards.forEach((c) => {
+        const visible = c.dataset.tipo === tipo;
+        c.hidden = !visible;
+        c.classList.remove('sel');
+      });
+      notaEmp.hidden = (tipo !== 'empresario');
+      avisoPlan.hidden = true;
+      // Si el tipo solo tiene un plan, seleccionarlo automáticamente.
+      const visibles = Array.from(planCards).filter((c) => !c.hidden);
+      if (visibles.length === 1) elegirPlan(visibles[0]);
+    }
+    function elegirPlan(card) {
+      fPlan.value = card.dataset.clave;
+      planCards.forEach((c) => c.classList.toggle('sel', c === card));
+    }
+
+    tipoCards.forEach((c) => c.addEventListener('click', () => elegirTipo(c.dataset.tipo)));
+    planCards.forEach((c) => c.addEventListener('click', () => elegirPlan(c)));
+
+    document.getElementById('form-registro').addEventListener('submit', (e) => {
+      if (!fTipo.value) { e.preventDefault(); avisoPlan.hidden = false;
+        avisoPlan.textContent = 'Primero elige qué tipo de cuenta eres.'; return; }
+      if (!fPlan.value) { e.preventDefault(); avisoPlan.hidden = false;
+        avisoPlan.textContent = 'Elige un plan para continuar.'; }
+    });
+  })();
+</script>
+{% endblock %}

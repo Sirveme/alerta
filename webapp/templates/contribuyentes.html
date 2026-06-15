@@ -6,7 +6,7 @@
 
 <table class="tabla">
   <thead>
-    <tr><th>Razón social</th><th>RUC</th><th>Estado</th><th>Urgencia</th><th>Último scrapeo</th><th></th></tr>
+    <tr><th>Razón social</th><th>RUC</th><th>Estado</th><th>Urgencia</th><th>Acceso dueño</th><th>Último scrapeo</th><th></th></tr>
   </thead>
   <tbody>
   {% for f in filas %}
@@ -16,6 +16,13 @@
     <td>{{ f.ruc }}</td>
     <td>{{ f.estado }}</td>
     <td><span class="badge badge--{{ f.urgencia }}">{{ m.label }}</span></td>
+    <td>
+      {% if f.acceso == 'con_acceso' %}
+        <span class="badge badge--acceso">con acceso</span>
+      {% else %}
+        <span class="badge badge--pendiente">pendiente</span>
+      {% endif %}
+    </td>
     <td class="muted">{{ f.ultimo_scrapeo_at | fecha_hora_lima }}</td>
     <td><a class="chip-tipo" href="/contribuyentes/{{ f.id }}/notificaciones">Ver</a></td>
   </tr>

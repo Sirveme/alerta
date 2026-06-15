@@ -34,8 +34,10 @@
     <a href="/" class="marca"><span class="marca-punto"></span> alerta.pe</a>
     <span class="barra-sep"></span>
     <nav class="barra-nav">
+      {% if not user.es_empresario %}
       <a href="/" class="nav-link nav-pc">Grupos</a>
       <a href="/contribuyentes" class="nav-link nav-pc">Clientes</a>
+      {% endif %}
       {% if not user.solo_lectura %}
       <button id="btn-mas" class="btn-icono" title="Acciones rápidas" aria-label="Acciones rápidas">+</button>
       {% endif %}
@@ -65,9 +67,9 @@
   <div class="hoja-fondo" id="hoja-fondo" hidden></div>
   <section class="hoja-ia" id="hoja-ia" aria-hidden="true">
     <div class="hoja-tirador"></div>
-    <div class="hoja-titulo"><span class="marca-punto"></span> Preguntá a alerta.pe</div>
+    <div class="hoja-titulo"><span class="marca-punto"></span> Pregúntale a alerta.pe</div>
     <div class="ia-barra">
-      <input id="ia-input" type="text" placeholder="Escribí o dictá tu consulta…"
+      <input id="ia-input" type="text" placeholder="Escribe o dicta tu consulta…"
              autocomplete="off" enterkeyhint="send">
       <button class="ia-btn ia-btn--mic" id="ia-mic" title="Dictar" aria-label="Dictar">🎤</button>
       <button class="ia-btn ia-btn--enviar" id="ia-enviar" title="Enviar" aria-label="Enviar">↑</button>
