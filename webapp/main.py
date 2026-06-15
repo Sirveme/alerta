@@ -9,9 +9,14 @@ Arranque local:
     uvicorn webapp.main:app --reload
 """
 
+import sys
 from __future__ import annotations
 
 from pathlib import Path
+
+RAIZ = Path(__file__).resolve().parent.parent
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
 
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, FileResponse, JSONResponse
