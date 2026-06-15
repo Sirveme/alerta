@@ -137,26 +137,51 @@ async function formNuevoCliente() {
     <div class="campo"><label>Clave SOL</label>
       <input id="nc-clave" type="password" required autocomplete="new-password">
       <small class="muted">Se cifra con Fernet. Nunca se muestra.</small></div>
+    <hr style="border:none;border-top:1px solid var(--borde);margin:14px 0">
+    <p class="muted" style="margin:0 0 10px">Datos del dueño del RUC (se crea su acceso gratis):</p>
+    <div class="campo"><label>Nombre del empresario</label>
+      <input id="nc-emp-nombre" required placeholder="Nombre y apellido del dueño"></div>
+    <div class="campo"><label>WhatsApp del empresario</label>
+      <input id="nc-emp-wa" inputmode="numeric" required placeholder="51XXXXXXXXX (con código país)">
+      <small class="muted">Para invitarlo a ver su propio RUC.</small></div>
     <div class="campo"><label>Grupos</label><div id="nc-grupos">${chks}</div></div>`,
     async (fondo) => {
       const ruc = document.getElementById('nc-ruc').value.trim();
       const usuario = document.getElementById('nc-usuario').value.trim();
       const clave = document.getElementById('nc-clave').value;
+      const empNombre = document.getElementById('nc-emp-nombre').value.trim();
+      const empWa = document.getElementById('nc-emp-wa').value.replace(/\D/g, '');
       if (!/^\d{11}$/.test(ruc) || !usuario || !clave) {
-        return confirmarModal('Datos incompletos', 'Revisá RUC (11 dígitos), usuario y clave SOL.', () => {});
+        return confirmarModal('Datos incompletos', 'Revisa el RUC (11 dígitos), usuario y clave SOL.', () => {});
+      }
+      if (!empNombre || empWa.length < 9) {
+        return confirmarModal('Datos del empresario', 'Ingresa el nombre y el WhatsApp del dueño del RUC (con código país).', () => {});
       }
       const grupos_ids = Array.from(document.querySelectorAll('#nc-grupos input:checked')).map((c) => c.value);
       try {
         const r = await fetch('/contribuyentes', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ruc, razon_social: document.getElementById('nc-rs').value.trim(),
-            usuario_sol: usuario, clave_sol: clave, grupos: grupos_ids })
+            usuario_sol: usuario, clave_sol: clave, grupos: grupos_ids,
+            empresario_nombre: empNombre, empresario_whatsapp: empWa })
         });
         const j = await r.json();
-        if (j.ok) { cerrarModal(); location.href = '/contribuyentes'; }
-        else confirmarModal('No se pudo crear', j.error || 'Error al crear el cliente.', () => {});
+        if (j.ok) { invitarEmpresario(j); }
+        else confirmarModal(j.limite ? 'Límite de plan' : 'No se pudo crear',
+                            j.error || 'Error al crear el cliente.', () => {});
       } catch (_) { confirmarModal('Error', 'Error de red al crear el cliente.', () => {}); }
     }, 'Crear cliente');
+}
+
+// Tras crear el cliente: mostrar el botón notorio "Invitar por WhatsApp".
+function invitarEmpresario(j) {
+  const nombre = (j.empresario && j.empresario.nombre) || 'tu cliente';
+  modalHTML('✅ Cliente creado',
+    `<p>Se creó el RUC y la cuenta gratuita de <strong>${_attr(nombre)}</strong>.</p>
+     <p class="muted">Invítalo por WhatsApp: recibirá el enlace para pedir su clave a Soporte.</p>
+     <a class="btn btn--bloque btn--whatsapp" href="${_attr(j.wa_url)}" target="_blank" rel="noopener">
+       Invitar al cliente por WhatsApp</a>`,
+    () => { cerrarModal(); location.href = '/contribuyentes'; }, 'Listo, ver clientes');
 }
 
 function formImportar() {
