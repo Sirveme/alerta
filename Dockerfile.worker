@@ -1,0 +1,22 @@
+# Dockerfile.worker — alerta.pe worker de scraping (Playwright + Chromium)
+# ═══════════════════════════════════════════════════════════════════════
+# Servicio SEPARADO de la WebApp. La web usa Nixpacks (railway.toml) y NO
+# tiene Playwright. Este worker usa la imagen oficial de Playwright (Python),
+# que ya trae Chromium + todas las dependencias del sistema preinstaladas.
+#
+# La versión de la imagen DEBE coincidir con la de playwright en runtime
+# (1.60.0) para que los navegadores instalados sean compatibles.
+
+FROM mcr.microsoft.com/playwright/python:v1.60.0-jammy
+
+WORKDIR /app
+
+# Dependencias Python. requirements.txt NO incluye playwright (la WebApp es
+# liviana); la imagen ya lo trae. Lo fijamos explícito para garantizar 1.60.0.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt playwright==1.60.0
+
+COPY . .
+
+# El worker NO sirve HTTP: no expone puerto ni necesita healthcheck.
+CMD ["python", "worker.py"]

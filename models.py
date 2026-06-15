@@ -224,6 +224,15 @@ class Contribuyente(Base, TimestampMixin):
     ultimo_scrapeo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ultimo_scrapeo_ok: Mapped[bool | None] = mapped_column(Boolean)
 
+    # Actualización bajo demanda (zAlerta-04): el botón "Actualizar ahora" de la
+    # WebApp NO scrapea en el proceso web (liviano, sin Playwright). Marca este
+    # flag y el worker separado (worker.py) lo scrapea con prioridad en su
+    # próximo ciclo corto, luego lo limpia.
+    actualizar_solicitado: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False)
+    actualizar_solicitado_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True))
+
     estudio: Mapped["EstudioContable"] = relationship(back_populates="contribuyentes")
     credencial: Mapped["CredencialSol"] = relationship(
         back_populates="contribuyente", uselist=False, cascade="all, delete-orphan")
