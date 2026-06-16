@@ -271,6 +271,9 @@ class Usuario(Base, TimestampMixin):
     # Empresario cuya clave aún la entrega Soporte manualmente (zAlerta-06 C.4).
     clave_pendiente: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ultimo_acceso_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Última visita al resumen/bienvenida (zAlerta-07): base para "nuevas desde
+    # tu última visita". Se actualiza DESPUÉS de calcular el resumen.
+    ultima_visita_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     estudio: Mapped["EstudioContable"] = relationship(back_populates="usuarios")
 
@@ -566,3 +569,35 @@ class Reaccion(Base):
         DateTime(timezone=True), default=ahora_lima, nullable=False)
 
     notificacion: Mapped["Notificacion"] = relationship(back_populates="reacciones")
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 10. PushSuscripcion — suscripción Web Push por dispositivo (zAlerta-07)
+# ═════════════════════════════════════════════════════════════════════
+class PushSuscripcion(Base):
+    """Una suscripción push por dispositivo/navegador de un usuario.
+
+    Multi-tenant (estudio_id) y UUID, consistente con el resto del modelo
+    nuevo. El envío lo hace el worker vía push_service (pywebpush + VAPID).
+    """
+    __tablename__ = "push_suscripciones"
+    __table_args__ = (
+        UniqueConstraint("usuario_id", "endpoint", name="uq_push_usuario_endpoint"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    estudio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    usuario_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False)
+    p256dh: Mapped[str] = mapped_column(Text, nullable=False)
+    auth: Mapped[str] = mapped_column(Text, nullable=False)
+
+    activa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
