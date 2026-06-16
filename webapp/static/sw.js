@@ -5,12 +5,13 @@
    Push: handler listo; el ENVÍO real es una fase aparte.
    ═══════════════════════════════════════════════════════════════════ */
 
-const CACHE = 'alertape-v2';
+const CACHE = 'alertape-v3';
 const ASSETS = [
   '/static/css/app.css',
   '/static/js/app.js',
   '/static/js/tema.js',
   '/static/js/ia.js',
+  '/static/js/push.js',
   '/static/img/favicon.svg',
   '/static/img/icono.svg',
   '/manifest.json',
@@ -55,9 +56,9 @@ self.addEventListener('fetch', (e) => {
   }
 });
 
-// ── Push (preparado; el envío real es fase aparte) ──
+// ── Push (zAlerta-07): muestra la notificación enviada por el worker ──
 self.addEventListener('push', (e) => {
-  let data = { title: 'alerta.pe', body: 'Tenés una novedad de SUNAT.' };
+  let data = { title: 'alerta.pe', body: 'Tienes una novedad de SUNAT.', url: '/' };
   try { if (e.data) data = e.data.json(); } catch (_) {}
   e.waitUntil(self.registration.showNotification(data.title || 'alerta.pe', {
     body: data.body || '',
@@ -67,7 +68,17 @@ self.addEventListener('push', (e) => {
   }));
 });
 
+// Al tocar: enfocar una pestaña de alerta.pe ya abierta, o abrir una nueva
+// en la pantalla de bienvenida/resumen.
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  e.waitUntil(clients.openWindow(e.notification.data || '/'));
+  const destino = e.notification.data || '/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if ('focus' in w) { w.navigate?.(destino); return w.focus(); }
+      }
+      return clients.openWindow(destino);
+    })
+  );
 });
