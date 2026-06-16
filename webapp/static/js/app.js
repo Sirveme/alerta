@@ -60,25 +60,70 @@ function postRedirect(action) {
   document.body.appendChild(f); f.submit();
 }
 
-// ── "Actualizar ahora" (scraping bajo demanda) ──
+// ── "Actualizar ahora" — indicador CON SUSTANCIA (zAlerta-07 D) ──
+function _horaCorta(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }); }
+  catch (_) { return '—'; }
+}
+function _resumenConteos(conteos) {
+  if (!conteos || !conteos.length) return 'Aún no hay notificaciones guardadas.';
+  return 'Tienes: ' + conteos.map((c) => `${c.n} ${c.etiqueta}`).join(' · ');
+}
+async function _estado(id) {
+  const r = await fetch(`/contribuyentes/${id}/estado-scrapeo`);
+  return r.json();
+}
+
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.btn-actualizar');
   if (!btn) return;
   const id = btn.dataset.id;
   const out = document.querySelector(`.resultado-actualizar[data-for="${id}"]`);
   const original = btn.innerHTML;
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Solicitando…';
-  if (out) out.textContent = 'Solicitando actualización…';
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Actualizando…';
+
+  // 1) Mostrar lo que YA tiene (instantáneo desde BD), no un spinner vacío.
+  let prev = { ultimo_scrapeo_at: null, total: 0 };
   try {
-    const r = await fetch(`/contribuyentes/${id}/actualizar`, { method: 'POST' });
-    const j = await r.json();
-    if (out) out.textContent = j.mensaje || (j.exito ? 'Listo.' : 'No se pudo, reintentar.');
-    // El worker procesa el scraping en segundo plano: recargamos en ~60s
-    // para mostrar los datos frescos cuando termine.
-    if (j.exito && j.solicitado) setTimeout(() => location.reload(), 60000);
+    const est = await _estado(id);
+    if (est.ok) {
+      prev = { ultimo_scrapeo_at: est.ultimo_scrapeo_at, total: est.total };
+      if (out) out.textContent = _resumenConteos(est.conteos) + ' · Buscando novedades…';
+    }
+  } catch (_) {}
+
+  // 2) Marcar el flag (el worker scrapea aparte).
+  try {
+    await fetch(`/contribuyentes/${id}/actualizar`, { method: 'POST' });
   } catch (_) {
     if (out) out.textContent = 'No se pudo solicitar la actualización, reintentar.';
-  } finally { btn.disabled = false; btn.innerHTML = original; }
+    btn.disabled = false; btn.innerHTML = original; return;
+  }
+  btn.disabled = false; btn.innerHTML = original;
+
+  // 3) Polling cada 10s hasta ~2 min: detectar cuando ultimo_scrapeo_at cambia.
+  let intentos = 0;
+  const maxIntentos = 12;
+  const timer = setInterval(async () => {
+    intentos++;
+    let est;
+    try { est = await _estado(id); } catch (_) { est = null; }
+    if (est && est.ok && est.ultimo_scrapeo_at !== prev.ultimo_scrapeo_at) {
+      clearInterval(timer);
+      const nuevas = (est.total || 0) - (prev.total || 0);
+      if (nuevas > 0) {
+        if (out) out.textContent = `¡${nuevas} ${nuevas === 1 ? 'nueva notificación' : 'nuevas notificaciones'}!`;
+        setTimeout(() => location.reload(), 1200);
+      } else if (out) {
+        out.textContent = `Listo. No hay notificaciones nuevas entre `
+          + `${_horaCorta(prev.ultimo_scrapeo_at)} y ${_horaCorta(est.ultimo_scrapeo_at)}.`;
+      }
+    } else if (intentos >= maxIntentos) {
+      clearInterval(timer);
+      if (out) out.textContent = 'El monitoreo sigue en proceso, te avisaremos apenas haya novedades.';
+    }
+  }, 10000);
 });
 
 // ── Menú de acciones rápidas "+" ──
