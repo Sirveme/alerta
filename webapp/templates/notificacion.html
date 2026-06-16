@@ -27,20 +27,36 @@
   </div>
   {% endif %}
 
-  {% if notif.texto_html %}
-  <div class="mt" style="overflow-wrap:anywhere;">{{ notif.texto_html | safe }}</div>
+  {% set cuerpo = notif.texto_html | cuerpo_notificacion %}
+  {% if cuerpo.numero %}
+  <div class="notif-linea mt"><strong>{{ cuerpo.numero }}</strong></div>
+  {% endif %}
+  {% if cuerpo.cuerpo %}
+  <div class="mt" style="overflow-wrap:anywhere;">{{ cuerpo.cuerpo }}</div>
+  {% elif cuerpo.es_json %}
+  <p class="muted mt">El contenido completo de este documento está en el PDF adjunto.</p>
+  {% endif %}
+  {% if cuerpo.tecnicos %}
+  <details class="mt">
+    <summary class="muted" style="cursor:pointer;">Detalles técnicos</summary>
+    <div class="muted" style="font-size:.85rem; margin-top:6px; overflow-wrap:anywhere;">
+      <div>Código de mensaje: {{ notif.cod_mensaje_sunat }}</div>
+      {% for k, val in cuerpo.tecnicos %}<div>{{ k }}: {{ val }}</div>{% endfor %}
+    </div>
+  </details>
   {% endif %}
 
   {% if notif.adjuntos %}
+  {% set txt_compartir = "alerta.pe — " ~ (notif.asunto or "Notificación de SUNAT") ~ ". Publicada: " ~ (notif.fecha_publica_sunat | fecha_hora_lima) ~ ". Ingresa a alerta.pe para verla." %}
   <div class="mt">
     <strong>Adjuntos</strong>
     {% for a in notif.adjuntos %}
     <div class="fila mt">
       <span>📎 {{ a.nombre_archivo }}</span>
-      <a class="btn btn--sec" target="_blank"
-         href="/notificaciones/{{ notif.id }}/adjunto/{{ a.id }}">Ver PDF</a>
-      <a class="btn btn--sec"
-         href="/notificaciones/{{ notif.id }}/adjunto/{{ a.id }}?descargar=true">Descargar</a>
+      <a class="btn btn--sec" target="_blank" href="/adjuntos/{{ a.id }}/ver">Ver PDF</a>
+      <a class="btn btn--sec" href="/adjuntos/{{ a.id }}/descargar">Descargar</a>
+      <a class="btn btn--sec" target="_blank" rel="noopener"
+         href="https://wa.me/?text={{ txt_compartir | urlencode }}">📲 Compartir</a>
     </div>
     {% endfor %}
   </div>
