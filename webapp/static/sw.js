@@ -5,13 +5,14 @@
    Push: handler listo; el ENVÍO real es una fase aparte.
    ═══════════════════════════════════════════════════════════════════ */
 
-const CACHE = 'alertape-v3';
+const CACHE = 'alertape-v4';
 const ASSETS = [
   '/static/css/app.css',
   '/static/js/app.js',
   '/static/js/tema.js',
   '/static/js/ia.js',
   '/static/js/push.js',
+  '/static/js/dock.js',
   '/static/img/favicon.svg',
   '/static/img/icono.svg',
   '/manifest.json',
