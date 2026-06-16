@@ -21,6 +21,7 @@ from sqlalchemy import select, func
 from db import get_session
 from models import (
     Grupo, Contribuyente, ContribuyenteGrupo, Notificacion, Urgencia, Usuario,
+    ETIQUETA_TIPO_DOCUMENTO, ahora_lima,
 )
 from ..core import templates
 from ..deps import UsuarioActual, usuario_actual, requiere_escritura
@@ -32,6 +33,30 @@ _URGENTES = (Urgencia.URGENTE, Urgencia.CRITICA)
 
 # Colores plantilla para grupos libres nuevos (rotación).
 _COLORES_LIBRES = ["#7C3AED", "#0891B2", "#BE185D", "#15803D", "#B45309"]
+
+# Grupos plantilla por régimen (zAlerta-01 B.3). Definidos AQUÍ dentro de
+# webapp/ para no depender de migrar_grupos_zAlerta01.py (script de migración
+# que NO se despliega en producción → causaba 500 en /grupos/plantilla).
+_GRUPOS_PLANTILLA = [
+    {"nombre": "NRUS · Bodegas",  "color": "#1F9D55", "icono": "ti-building-store",     "orden": 1},
+    {"nombre": "RER",             "color": "#D97706", "icono": "ti-briefcase",          "orden": 2},
+    {"nombre": "RMT",             "color": "#2563EB", "icono": "ti-building-bank",       "orden": 3},
+    {"nombre": "Régimen General", "color": "#DC2626", "icono": "ti-building-skyscraper", "orden": 4},
+]
+
+
+async def crear_grupos_plantilla_estudio(session, estudio_id: uuid.UUID) -> int:
+    """Crea los grupos plantilla por régimen para un estudio. Idempotente."""
+    creados = 0
+    for plt in _GRUPOS_PLANTILLA:
+        ya = await session.scalar(
+            select(Grupo.id).where(Grupo.estudio_id == estudio_id,
+                                   Grupo.nombre == plt["nombre"]))
+        if ya:
+            continue
+        session.add(Grupo(estudio_id=estudio_id, **plt))
+        creados += 1
+    return creados
 
 
 async def _resumen_grupos(session, estudio_id: uuid.UUID) -> list[dict]:
@@ -81,8 +106,75 @@ async def _acceso_empresario(session, contrib) -> str:
     return "con_acceso" if activo else "pendiente"
 
 
+def _etiqueta_tipo(tipo_enum) -> str:
+    clave = tipo_enum.value if tipo_enum is not None else None
+    return ETIQUETA_TIPO_DOCUMENTO.get(clave, "Otros")
+
+
+async def _calcular_resumen(session, user: UsuarioActual, desde):
+    """Resumen de bienvenida desde BD (zAlerta-07 B). Multi-tenant:
+    estudio ve lo suyo; empresario solo su(s) RUC(s) vía cuenta_empresario_id.
+    'desde' = ultima_visita_at anterior (None = primera visita)."""
+    if user.es_empresario:
+        sub = select(Contribuyente.id).where(
+            Contribuyente.cuenta_empresario_id == user.estudio_id)
+        base = Notificacion.contribuyente_id.in_(sub)
+    else:
+        base = Notificacion.estudio_id == user.estudio_id
+
+    n_nuevas, nuevas_por_tipo, clientes_novedades = 0, [], []
+    if desde is not None:
+        rows = (await session.execute(
+            select(Notificacion.tipo_documento_enum, func.count(Notificacion.id))
+            .where(base, Notificacion.creado_at > desde)
+            .group_by(Notificacion.tipo_documento_enum))).all()
+        for tipo_enum, cnt in rows:
+            n_nuevas += cnt
+            nuevas_por_tipo.append({"etiqueta": _etiqueta_tipo(tipo_enum), "n": cnt})
+        # Para ESTUDIO multi-cliente: qué clientes tienen novedades.
+        if not user.es_empresario and n_nuevas:
+            clientes_novedades = list(await session.scalars(
+                select(Contribuyente.razon_social).distinct()
+                .join(Notificacion,
+                      Notificacion.contribuyente_id == Contribuyente.id)
+                .where(Notificacion.estudio_id == user.estudio_id,
+                       Notificacion.creado_at > desde).limit(8)))
+
+    # Recordatorios URGENTES anteriores (no leídos). Si no hay, se omite.
+    urgentes = []
+    urg_rows = (await session.execute(
+        select(Notificacion.tipo_documento_enum, func.count(Notificacion.id))
+        .where(base, Notificacion.urgencia.in_(_URGENTES),
+               Notificacion.leida == False)  # noqa: E712
+        .group_by(Notificacion.tipo_documento_enum))).all()
+    for tipo_enum, cnt in urg_rows:
+        urgentes.append({"etiqueta": _etiqueta_tipo(tipo_enum), "n": cnt})
+
+    return {
+        "desde": desde,
+        "primera_visita": desde is None,
+        "n_nuevas": n_nuevas,
+        "nuevas_por_tipo": nuevas_por_tipo,
+        "clientes_novedades": [c or "RUC" for c in clientes_novedades],
+        "urgentes": urgentes,
+        "es_empresario": user.es_empresario,
+    }
+
+
+async def _resumen_y_marcar_visita(session, user: UsuarioActual) -> dict:
+    """Calcula el resumen con la última visita ANTERIOR y luego la actualiza."""
+    usuario_db = await session.get(Usuario, user.id)
+    desde = usuario_db.ultima_visita_at if usuario_db else None
+    resumen = await _calcular_resumen(session, user, desde)
+    if usuario_db:                       # actualizar DESPUÉS de calcular
+        usuario_db.ultima_visita_at = ahora_lima()
+        await session.commit()
+    return resumen
+
+
 async def _vista_empresario(request: Request, session, user: UsuarioActual):
     """Dashboard del EMPRESARIO: solo su(s) RUC(s) vinculado(s), solo lectura."""
+    resumen = await _resumen_y_marcar_visita(session, user)
     contribs = (await session.scalars(
         select(Contribuyente).where(
             Contribuyente.cuenta_empresario_id == user.estudio_id)
@@ -102,7 +194,7 @@ async def _vista_empresario(request: Request, session, user: UsuarioActual):
             "urgencia": _urgencia_max(urgencias), "no_leidas": no_leidas,
         })
     return templates.TemplateResponse(request, "empresario.html", {
-        "user": user, "tarjetas": tarjetas})
+        "user": user, "tarjetas": tarjetas, "resumen": resumen})
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -111,6 +203,7 @@ async def dashboard(request: Request, user: UsuarioActual = Depends(usuario_actu
         async with get_session() as session:
             return await _vista_empresario(request, session, user)
     async with get_session() as session:
+        resumen = await _resumen_y_marcar_visita(session, user)
         grupos = await _resumen_grupos(session, user.estudio_id)
         total_clientes = await session.scalar(
             select(func.count(Contribuyente.id)).where(
@@ -124,6 +217,7 @@ async def dashboard(request: Request, user: UsuarioActual = Depends(usuario_actu
                         ContribuyenteGrupo.estudio_id == user.estudio_id))))
     return templates.TemplateResponse(request, "dashboard.html", {
         "user": user,
+        "resumen": resumen,
         "grupos": grupos,
         "total_clientes": total_clientes or 0,
         "sin_grupo": sin_grupo or 0,
@@ -161,8 +255,9 @@ async def crear_grupo(
 async def crear_grupos_plantilla(
     request: Request, user: UsuarioActual = Depends(requiere_escritura)):
     """Crea los grupos por régimen (NRUS·Bodegas, RER, RMT, Régimen General)."""
-    from migrar_grupos_zAlerta01 import crear_grupos_plantilla as _crear
-    await _crear(user.estudio_id)
+    async with get_session() as session:
+        await crear_grupos_plantilla_estudio(session, user.estudio_id)
+        await session.commit()
     return RedirectResponse("/", status_code=303)
 
 
