@@ -15,8 +15,10 @@ Async (SQLAlchemy 2.0 + asyncpg). Todo en hora Lima.
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -29,6 +31,33 @@ TZ_LIMA = ZoneInfo("America/Lima")
 
 def ahora_lima() -> datetime:
     return datetime.now(TZ_LIMA)
+
+
+def _leer_pdf_local(pdfs, nombre_archivo: str) -> bytes | None:
+    """Lee los bytes del PDF que el scraper descargó al filesystem del worker,
+    para persistirlo en BD (bytea_temporal) y que la WEB lo sirva sin depender
+    del filesystem del worker (zAlerta-08 #4). Devuelve los bytes o None.
+
+    NOTA: esta es la ÚNICA excepción permitida al 'no tocar motor': solo
+    persiste el PDF, no cambia la lógica de scraping/login.
+    """
+    if not pdfs or not nombre_archivo:
+        return None
+    objetivo = nombre_archivo.lower()
+    for ruta in pdfs:
+        if not isinstance(ruta, str) or ruta.startswith("PENDIENTE:"):
+            continue
+        base = os.path.basename(ruta).lower()
+        if base == objetivo or base == objetivo + ".pdf" or objetivo in base:
+            try:
+                p = Path(ruta)
+                if p.exists():
+                    data = p.read_bytes()
+                    if data[:4] == b"%PDF" or len(data) > 1000:
+                        return data
+            except Exception:
+                return None
+    return None
 
 
 def _parse_fecha_publica(valor: str | None) -> datetime | None:
@@ -94,19 +123,26 @@ async def ingestar_resultado(
 
         # ── Adjuntos (dedup por cod_archivo, desde listAttach del detalle) ──
         detalle = msg.get("detalle") or {}
+        pdfs_locales = msg.get("pdfs") or []   # rutas que descargó el scraper
         for att in (detalle.get("listAttach") or []):
             cod_arch = str(att.get("codArchivo") or "")
             nombre = att.get("nomArchivo") or ""
             if not cod_arch or not nombre:
                 continue
+            pdf_bytes = _leer_pdf_local(pdfs_locales, nombre)
             dup = await session.scalar(
-                select(Adjunto.id).where(
+                select(Adjunto).where(
                     Adjunto.notificacion_id == notif_id,
                     Adjunto.cod_archivo_sunat == cod_arch,
                 )
             )
             if dup:
                 stats["adjuntos_duplicados"] += 1
+                # Backfill: si el PDF no estaba en BD y ahora lo tenemos, guardarlo.
+                if dup.bytea_temporal is None and pdf_bytes:
+                    dup.bytea_temporal = pdf_bytes
+                    dup.descargado = True
+                    dup.descargado_at = ahora_lima()
                 continue
             session.add(Adjunto(
                 notificacion_id=notif_id,
@@ -114,7 +150,10 @@ async def ingestar_resultado(
                 cod_archivo_sunat=cod_arch,
                 nombre_archivo=nombre,
                 tamano_bytes=att.get("cntTamarch"),
-                # gcs_key / bytea_temporal se llenan en el paso de subida
+                # PDF persistido en BD para que la WEB lo sirva (zAlerta-08 #4).
+                bytea_temporal=pdf_bytes,
+                descargado=bool(pdf_bytes),
+                descargado_at=ahora_lima() if pdf_bytes else None,
             ))
             stats["adjuntos_nuevos"] += 1
 
