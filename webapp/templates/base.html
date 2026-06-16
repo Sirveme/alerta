@@ -57,6 +57,17 @@
   {% endif %}
   {% endif %}
 
+  {% if user %}
+  <!-- Banner de avisos push (no pide permiso al cargar; solo al tocar) -->
+  <div id="push-banner" class="push-banner" hidden>
+    <span>Activa los avisos y entérate al instante de las novedades de SUNAT.</span>
+    <span class="push-banner-acc">
+      <button id="push-activar" class="btn">Activar avisos</button>
+      <button id="push-cerrar" class="btn btn--sec">Ahora no</button>
+    </span>
+  </div>
+  {% endif %}
+
   <main class="contenido">
     {% block contenido %}{% endblock %}
   </main>
@@ -139,6 +150,7 @@
   <script src="/static/js/app.js"></script>
   <script src="/static/js/tema.js"></script>
   {% if user %}<script src="/static/js/ia.js"></script>{% endif %}
+  {% if user %}<script src="/static/js/push.js"></script>{% endif %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

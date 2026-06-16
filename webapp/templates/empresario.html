@@ -6,6 +6,8 @@
 </div>
 <p class="subtitulo">Tu buzón SUNAT, las 24 horas. Acceso de solo lectura.</p>
 
+{% include "_resumen.html" %}
+
 {% for c in tarjetas %}
 {% set m = c.urgencia | urgencia_meta %}
 <a class="tarjeta notif-item acento tarjeta-link acento--{{ c.urgencia }}"

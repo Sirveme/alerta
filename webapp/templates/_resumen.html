@@ -1,0 +1,37 @@
+{# Tarjeta de bienvenida con resumen (zAlerta-07 B). Espera `resumen`. #}
+{% if resumen %}
+<div class="tarjeta acento resumen mt {% if resumen.n_nuevas %}acento--importante{% else %}acento--al_dia{% endif %}">
+  {% if resumen.n_nuevas %}
+    <div class="resumen-nuevas">
+      {{ resumen.n_nuevas }} nueva{{ 's' if resumen.n_nuevas != 1 else '' }} desde tu última visita
+      {% if resumen.desde %}<span class="muted">({{ resumen.desde | fecha_hora_lima }})</span>{% endif %}
+    </div>
+    <div class="resumen-chips">
+      {% for t in resumen.nuevas_por_tipo %}
+      <span class="resumen-chip">{{ t.n }} {{ t.etiqueta }}</span>
+      {% endfor %}
+    </div>
+    {% if resumen.clientes_novedades %}
+    <div class="muted mt">
+      {{ resumen.clientes_novedades | length }} cliente(s) con novedades:
+      {{ resumen.clientes_novedades | join(' · ') }}
+    </div>
+    {% endif %}
+  {% elif resumen.primera_visita %}
+    <div class="resumen-nuevas">Te damos la bienvenida a alerta.pe</div>
+    <div class="muted">Aquí verás tus novedades de SUNAT apenas el monitoreo las traiga.</div>
+  {% else %}
+    <div class="resumen-tranquilo">Todo al día.</div>
+    <div class="muted">No hay notificaciones nuevas desde tu última visita
+      {% if resumen.desde %}({{ resumen.desde | fecha_hora_lima }}){% endif %}.</div>
+  {% endif %}
+
+  {% if resumen.urgentes %}
+  <div class="resumen-chips mt">
+    {% for u in resumen.urgentes %}
+    <span class="resumen-chip badge--urgente">Pendiente: {{ u.n }} {{ u.etiqueta }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
