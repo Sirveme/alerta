@@ -50,7 +50,7 @@ self.addEventListener('fetch', (e) => {
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req).catch(() => caches.match(req).then((hit) => hit ||
-        new Response('<h1>Sin conexión</h1><p>Reabrí la app cuando tengas red.</p>',
+        new Response('<h1>Sin conexión</h1><p>Reabre la app cuando tengas red.</p>',
           { headers: { 'Content-Type': 'text/html; charset=utf-8' } })))
     );
   }
