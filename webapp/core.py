@@ -8,12 +8,14 @@ filtros en español (fechas dd/MM/YYYY, hora Lima) y helpers de presentación
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 
 from models import ETIQUETA_TIPO_DOCUMENTO
 
@@ -70,9 +72,58 @@ def etiqueta_tipo_doc(valor) -> str:
     return ETIQUETA_TIPO_DOCUMENTO.get(clave, "Otros")
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Cuerpo de notificación: presentar legible, NUNCA JSON crudo (zAlerta-08 #3)
+# ─────────────────────────────────────────────────────────────────────
+_CAMPOS_CUERPO = ("contenido", "mensaje", "texto", "cuerpo", "desMensaje",
+                  "msjMensaje", "descripcion", "observacion", "detalle")
+_CAMPOS_NUMERO = ("numero", "nroDocumento", "numeroDocumento", "nro", "documento")
+
+
+def _fmt_numero(valor) -> str | None:
+    if not valor:
+        return None
+    s = str(valor)
+    for viejo in ("No:", "N°:", "Nro:", "nro:", "N �:"):
+        s = s.replace(viejo, "N° ")
+    return s.strip()
+
+
+def cuerpo_notificacion(texto_html) -> dict:
+    """Presenta el cuerpo del mensaje de forma legible. Si `texto_html` es un
+    JSON crudo (algunos mensajes de SUNAT lo son), extrae número de documento,
+    cuerpo y deja el resto como 'detalles técnicos' — nunca vuelca el JSON.
+
+    Devuelve {numero, cuerpo (Markup|None), tecnicos [(k,v)], es_json}.
+    """
+    raw = (texto_html or "").strip()
+    if not raw:
+        return {"numero": None, "cuerpo": None, "tecnicos": [], "es_json": False}
+
+    if raw[:1] in "{[":
+        try:
+            data = json.loads(raw)
+        except Exception:
+            data = None
+        if isinstance(data, dict):
+            numero = next((data.get(k) for k in _CAMPOS_NUMERO if data.get(k)), None)
+            cuerpo = next((data.get(k).strip() for k in _CAMPOS_CUERPO
+                           if isinstance(data.get(k), str) and data.get(k).strip()),
+                          None)
+            tecnicos = [(k, v) for k, v in data.items()
+                        if not isinstance(v, (dict, list)) and k not in _CAMPOS_CUERPO]
+            return {"numero": _fmt_numero(numero),
+                    "cuerpo": Markup(cuerpo) if cuerpo else None,
+                    "tecnicos": tecnicos, "es_json": True}
+
+    # No es JSON: contenido HTML normal del visor SUNAT.
+    return {"numero": None, "cuerpo": Markup(raw), "tecnicos": [], "es_json": False}
+
+
 templates.env.filters["fecha_lima"] = fecha_lima
 templates.env.filters["fecha_hora_lima"] = fecha_hora_lima
 templates.env.filters["urgencia_meta"] = urgencia_meta
 templates.env.filters["etiqueta_tipo_doc"] = etiqueta_tipo_doc
+templates.env.filters["cuerpo_notificacion"] = cuerpo_notificacion
 templates.env.globals["ETIQUETA_TIPO_DOCUMENTO"] = ETIQUETA_TIPO_DOCUMENTO
 templates.env.globals["WHATSAPP_SOPORTE"] = WHATSAPP_SOPORTE
