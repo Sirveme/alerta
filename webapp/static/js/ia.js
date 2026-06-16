@@ -79,12 +79,20 @@
   function renderTarjeta(t) {
     const clase = 'acento--' + (t.urgencia || 'informativa');
     const wa = 'https://wa.me/?text=' + encodeURIComponent(textoWhatsapp(t));
-    let acciones = '<div class="voz-acciones">'
-      + '<button class="btn btn--sec" data-ia="escuchar">🔊 Escuchar</button>'
-      + '<a class="btn btn--sec" target="_blank" rel="noopener" href="' + wa + '">📲 Compartir</a>';
-    if (t.adjunto_url) acciones += '<a class="btn btn--sec" target="_blank" href="' + t.adjunto_url + '">📎 Ver PDF</a>';
-    if (t.contribuyente_id) acciones += '<a class="btn btn--sec" href="/contribuyentes/' + t.contribuyente_id + '/notificaciones">Ver ficha</a>';
+    let acciones = '<div class="acciones-soc">'
+      + '<button class="acc-soc" data-ia="escuchar" aria-label="Escuchar"><i class="ti ti-volume"></i><span>Escuchar</span></button>'
+      + '<a class="acc-soc" target="_blank" rel="noopener" href="' + wa + '" aria-label="Compartir"><i class="ti ti-brand-whatsapp"></i><span>Compartir</span></a>';
+    if (t.adjunto_url) acciones += '<a class="acc-soc" target="_blank" href="' + t.adjunto_url + '" aria-label="Ver PDF"><i class="ti ti-file-text"></i><span>Ver PDF</span></a>';
+    if (t.contribuyente_id) acciones += '<a class="acc-soc" href="/contribuyentes/' + t.contribuyente_id + '/notificaciones" aria-label="Ver ficha"><i class="ti ti-list-details"></i><span>Ficha</span></a>';
     acciones += '</div>';
+
+    // Varias coincidencias (zAlerta-08): chips para elegir cliente.
+    let opciones = '';
+    if (t.opciones && t.opciones.length) {
+      opciones = '<div class="ia-sugerencias">'
+        + t.opciones.map((o) => '<button class="ia-sug" data-opc="' + esc(o.nombre) + '">' + esc(o.nombre) + '</button>').join('')
+        + '</div>';
+    }
 
     let meta = '';
     if (t.monto) meta += '<span class="chip-tipo">' + esc(t.monto) + '</span> ';
@@ -93,10 +101,10 @@
 
     let reacciones = '';
     if (t.notificacion_id) {
-      reacciones = '<div class="fila mt" data-ia-rx="' + esc(t.notificacion_id) + '">'
-        + '<button class="btn btn--sec rx" data-tipo="util">👍 Útil</button>'
-        + '<button class="btn btn--sec rx" data-tipo="no_util">👎 No útil</button>'
-        + '<button class="btn btn--sec rx" data-tipo="destacada">⭐ Destacar</button></div>';
+      reacciones = '<div class="acciones-soc" data-ia-rx="' + esc(t.notificacion_id) + '">'
+        + '<button class="acc-soc rx" data-tipo="util" aria-label="Útil"><i class="ti ti-thumb-up"></i><span>Útil</span></button>'
+        + '<button class="acc-soc rx" data-tipo="no_util" aria-label="No útil"><i class="ti ti-thumb-down"></i><span>No útil</span></button>'
+        + '<button class="acc-soc rx" data-tipo="destacada" aria-label="Destacar"><i class="ti ti-star"></i><span>Destacar</span></button></div>';
     }
 
     salida.innerHTML =
@@ -105,11 +113,15 @@
       + (t.ruc ? '<span class="muted">RUC ' + esc(t.ruc) + '</span>' : '') + '</div>'
       + '<div class="voz-respuesta">' + esc(t.respuesta || '') + '</div>'
       + (meta ? '<div class="notif-linea">' + meta + '</div>' : '')
-      + acciones + reacciones
+      + opciones + acciones + reacciones
       + '<p class="voz-trans">«' + esc(t.transcripcion || '') + '»</p></div>';
 
     salida.querySelector('[data-ia="escuchar"]')?.addEventListener('click', () => hablar(t.respuesta));
     hablar(t.respuesta);  // lee al aparecer (manos libres)
+
+    // Elegir entre varias coincidencias → reconsulta por ese nombre.
+    salida.querySelectorAll('[data-opc]').forEach((b) =>
+      b.addEventListener('click', () => { input.value = b.dataset.opc; enviar(); }));
 
     const rx = salida.querySelector('[data-ia-rx]');
     rx?.querySelectorAll('.rx').forEach((b) => b.addEventListener('click', async () => {
@@ -119,8 +131,14 @@
       });
       const j = await res.json();
       if (j.ok) {
-        rx.querySelectorAll('.rx').forEach((x) => x.classList.remove('activa'));
-        if (j.tipo) rx.querySelector(`[data-tipo="${j.tipo}"]`)?.classList.add('activa');
+        rx.querySelectorAll('.rx').forEach((x) =>
+          x.classList.remove('activa', 'activa--util', 'activa--destacada'));
+        if (j.tipo) {
+          const el = rx.querySelector(`[data-tipo="${j.tipo}"]`);
+          el?.classList.add('activa');
+          if (j.tipo === 'util') el?.classList.add('activa--util');
+          if (j.tipo === 'destacada') el?.classList.add('activa--destacada');
+        }
       }
     }));
   }

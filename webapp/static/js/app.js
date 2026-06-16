@@ -60,49 +60,87 @@ function postRedirect(action) {
   document.body.appendChild(f); f.submit();
 }
 
-// ── "Actualizar ahora" — indicador CON SUSTANCIA (zAlerta-07 D) ──
-function _horaCorta(iso) {
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }); }
-  catch (_) { return '—'; }
+// ── "Actualizar ahora" — indicador PROTAGONISTA (zAlerta-09 Pieza 3) ──
+function _esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-function _resumenConteos(conteos) {
-  if (!conteos || !conteos.length) return 'Aún no hay notificaciones guardadas.';
-  return 'Tienes: ' + conteos.map((c) => `${c.n} ${c.etiqueta}`).join(' · ');
+function _horaCorta(iso) {
+  if (!iso) return null;
+  try { return new Date(iso).toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit', hour12: true }); }
+  catch (_) { return null; }
 }
 async function _estado(id) {
   const r = await fetch(`/contribuyentes/${id}/estado-scrapeo`);
   return r.json();
 }
 
+// Bloque "Revisando tu Buzón SUNAT" con lista narrada que avanza.
+const _ACTU_FASES = ['Órdenes de Pago', 'Esquelas', 'Resoluciones de Determinación', 'Multas · Cobranza Coactiva'];
+function _indicadorBuscando(out, nombre) {
+  out.innerHTML =
+    '<div class="actu-bloque">'
+    + '<div class="actu-barra"><span></span></div>'
+    + '<div class="actu-head">'
+    +   '<span class="actu-icono"><i class="ti ti-mail-search"></i></span>'
+    +   '<div><div class="actu-titulo">Revisando tu Buzón SUNAT</div>'
+    +     '<div class="actu-sub muted">' + _esc(nombre) + '</div></div>'
+    + '</div>'
+    + '<ul class="actu-lista">'
+    +   _ACTU_FASES.map((f) => '<li data-estado="pend"><i class="ti ti-circle"></i> ' + _esc(f) + '</li>').join('')
+    + '</ul></div>';
+  const items = Array.from(out.querySelectorAll('.actu-lista li'));
+  let cur = 0;
+  function pinta() {
+    items.forEach((li, i) => {
+      const ic = li.querySelector('.ti');
+      if (i < cur) { li.dataset.estado = 'ok'; ic.className = 'ti ti-check'; }
+      else if (i === cur) { li.dataset.estado = 'run'; ic.className = 'ti ti-loader-2'; }
+      else { li.dataset.estado = 'pend'; ic.className = 'ti ti-circle'; }
+    });
+  }
+  pinta();
+  const timer = setInterval(() => { if (cur < items.length - 1) { cur++; pinta(); } }, 1800);
+  return { stop() { clearInterval(timer); } };
+}
+
+// Resultado protagonista (persiste, se cierra con la X).
+function _resBloque(out, variante, icono, titulo, sub) {
+  out.innerHTML =
+    '<div class="actu-res actu-res--' + variante + '">'
+    + '<i class="ti ' + icono + ' res-icono"></i>'
+    + '<div><div class="res-tit">' + _esc(titulo) + '</div>'
+    + (sub ? '<div class="res-sub">' + _esc(sub) + '</div>' : '') + '</div>'
+    + '<button class="actu-cerrar" aria-label="Cerrar"><i class="ti ti-x"></i></button>'
+    + '</div>';
+  out.querySelector('.actu-cerrar')?.addEventListener('click', () => { out.innerHTML = ''; });
+}
+
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.btn-actualizar');
   if (!btn) return;
   const id = btn.dataset.id;
+  const nombre = btn.dataset.nombre || '';
   const out = document.querySelector(`.resultado-actualizar[data-for="${id}"]`);
-  const original = btn.innerHTML;
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Actualizando…';
+  if (!out) return;
+  btn.disabled = true;
 
-  // 1) Mostrar lo que YA tiene (instantáneo desde BD), no un spinner vacío.
+  // Estado inicial (para comparar contra el resultado).
   let prev = { ultimo_scrapeo_at: null, total: 0 };
-  try {
-    const est = await _estado(id);
-    if (est.ok) {
-      prev = { ultimo_scrapeo_at: est.ultimo_scrapeo_at, total: est.total };
-      if (out) out.textContent = _resumenConteos(est.conteos) + ' · Buscando novedades…';
-    }
-  } catch (_) {}
+  try { const est = await _estado(id); if (est.ok) prev = { ultimo_scrapeo_at: est.ultimo_scrapeo_at, total: est.total }; }
+  catch (_) {}
 
-  // 2) Marcar el flag (el worker scrapea aparte).
-  try {
-    await fetch(`/contribuyentes/${id}/actualizar`, { method: 'POST' });
-  } catch (_) {
-    if (out) out.textContent = 'No se pudo solicitar la actualización, reintentar.';
-    btn.disabled = false; btn.innerHTML = original; return;
+  const ind = _indicadorBuscando(out, nombre);
+
+  // Marcar el flag (el worker scrapea aparte).
+  try { await fetch(`/contribuyentes/${id}/actualizar`, { method: 'POST' }); }
+  catch (_) {
+    ind.stop();
+    _resBloque(out, 'espera', 'ti-alert-circle', 'No se pudo solicitar la actualización', 'Reintenta en unos momentos.');
+    btn.disabled = false; return;
   }
-  btn.disabled = false; btn.innerHTML = original;
+  btn.disabled = false;
 
-  // 3) Polling cada 10s hasta ~2 min: detectar cuando ultimo_scrapeo_at cambia.
+  // Polling cada 10s hasta ~2 min: detectar cuando ultimo_scrapeo_at cambia.
   let intentos = 0;
   const maxIntentos = 12;
   const timer = setInterval(async () => {
@@ -110,18 +148,24 @@ document.addEventListener('click', async (e) => {
     let est;
     try { est = await _estado(id); } catch (_) { est = null; }
     if (est && est.ok && est.ultimo_scrapeo_at !== prev.ultimo_scrapeo_at) {
-      clearInterval(timer);
+      clearInterval(timer); ind.stop();
       const nuevas = (est.total || 0) - (prev.total || 0);
       if (nuevas > 0) {
-        if (out) out.textContent = `¡${nuevas} ${nuevas === 1 ? 'nueva notificación' : 'nuevas notificaciones'}!`;
-        setTimeout(() => location.reload(), 1200);
-      } else if (out) {
-        out.textContent = `Listo. No hay notificaciones nuevas entre `
-          + `${_horaCorta(prev.ultimo_scrapeo_at)} y ${_horaCorta(est.ultimo_scrapeo_at)}.`;
+        _resBloque(out, 'nuevas', 'ti-bell-ringing',
+          '¡' + nuevas + (nuevas === 1 ? ' nueva notificación!' : ' nuevas notificaciones!'),
+          'Actualizando la lista…');
+        setTimeout(() => location.reload(), 1400);
+      } else {
+        const antes = _horaCorta(prev.ultimo_scrapeo_at), ahora = _horaCorta(est.ultimo_scrapeo_at);
+        const sub = antes
+          ? 'No hay notificaciones nuevas entre ' + antes + ' y ' + ahora + '.'
+          : 'Tu Buzón quedó al día a las ' + (ahora || '') + '.';
+        _resBloque(out, 'ok', 'ti-circle-check', 'Todo revisado · sin novedades', sub);
       }
     } else if (intentos >= maxIntentos) {
-      clearInterval(timer);
-      if (out) out.textContent = 'El monitoreo sigue en proceso, te avisaremos apenas haya novedades.';
+      clearInterval(timer); ind.stop();
+      _resBloque(out, 'espera', 'ti-clock',
+        'El monitoreo sigue en proceso', 'Te avisaremos apenas haya novedades.');
     }
   }, 10000);
 });

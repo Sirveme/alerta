@@ -10,8 +10,11 @@
   const root = document.documentElement;
 
   function leer() {
-    try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem(CLAVE) || '{}')); }
-    catch (_) { return Object.assign({}, DEF); }
+    var t;
+    try { t = Object.assign({}, DEF, JSON.parse(localStorage.getItem(CLAVE) || '{}')); }
+    catch (_) { t = Object.assign({}, DEF); }
+    if (t.color === 'femenino') t.color = 'violeta';   // tema renombrado
+    return t;
   }
   function aplicar(t) {
     root.setAttribute('data-color', t.color);
