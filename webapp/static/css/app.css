@@ -362,3 +362,19 @@ a.tarjeta-link { display:block; color:inherit; }
 .btn--whatsapp:hover { filter:brightness(1.05); }
 .badge--acceso     { background:#1F9D55; color:#fff; }
 .badge--pendiente  { background:#D97706; color:#fff; }
+
+/* ── Banner de avisos push (zAlerta-07) ── */
+.push-banner { display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  justify-content:space-between; margin:10px 14px 0; padding:11px 14px;
+  background:var(--superficie-2); border:1px solid var(--borde);
+  border-left:var(--franja-w) solid var(--marca); border-radius:var(--radio);
+  color:var(--texto); font-size:.92rem; }
+.push-banner-acc { display:flex; gap:8px; }
+
+/* ── Resumen de bienvenida (zAlerta-07 B) ── */
+.resumen { margin-top:4px; }
+.resumen-nuevas { font-size:1.05rem; font-weight:600; }
+.resumen-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.resumen-chip { font-size:.82rem; padding:4px 10px; border:1px solid var(--borde);
+  border-radius:999px; background:var(--superficie-2); color:var(--texto); }
+.resumen-tranquilo { color:var(--u-aldia, #1F9D55); font-weight:600; }
