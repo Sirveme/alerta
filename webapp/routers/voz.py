@@ -37,6 +37,23 @@ _KW_VENCE = ("vence", "vencimiento", "plazo", "vencer", "vencen", "fecha limite"
 _KW_PAGO = ("orden de pago", "ordenes de pago", "deuda", "pagar", "monto", "debe", "cuanto")
 _KW_NOVEDAD = ("novedad", "novedades", "nuevo", "nuevos", "ultimo", "ultima", "reciente")
 
+# Palabras a ignorar al buscar el NOMBRE del cliente (formas jurídicas, verbos
+# de consulta, conectores). Priorizamos la palabra distintiva del nombre.
+_STOPWORDS = {
+    "eirl", "sac", "srl", "sociedad", "anonima", "anonimas", "empresa",
+    "empresas", "comercial", "servicios", "multiservicios", "negocios",
+    "contribuyente", "cliente", "clientes", "ruc", "para", "sobre", "tiene",
+    "tienes", "hay", "dime", "dile", "muestra", "muestrame", "busca", "buscar",
+    "quiero", "saber", "ver", "novedad", "novedades", "como", "esta", "estan",
+    "algo", "alguna", "alguno", "este", "esta", "este", "del", "las", "los",
+    "una", "uno", "que", "con", "por", "mis", "todo", "todos", "general",
+}
+# Todas las keywords de intención (planas) — tampoco son nombre de cliente.
+_INTENT_KW = set()
+for _grp in (_KW_MULTA, _KW_VENCE, _KW_PAGO, _KW_NOVEDAD):
+    for _kw in _grp:
+        _INTENT_KW.update(_kw.split())
+
 
 def _normalizar(texto: str) -> str:
     """minúsculas + sin tildes (para matching robusto de voz)."""
@@ -68,34 +85,42 @@ def interpretar_intencion(texto: str) -> dict:
     return {"ruc": ruc, "nombre_buscado": norm, "intencion": intencion}
 
 
-async def _buscar_contribuyente(session, estudio_id, intencion: dict):
-    """Encuentra el contribuyente por RUC exacto o por tokens del nombre."""
+async def _candidatos(session, user: UsuarioActual):
+    """Contribuyentes visibles para el usuario (multi-tenant + empresario)."""
+    if user.es_empresario:
+        cond = Contribuyente.cuenta_empresario_id == user.estudio_id
+    else:
+        cond = Contribuyente.estudio_id == user.estudio_id
+    return list(await session.scalars(select(Contribuyente).where(cond)))
+
+
+def _terminos_busqueda(norm: str) -> list[str]:
+    """Tokens distintivos del nombre buscado (sin formas jurídicas ni verbos)."""
+    palabras = re.findall(r"[a-z0-9]+", norm)
+    return [p for p in palabras
+            if len(p) >= 4 and p not in _STOPWORDS and p not in _INTENT_KW]
+
+
+def _coincidencias(contribs, intencion: dict) -> list:
+    """Match PARCIAL e insensible a may/min y acentos. RUC exacto tiene prioridad."""
+    # RUC exacto o parcial (si dijo dígitos)
     if intencion["ruc"]:
-        c = await session.scalar(
-            select(Contribuyente).where(
-                Contribuyente.estudio_id == estudio_id,
-                Contribuyente.ruc == intencion["ruc"]))
-        if c:
-            return c
+        exactos = [c for c in contribs if c.ruc == intencion["ruc"]]
+        if exactos:
+            return exactos
 
-    # Match por nombre: tokens significativos del texto contra razón social
-    contribs = (await session.scalars(
-        select(Contribuyente).where(
-            Contribuyente.estudio_id == estudio_id))).all()
-    if not contribs:
-        return None
+    terminos = _terminos_busqueda(intencion["nombre_buscado"])
+    # Términos numéricos: pueden ser parte del RUC.
+    num = [t for t in terminos if t.isdigit()]
+    txt = [t for t in terminos if not t.isdigit()]
 
-    norm = intencion["nombre_buscado"]
-    mejor, mejor_score = None, 0
+    matches = []
     for c in contribs:
         rs = _normalizar(c.razon_social or "")
-        if not rs:
-            continue
-        tokens = [t for t in rs.split() if len(t) >= 4]
-        score = sum(1 for t in tokens if t in norm)
-        if score > mejor_score:
-            mejor, mejor_score = c, score
-    return mejor if mejor_score > 0 else None
+        ruc = c.ruc or ""
+        if any(t in rs for t in txt) or any(t in ruc for t in num):
+            matches.append(c)
+    return matches
 
 
 def _monto_de_texto(texto: str | None) -> str | None:
@@ -118,24 +143,42 @@ async def consultar_voz(request: Request,
     intencion = interpretar_intencion(texto)
 
     async with get_session() as session:
-        contrib = await _buscar_contribuyente(session, user.estudio_id, intencion)
-        if not contrib:
+        contribs = await _candidatos(session, user)
+        matches = _coincidencias(contribs, intencion)
+
+        if not matches:
             return JSONResponse({
                 "ok": True,
                 "tarjeta": {
                     "titulo": "No identifiqué al cliente",
-                    "respuesta": "No encontré ese contribuyente. Probá decir el "
-                                 "RUC o el nombre completo.",
+                    "respuesta": "No encontré ese cliente. Prueba con otra parte "
+                                 "del nombre o el RUC.",
                     "urgencia": "informativa",
                     "color": urgencia_meta("informativa")["bg"],
                     "transcripcion": texto,
                 },
             })
 
-        # Construir query según intención
+        if len(matches) > 1:
+            opciones = [{"id": str(c.id), "nombre": c.razon_social or c.ruc,
+                         "ruc": c.ruc} for c in matches[:6]]
+            listado = " · ".join(o["nombre"] for o in opciones)
+            return JSONResponse({"ok": True, "tarjeta": {
+                "titulo": f"Encontré {len(matches)} clientes",
+                "respuesta": f"Encontré {len(matches)}: {listado}. ¿Cuál de ellos?",
+                "urgencia": "informativa",
+                "color": urgencia_meta("informativa")["bg"],
+                "opciones": opciones,
+                "transcripcion": texto,
+            }})
+
+        contrib = matches[0]
+
+        # Construir query según intención (estudio REAL del RUC → vale para
+        # estudio y empresario, ya validado el acceso por _candidatos).
         q = (select(Notificacion).where(
                 Notificacion.contribuyente_id == contrib.id,
-                Notificacion.estudio_id == user.estudio_id))
+                Notificacion.estudio_id == contrib.estudio_id))
 
         from models import TipoDocumento
         if intencion["intencion"] == "multa":
@@ -170,7 +213,7 @@ async def consultar_voz(request: Request,
         adj = await session.scalar(
             select(Adjunto).where(
                 Adjunto.notificacion_id == notif.id,
-                Adjunto.estudio_id == user.estudio_id).limit(1))
+                Adjunto.estudio_id == contrib.estudio_id).limit(1))
 
         urg = notif.urgencia.value if notif.urgencia else "sin_clasificar"
         monto = _monto_de_texto(notif.asunto) or _monto_de_texto(notif.texto_html)
@@ -208,8 +251,7 @@ async def consultar_voz(request: Request,
             "resumen_ia": notif.resumen_ia,
             "notificacion_id": str(notif.id),
             "contribuyente_id": str(contrib.id),
-            "adjunto_url": (f"/notificaciones/{notif.id}/adjunto/{adj.id}"
-                            if adj else None),
+            "adjunto_url": (f"/adjuntos/{adj.id}/ver" if adj else None),
             "intencion": intencion["intencion"],
             "transcripcion": texto,
         }

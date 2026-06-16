@@ -139,6 +139,49 @@ async def reaccionar(
     return JSONResponse({"ok": True, "tipo": None if quitada else tipo.value})
 
 
+async def _servir_adjunto(adjunto_id: uuid.UUID, user: UsuarioActual,
+                          descargar: bool):
+    """Sirve el PDF desde BD (bytea_temporal). Multi-tenant + empresario."""
+    async with get_session() as session:
+        adj = await session.scalar(
+            select(Adjunto)
+            .options(selectinload(Adjunto.notificacion)
+                     .selectinload(Notificacion.contribuyente))
+            .where(Adjunto.id == adjunto_id))
+        if not adj or adj.notificacion is None or not _puede_ver_notif(user, adj.notificacion):
+            return Response("Adjunto no encontrado.", status_code=404)
+
+        if adj.bytea_temporal:
+            nombre = adj.nombre_archivo or "documento.pdf"
+            if not nombre.lower().endswith(".pdf"):
+                nombre += ".pdf"
+            disp = "attachment" if descargar else "inline"
+            return Response(
+                content=bytes(adj.bytea_temporal),
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'{disp}; filename="{nombre}"'})
+
+    # Aún no está en BD: el worker todavía no lo descargó. Mensaje neutro.
+    return Response(
+        "<!doctype html><html lang='es'><meta charset='utf-8'>"
+        "<body style='font-family:sans-serif;padding:24px;color:#16191F'>"
+        "<p>El PDF se está descargando, intenta en unos momentos.</p>"
+        "</body></html>",
+        status_code=202, media_type="text/html; charset=utf-8")
+
+
+@router.get("/adjuntos/{adjunto_id}/ver")
+async def ver_adjunto_pdf(adjunto_id: uuid.UUID,
+                          user: UsuarioActual = Depends(usuario_actual)):
+    return await _servir_adjunto(adjunto_id, user, descargar=False)
+
+
+@router.get("/adjuntos/{adjunto_id}/descargar")
+async def descargar_adjunto_pdf(adjunto_id: uuid.UUID,
+                                user: UsuarioActual = Depends(usuario_actual)):
+    return await _servir_adjunto(adjunto_id, user, descargar=True)
+
+
 @router.get("/notificaciones/{notif_id}/adjunto/{adjunto_id}")
 async def ver_adjunto(
     notif_id: uuid.UUID, adjunto_id: uuid.UUID, descargar: bool = False,
@@ -166,4 +209,5 @@ async def ver_adjunto(
             return JSONResponse(
                 {"error": "PDF en almacenamiento externo (pendiente de URL firmada).",
                  "gcs_key": adj.gcs_key}, status_code=501)
-    return Response("El PDF aún no fue descargado.", status_code=404)
+    return Response("El PDF se está descargando, intenta en unos momentos.",
+                    status_code=202)
