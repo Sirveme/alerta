@@ -231,7 +231,7 @@ function invitarEmpresario(j) {
 
 function formImportar() {
   modalHTML('Importar Excel de RUCs', `
-    <p class="muted">Subí un .xlsx con columnas: <strong>RUC, usuario, clave, grupo</strong>.</p>
+    <p class="muted">Sube un .xlsx con columnas: <strong>RUC, usuario, clave, grupo</strong>.</p>
     <div class="campo"><input id="imp-file" type="file" accept=".xlsx,.xls"></div>`,
     async () => {
       const f = document.getElementById('imp-file').files[0];

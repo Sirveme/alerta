@@ -43,7 +43,7 @@
       const j = await r.json();
       if (j.ok) renderTarjeta(j.tarjeta);
       else salida.innerHTML = simple(j.mensaje || 'No pude procesar la consulta.');
-    } catch (_) { salida.innerHTML = simple('Error de red, reintentá.'); }
+    } catch (_) { salida.innerHTML = simple('Error de red, reintenta.'); }
   }
 
   // ── Voz (Web Speech) ──
@@ -63,7 +63,7 @@
   } else if (mic) {
     mic.addEventListener('click', () =>
       confirmarModal('Voz no disponible',
-        'Tu navegador no soporta dictado. Escribí la consulta.', () => {}));
+        'Tu navegador no soporta dictado. Escribe la consulta.', () => {}));
   }
   function pararVoz() {
     try { if (grabando) rec.stop(); } catch (_) {}
