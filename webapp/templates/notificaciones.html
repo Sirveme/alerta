@@ -6,8 +6,10 @@
 <p class="subtitulo">RUC {{ contrib.ruc }}</p>
 
 {% if not user.solo_lectura %}
-<button class="btn btn--bloque btn-actualizar" data-id="{{ contrib.id }}">Actualizar ahora</button>
-<div class="resultado-actualizar muted mt" data-for="{{ contrib.id }}"></div>
+<button class="btn btn--bloque btn-actualizar" data-id="{{ contrib.id }}"
+        data-nombre="{{ contrib.razon_social or contrib.ruc }}">
+  <i class="ti ti-refresh" aria-hidden="true"></i> Actualizar</button>
+<div class="resultado-actualizar mt" data-for="{{ contrib.id }}"></div>
 {% endif %}
 
 <!-- Selector de tipo de documento: chips horizontales scrolleables -->

@@ -19,30 +19,31 @@
 
 {% for c in tarjetas %}
 {% set m = c.urgencia | urgencia_meta %}
-<div class="tarjeta notif-item acento acento--{{ c.urgencia }}">
-  <div class="fila spread">
-    <div>
-      <div class="notif-asunto">{{ c.razon_social }}</div>
-      <div class="notif-linea">RUC {{ c.ruc }}
-        {% if c.no_leidas %}· <span class="badge-conteo">{{ c.no_leidas }} sin leer</span>{% endif %}
-        {% if c.acceso == 'con_acceso' %}
-        · <span class="badge badge--acceso">cliente con acceso</span>
-        {% else %}
-        · <span class="badge badge--pendiente">pendiente de invitar</span>
-        {% endif %}
-      </div>
-    </div>
-    <span class="badge badge--{{ c.urgencia }}">{{ m.label }}</span>
+<div class="cliente-card estado--{{ c.urgencia }}">
+  <div class="cc-top">
+    <div class="cc-nombre">{{ c.razon_social }}</div>
+    <span class="cc-badge">{{ m.label }}</span>
   </div>
-  <div class="fila mt">
-    <a class="btn btn--sec" href="/contribuyentes/{{ c.id }}/notificaciones">Ver notificaciones</a>
-    {% if not user.solo_lectura %}
-    <button class="btn btn-actualizar" data-id="{{ c.id }}">Actualizar ahora</button>
-    <button class="btn btn--sec" data-action="/grupos/{{ grupo.id }}/quitar/{{ c.id }}"
-            data-quitar="{{ c.razon_social }}">Quitar</button>
+  <div class="cc-meta">
+    <span>RUC {{ c.ruc }}</span>
+    {% if c.no_leidas %}<span>·</span> <span class="cc-sinleer">{{ c.no_leidas }} sin leer</span>{% endif %}
+    {% if c.acceso != 'con_acceso' %}
+    <span>·</span> <span class="cc-invitar"><i class="ti ti-user-plus" aria-hidden="true"></i> invitar</span>
     {% endif %}
   </div>
-  <div class="resultado-actualizar muted" data-for="{{ c.id }}"></div>
+  <div class="cc-acciones">
+    <a class="btn-cc btn-cc--ver" href="/contribuyentes/{{ c.id }}/notificaciones">
+      <i class="ti ti-eye" aria-hidden="true"></i> Ver</a>
+    {% if not user.solo_lectura %}
+    <button class="btn-cc btn-cc--actu btn-actualizar" data-id="{{ c.id }}"
+            data-nombre="{{ c.razon_social }}">
+      <i class="ti ti-refresh" aria-hidden="true"></i> Actualizar</button>
+    <button class="btn-cc btn-cc--quitar" data-action="/grupos/{{ grupo.id }}/quitar/{{ c.id }}"
+            data-quitar="{{ c.razon_social }}" aria-label="Quitar del grupo">
+      <i class="ti ti-x" aria-hidden="true"></i></button>
+    {% endif %}
+  </div>
+  <div class="resultado-actualizar" data-for="{{ c.id }}"></div>
 </div>
 {% else %}
 <div class="tarjeta"><p class="muted">Este grupo no tiene clientes todavía.</p></div>

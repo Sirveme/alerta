@@ -46,27 +46,38 @@
   </details>
   {% endif %}
 
-  {% if notif.adjuntos %}
   {% set txt_compartir = "alerta.pe — " ~ (notif.asunto or "Notificación de SUNAT") ~ ". Publicada: " ~ (notif.fecha_publica_sunat | fecha_hora_lima) ~ ". Ingresa a alerta.pe para verla." %}
+  {% if notif.adjuntos %}
+  {% for a in notif.adjuntos %}
   <div class="mt">
-    <strong>Adjuntos</strong>
-    {% for a in notif.adjuntos %}
-    <div class="fila mt">
-      <span>📎 {{ a.nombre_archivo }}</span>
-      <a class="btn btn--sec" target="_blank" href="/adjuntos/{{ a.id }}/ver">Ver PDF</a>
-      <a class="btn btn--sec" href="/adjuntos/{{ a.id }}/descargar">Descargar</a>
-      <a class="btn btn--sec" target="_blank" rel="noopener"
-         href="https://wa.me/?text={{ txt_compartir | urlencode }}">📲 Compartir</a>
+    <span class="muted" style="font-size:.85rem;">📎 {{ a.nombre_archivo }}</span>
+    <div class="acciones-soc">
+      <a class="acc-soc" target="_blank" href="/adjuntos/{{ a.id }}/ver"
+         aria-label="Ver PDF"><i class="ti ti-file-text" aria-hidden="true"></i><span>Ver PDF</span></a>
+      <a class="acc-soc" href="/adjuntos/{{ a.id }}/descargar"
+         aria-label="Descargar PDF"><i class="ti ti-download" aria-hidden="true"></i><span>Descargar</span></a>
+      <a class="acc-soc" target="_blank" rel="noopener"
+         href="https://wa.me/?text={{ txt_compartir | urlencode }}"
+         aria-label="Compartir por WhatsApp"><i class="ti ti-brand-whatsapp" aria-hidden="true"></i><span>Compartir</span></a>
     </div>
-    {% endfor %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="acciones-soc">
+    <a class="acc-soc" target="_blank" rel="noopener"
+       href="https://wa.me/?text={{ txt_compartir | urlencode }}"
+       aria-label="Compartir por WhatsApp"><i class="ti ti-brand-whatsapp" aria-hidden="true"></i><span>Compartir</span></a>
   </div>
   {% endif %}
 
   {% if not user.solo_lectura %}
-  <div class="fila mt" id="reacciones" data-notif="{{ notif.id }}">
-    <button class="btn btn--sec rx {% if mi_reaccion == 'util' %}activa{% endif %}" data-tipo="util">👍 Útil</button>
-    <button class="btn btn--sec rx {% if mi_reaccion == 'no_util' %}activa{% endif %}" data-tipo="no_util">👎 No útil</button>
-    <button class="btn btn--sec rx {% if mi_reaccion == 'destacada' %}activa{% endif %}" data-tipo="destacada">⭐ Destacar</button>
+  <div class="acciones-soc" id="reacciones" data-notif="{{ notif.id }}">
+    <button class="acc-soc rx {% if mi_reaccion == 'util' %}activa activa--util{% endif %}"
+            data-tipo="util" aria-label="Marcar útil"><i class="ti ti-thumb-up" aria-hidden="true"></i><span>Útil</span></button>
+    <button class="acc-soc rx {% if mi_reaccion == 'no_util' %}activa{% endif %}"
+            data-tipo="no_util" aria-label="Marcar no útil"><i class="ti ti-thumb-down" aria-hidden="true"></i><span>No útil</span></button>
+    <button class="acc-soc rx {% if mi_reaccion == 'destacada' %}activa activa--destacada{% endif %}"
+            data-tipo="destacada" aria-label="Destacar"><i class="ti ti-star" aria-hidden="true"></i><span>Destacar</span></button>
   </div>
   {% endif %}
 </div>
@@ -82,8 +93,14 @@
     });
     const j = await r.json();
     if (j.ok) {
-      cont.querySelectorAll('.rx').forEach((x) => x.classList.remove('activa'));
-      if (j.tipo) cont.querySelector(`[data-tipo="${j.tipo}"]`)?.classList.add('activa');
+      cont.querySelectorAll('.rx').forEach((x) =>
+        x.classList.remove('activa', 'activa--util', 'activa--destacada'));
+      if (j.tipo) {
+        const el = cont.querySelector(`[data-tipo="${j.tipo}"]`);
+        el?.classList.add('activa');
+        if (j.tipo === 'util') el?.classList.add('activa--util');
+        if (j.tipo === 'destacada') el?.classList.add('activa--destacada');
+      }
     }
   }));
 </script>
