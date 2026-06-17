@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 
 class CredencialSolCreate(BaseModel):
-    tipo_usuario: int = Field(default=2, description="1=usuario SOL, 2=DNI titular")
+    tipo_usuario: int = Field(default=2, description="1=DNI titular, 2=RUC + Usuario SOL alfanumérico")
     dni: Optional[str] = None
     usuario_sol: Optional[str] = None
     clave_sol: str = Field(..., min_length=1)
