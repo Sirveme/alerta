@@ -47,8 +47,8 @@
             <div style="margin-bottom: 16px;">
                 <label style="display: block; font-size: 12px; color: var(--color-text-tenue); margin-bottom: 4px;">Tipo de usuario SOL</label>
                 <select class="input" name="tipo_usuario_sol" id="tipo_usuario_sol">
-                    <option value="2">DNI del titular</option>
-                    <option value="1">Usuario SOL alfanumérico</option>
+                    <option value="1">DNI del titular</option>
+                    <option value="2">Usuario SOL alfanumérico</option>
                 </select>
             </div>
 
@@ -76,8 +76,8 @@
 // Toggle entre DNI y Usuario SOL
 document.getElementById('tipo_usuario_sol').addEventListener('change', (e) => {
     const tipo = e.target.value;
-    document.getElementById('grupo_dni').style.display = tipo === '2' ? 'block' : 'none';
-    document.getElementById('grupo_usuario_sol').style.display = tipo === '1' ? 'block' : 'none';
+    document.getElementById('grupo_dni').style.display = tipo === '1' ? 'block' : 'none';
+    document.getElementById('grupo_usuario_sol').style.display = tipo === '2' ? 'block' : 'none';
 });
 
 // Validar RUC al completar 11 dígitos
