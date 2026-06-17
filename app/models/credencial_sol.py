@@ -19,7 +19,7 @@ class CredencialSol(Base, TimestampMixin):
         nullable=False,
     )
 
-    # tipo_usuario: 1=usuario SOL alfanumérico, 2=DNI titular
+    # tipo_usuario: 1=DNI titular, 2=RUC + Usuario SOL alfanumérico
     tipo_usuario: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
 
     # Campos encriptados con Fernet (Texts largos por seguridad)
