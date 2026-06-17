@@ -54,8 +54,11 @@ class Settings(BaseSettings):
 
     @property
     def j_username(self) -> str:
-        """Compatibilidad con prototipo: username para login SUNAT."""
-        if self.sunat_tipo_usuario == 2:
+        """Compatibilidad con prototipo: username para login SUNAT.
+
+        tipo=1 -> DNI titular; tipo=2 -> RUC + Usuario SOL alfanumérico.
+        """
+        if self.sunat_tipo_usuario == 1:
             return self.sunat_dni
         return self.sunat_usuario
 
