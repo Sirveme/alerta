@@ -266,6 +266,9 @@ class Usuario(Base, TimestampMixin):
     access_code: Mapped[str] = mapped_column(String(255), nullable=False)
     rol: Mapped[RolUsuario] = mapped_column(
         Enum(RolUsuario), default=RolUsuario.CONTADOR, nullable=False)
+    # Cargo declarado del empresario en su negocio (zAlerta-11a B.5): dueño /
+    # administrador / gerente / encargado. Opcional, solo informativo.
+    cargo: Mapped[str | None] = mapped_column(String(30))
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     debe_cambiar_clave: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Empresario cuya clave aún la entrega Soporte manualmente (zAlerta-06 C.4).
@@ -652,9 +655,12 @@ class SolicitudValidacionCredencial(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
-    estudio_id: Mapped[uuid.UUID] = mapped_column(
+    # NULL en el alta pública del empresario (zAlerta-11a): la comprobación
+    # ocurre ANTES de crear la organización. El polling es por id (UUID
+    # inadivinable) y solo devuelve conecta=bool, sin exponer datos del tenant.
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
-        nullable=False, index=True)
+        nullable=True, index=True)
 
     ruc: Mapped[str] = mapped_column(String(11), nullable=False)
     usuario_sol: Mapped[str] = mapped_column(String(50), nullable=False)
