@@ -66,6 +66,26 @@ def usuario_actual(request: Request) -> UsuarioActual:
         raise RedirigirALogin()
 
 
+def usuario_actual_opcional(request: Request) -> "UsuarioActual | None":
+    """Como usuario_actual pero NO redirige: devuelve None si no hay sesión.
+
+    Para rutas que sirven contenido público a anónimos y contenido propio a
+    logueados (p.ej. la raíz "/" → landing si anónimo, dashboard si logueado)."""
+    sesion = leer_sesion(request.cookies.get(COOKIE_NOMBRE))
+    if not sesion:
+        return None
+    try:
+        return UsuarioActual(
+            id=uuid.UUID(sesion["uid"]),
+            estudio_id=uuid.UUID(sesion["eid"]),
+            rol=RolUsuario(sesion["rol"]),
+            nombre=sesion.get("nombre", ""),
+            tipo_cuenta=sesion.get("tc", TipoCuenta.ESTUDIO.value),
+        )
+    except (KeyError, ValueError):
+        return None
+
+
 async def contribuyente_accesible(session, user: "UsuarioActual",
                                   contribuyente_id: uuid.UUID):
     """Devuelve el Contribuyente si el usuario puede verlo, o None.

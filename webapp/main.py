@@ -27,7 +27,7 @@ from .deps import RedirigirALogin
 from . import auth
 from .routers import (
     dashboard, notificaciones, voz, actualizar, push, clientes, registro,
-    superadmin,
+    superadmin, landing,
 )
 
 app = FastAPI(title="alerta.pe", docs_url=None, redoc_url=None)
@@ -44,6 +44,7 @@ app.include_router(actualizar.router)
 app.include_router(push.router)
 app.include_router(clientes.router)
 app.include_router(superadmin.router)
+app.include_router(landing.router)
 
 
 # Sin sesión → al login (para vistas HTML); JSON para llamadas API.
