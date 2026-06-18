@@ -185,8 +185,11 @@ document.addEventListener('click', async (e) => {
 
 function abrirAccion(accion) {
   if (accion === 'nuevo-grupo') return formNuevoGrupo();
-  if (accion === 'nuevo-cliente') return formNuevoCliente();
-  if (accion === 'importar') return formImportar();
+  // zAlerta-10: el alta de clientes (y la importación) vive en el asistente
+  // de 2 fases. El menú "+" ahora lleva ahí en vez del modal de un solo RUC.
+  if (accion === 'nuevo-cliente' || accion === 'importar') {
+    location.href = '/clientes/nuevo'; return;
+  }
 }
 
 function formNuevoGrupo() {
