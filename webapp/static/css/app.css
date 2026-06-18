@@ -604,3 +604,164 @@ a.tarjeta-link { display:block; color:inherit; }
   cursor:pointer; text-decoration:none; box-shadow:var(--sombra); }
 .btn-agregar-cliente:hover { filter:brightness(1.06); }
 .btn-agregar-cliente .ti { font-size:18px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   zAlerta-11a · Landing pública + Alta del empresario
+   ══════════════════════════════════════════════════════════════════ */
+.lp { max-width:560px; margin:0 auto; padding:0 4px 40px; }
+
+/* A.1 Héroe */
+.lp-hero { text-align:center; padding:34px 8px 26px; }
+.lp-marca { display:flex; align-items:center; justify-content:center; gap:8px;
+  font-weight:600; font-size:1.05rem; position:relative; }
+.lp-marca .marca-punto { width:12px; height:12px;
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--fab) 20%,transparent),
+             0 0 16px color-mix(in srgb,var(--fab) 70%,transparent); }
+.lp-volver { position:absolute; right:0; font-size:.82rem; color:var(--texto-suave); }
+.lp-titular { font-size:1.9rem; line-height:1.15; margin:22px 0 10px; letter-spacing:-.02em; }
+.lp-sub { color:var(--texto-suave); font-size:1.05rem; margin:0 auto 22px; max-width:440px; }
+.lp-precio { border:2px solid #1D9E75; border-radius:var(--radio);
+  padding:14px; margin:0 auto 20px; max-width:320px;
+  background:color-mix(in srgb,#1D9E75 8%,transparent); }
+.lp-precio-monto { font-size:2rem; font-weight:700; color:var(--texto); }
+.lp-precio-monto span { font-size:1rem; font-weight:500; color:var(--texto-suave); }
+.lp-precio-prueba { color:#1D9E75; font-weight:600; font-size:.92rem; margin-top:2px; }
+.lp-cta { display:block; width:100%; max-width:360px; margin:0 auto; text-align:center;
+  background:#1D9E75; color:#fff; border:none; border-radius:var(--radio);
+  padding:16px; font-size:1.1rem; font-weight:700; text-decoration:none;
+  cursor:pointer; box-shadow:0 4px 14px color-mix(in srgb,#1D9E75 35%,transparent); }
+.lp-cta:hover { filter:brightness(1.05); }
+.lp-link-demo { display:inline-block; margin-top:16px; color:var(--texto-suave);
+  text-decoration:none; font-size:.9rem; }
+
+/* Bloques */
+.lp-bloque { margin:28px 0; }
+.lp-h2 { font-size:1.35rem; margin:0 0 12px; letter-spacing:-.01em; }
+.lp-h3 { font-size:1.05rem; margin:20px 0 10px; }
+.lp-parrafo { color:var(--texto); line-height:1.55; }
+.lp-pie { text-align:center; color:var(--texto-suave); margin-top:14px; font-size:.92rem; }
+
+/* A.2 Demo del celular (CSS) */
+.lp-demo { display:flex; justify-content:center; }
+.phone { width:248px; height:500px; border-radius:34px; background:#05070C;
+  border:8px solid #1b2030; box-shadow:0 16px 40px rgba(0,0,0,.45);
+  position:relative; overflow:hidden; }
+.phone-notch { position:absolute; top:0; left:50%; transform:translateX(-50%);
+  width:96px; height:20px; background:#1b2030; border-radius:0 0 12px 12px; z-index:3; }
+.phone-pantalla { position:absolute; inset:0; padding:34px 14px 14px;
+  background:linear-gradient(180deg,#0E1117,#161B24); }
+.ph-push, .ph-card { position:absolute; left:14px; right:14px;
+  opacity:0; transform:translateY(10px); transition:opacity .6s ease, transform .6s ease; }
+.ph-push.on, .ph-card.on { opacity:1; transform:translateY(0); }
+.ph-push { top:40px; background:#1A1F2B; border:1px solid #2E3548;
+  border-radius:14px; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,.4); }
+.ph-push-app { display:flex; align-items:center; gap:6px; font-size:.72rem; color:#9aa3b2; }
+.ph-push-app .marca-punto { width:8px; height:8px; }
+.ph-push-tit { font-weight:700; color:#F0F3F8; margin-top:6px; font-size:.92rem; }
+.ph-push-cuerpo { color:#c7cdda; font-size:.82rem; margin-top:2px; }
+.ph-card { top:40px; background:#161B24; border:1px solid #2E3548;
+  border-left:4px solid var(--u-urgente); border-radius:12px; padding:13px; }
+.ph-card-head { display:flex; justify-content:space-between; align-items:center; }
+.ph-tipo { font-weight:700; color:#F0F3F8; font-size:.9rem; }
+.ph-urg { font-size:.68rem; font-weight:700; color:#fff; background:var(--u-urgente);
+  padding:2px 8px; border-radius:999px; }
+.ph-detalle { list-style:none; padding:0; margin:10px 0; }
+.ph-detalle li { display:flex; justify-content:space-between; gap:8px;
+  font-size:.78rem; padding:4px 0; border-bottom:1px solid #232a3a; }
+.ph-detalle li span { color:#8a93a4; } .ph-detalle li b { color:#e6ebf3; text-align:right; }
+.ph-orienta { background:color-mix(in srgb,var(--u-importante) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--u-importante) 45%,transparent);
+  border-radius:10px; padding:9px; font-size:.76rem; color:#f0d9a8; margin:8px 0; }
+.ph-orienta .ti { color:var(--u-importante); }
+.ph-botones { display:flex; gap:8px; }
+.ph-btn { flex:1; text-align:center; background:var(--marca); color:#fff;
+  border-radius:8px; padding:8px; font-size:.76rem; font-weight:600; }
+.ph-btn--sec { background:#232a3a; color:#c7cdda; }
+
+/* A.3 Autoridad */
+.lp-autoridad { display:flex; gap:14px; align-items:flex-start; }
+.lp-foto-ph { flex:0 0 72px; width:72px; height:72px; border-radius:50%;
+  background:var(--superficie-2); border:1px solid var(--borde);
+  display:grid; place-items:center; color:var(--texto-suave); font-size:30px; }
+.lp-autor-nombre { font-weight:700; font-size:1.1rem; }
+.lp-cita { font-style:italic; margin:10px 0 0; color:var(--texto); }
+.lp-videos { display:grid; gap:10px; }
+.lp-video { display:flex; align-items:center; gap:12px; border:1px solid var(--borde);
+  border-radius:var(--radio); padding:10px; background:var(--superficie); cursor:pointer; }
+.lp-video:hover { border-color:var(--borde-fuerte); }
+.lp-video-play { flex:0 0 48px; width:48px; height:48px; border-radius:10px;
+  background:var(--superficie-2); display:grid; place-items:center; color:var(--fab); font-size:22px; }
+.lp-video-tit { font-weight:600; font-size:.92rem; }
+
+/* A.5 Pasos */
+.lp-pasos { display:grid; gap:10px; }
+.lp-paso { display:flex; align-items:center; gap:12px; }
+.lp-num { flex:0 0 34px; width:34px; height:34px; border-radius:50%;
+  background:var(--marca); color:#fff; display:grid; place-items:center; font-weight:700; }
+
+/* A.8 Testimonios */
+.lp-testis { display:grid; gap:14px; }
+.lp-testi { display:flex; flex-direction:column; gap:10px; }
+.lp-testi-foto { width:64px; height:64px; border-radius:50%; background:var(--superficie-2);
+  border:1px solid var(--borde); display:grid; place-items:center; color:var(--texto-suave); font-size:26px; }
+.lp-testi-frase { margin:0; font-size:1.15rem; line-height:1.4; font-weight:500; }
+.lp-testi figcaption { font-size:.9rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.lp-testi-i { background:none; border:none; color:var(--texto-suave); cursor:pointer; padding:2px; }
+.lp-testi-i:hover { color:var(--marca); }
+
+/* A.10 Cierre */
+.lp-cierre { text-align:center; padding:24px; margin-top:30px;
+  background:color-mix(in srgb,#1D9E75 7%,transparent); }
+.lp-foot { text-align:center; margin-top:26px; font-size:.82rem; }
+
+/* ── Alta del empresario (/activar) ── */
+.act { max-width:520px; margin:0 auto; padding:24px 6px 48px; }
+.act-marca { display:flex; align-items:center; gap:8px; font-weight:600; }
+.act-marca .marca-punto { width:11px; height:11px; }
+.act-titulo { font-size:1.6rem; margin:14px 0 4px; letter-spacing:-.01em; }
+.act-bloque { margin-top:16px; }
+.act-label { font-weight:600; display:block; margin-bottom:8px; }
+#act-ruc { width:100%; padding:13px; font-size:1.15rem; letter-spacing:.06em;
+  background:var(--superficie-2); color:var(--texto);
+  border:1.5px solid var(--borde); border-radius:var(--radio); }
+#act-ruc:focus { outline:none; border-color:#1D9E75; }
+.act-ruc-ok { display:flex; align-items:flex-start; gap:10px; margin-top:12px;
+  padding:11px; border-radius:var(--radio);
+  background:color-mix(in srgb,#1D9E75 12%,transparent);
+  border:1px solid color-mix(in srgb,#1D9E75 45%,transparent); }
+.act-ruc-ok .ti { color:#1D9E75; font-size:22px; }
+.act-rs { font-weight:700; }
+.act-rs-edit { width:100%; margin-top:10px; padding:10px; background:var(--superficie-2);
+  color:var(--texto); border:1.5px solid var(--u-importante); border-radius:var(--radio); }
+.act-estado { margin-top:8px; font-size:.9rem; min-height:1em; }
+.act-estado.ok { color:var(--u-aldia); } .act-estado.warn { color:var(--u-importante); }
+.act-estado.err { color:var(--u-urgente); }
+
+.act-pregunta { font-weight:700; font-size:1.1rem; margin-bottom:12px; }
+.act-bifurca { display:flex; gap:10px; }
+.act-opt { flex:1; padding:14px; border:1.5px solid var(--borde); border-radius:var(--radio);
+  background:var(--superficie-2); color:var(--texto); font-weight:600; cursor:pointer; }
+.act-opt:hover { border-color:var(--borde-fuerte); }
+.act-opt.sel { border-color:#1D9E75; background:color-mix(in srgb,#1D9E75 14%,transparent); }
+.act-rama { margin-top:14px; }
+.act-cred { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media (max-width:440px){ .act-cred { grid-template-columns:1fr; } }
+.act-comprobar-fila { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px; }
+.act-conexion { font-weight:600; font-size:.9rem; }
+.act-conexion.ok { color:var(--u-aldia); } .act-conexion.no { color:var(--u-urgente); }
+.act-conexion.run { color:var(--texto-suave); }
+.act-mensaje { background:var(--superficie-2); border:1px solid var(--borde);
+  border-radius:var(--radio); padding:12px; font-size:.92rem; line-height:1.5; margin:6px 0 10px; }
+.act-mensaje .hl { color:#1D9E75; }
+.act-mensaje a { color:var(--marca); }
+.act-check { display:flex; align-items:center; gap:8px; font-size:.85rem;
+  color:var(--texto-suave); margin-bottom:12px; cursor:pointer; }
+.act-check input { width:auto; min-height:auto; }
+.act-canal { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.act-avatares { display:flex; }
+.act-av { width:34px; height:34px; border-radius:50%; background:var(--superficie-2);
+  border:1px solid var(--borde); display:grid; place-items:center; color:var(--texto-suave);
+  margin-left:-8px; animation:avEntra 3s ease-in-out infinite; }
+.act-av:nth-child(2){ animation-delay:.6s } .act-av:nth-child(3){ animation-delay:1.2s }
+@keyframes avEntra { 0%,100%{ opacity:.5; transform:translateX(6px) } 50%{ opacity:1; transform:translateX(0) } }
+.act-activar { margin-top:22px; }
