@@ -534,3 +534,73 @@ a.tarjeta-link { display:block; color:inherit; }
              0 0 18px color-mix(in srgb, var(--marca) 70%, transparent); }
 .login-card .titulo-pagina { margin:0; }
 .login-card form { margin-top:6px; }
+
+/* ── zAlerta-10 · Alta de clientes en 2 fases ── */
+.alta { max-width:720px; }
+.alta-pasos { display:flex; gap:10px; margin:14px 0 18px; }
+.alta-paso { display:flex; align-items:center; gap:7px; font-size:.88rem;
+  color:var(--texto-suave); font-weight:500; }
+.alta-paso b { display:inline-grid; place-items:center; width:22px; height:22px;
+  border-radius:999px; background:var(--superficie-2); border:1px solid var(--borde);
+  font-size:.8rem; }
+.alta-paso.activo { color:var(--texto); }
+.alta-paso.activo b { background:var(--marca); border-color:var(--marca); color:#fff; }
+
+.alta-captura { display:flex; gap:8px; }
+.alta-captura input { flex:1; padding:12px 13px; font-size:1.05rem;
+  background:var(--superficie-2); color:var(--texto);
+  border:1.5px solid var(--borde); border-radius:var(--radio);
+  letter-spacing:.04em; }
+.alta-captura input:focus { outline:none; border-color:var(--marca); }
+.alta-estado { margin-top:8px; font-size:.9rem; min-height:1.1em; }
+.alta-estado.ok { color:var(--u-aldia); }
+.alta-estado.warn { color:var(--u-importante); }
+.alta-estado.err { color:var(--u-urgente); }
+
+.alta-archivo { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  margin-top:14px; padding-top:14px; border-top:1px solid var(--borde); }
+
+.alta-tabla { margin-top:16px; }
+.alta-tabla td { vertical-align:middle; }
+.alta-rs-edit { width:100%; padding:7px 9px; background:var(--superficie-2);
+  color:var(--texto); border:1.5px solid var(--u-importante); border-radius:var(--radio); }
+.alta-pin { display:inline-grid; place-items:center; width:24px; height:24px;
+  border-radius:999px; font-weight:700; font-size:.85rem; }
+.alta-pin.ok { background:color-mix(in srgb,var(--u-aldia) 22%,transparent); color:var(--u-aldia); }
+.alta-pin.warn { background:color-mix(in srgb,var(--u-importante) 22%,transparent); color:var(--u-importante); }
+.alta-pin.run { color:var(--texto-suave); }
+.alta-quitar { background:none; border:none; color:var(--texto-suave); cursor:pointer;
+  padding:4px; border-radius:6px; }
+.alta-quitar:hover { color:var(--u-urgente); background:var(--superficie-2); }
+.alta-vacio { margin-top:16px; }
+.alta-acciones { display:flex; gap:10px; margin-top:18px; }
+.alta-acciones .btn--bloque { flex:1; }
+
+/* Fase 2 */
+.alta-card { background:var(--superficie); border:1.5px solid var(--borde);
+  border-radius:var(--radio); padding:16px; margin-bottom:14px; }
+.alta-card-top { display:flex; justify-content:space-between; align-items:flex-start;
+  gap:10px; margin-bottom:12px; }
+.alta-card-rs { font-weight:600; }
+.alta-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:520px){ .alta-grid { grid-template-columns:1fr; } }
+.alta-grupos { display:flex; flex-wrap:wrap; gap:8px; }
+.alta-grupo-chk { display:inline-flex; align-items:center; gap:6px; font-weight:400;
+  font-size:.88rem; padding:6px 10px; border:1px solid var(--borde);
+  border-radius:999px; cursor:pointer; }
+.alta-grupo-chk input { width:auto; min-height:auto; margin:0; }
+.alta-comprobar { width:auto; }
+.alta-conexion { font-size:.85rem; font-weight:600; white-space:nowrap; }
+.alta-conexion.ok { color:var(--u-aldia); }
+.alta-conexion.no { color:var(--u-urgente); }
+.alta-conexion.run { color:var(--texto-suave); }
+.ti-loader-2 { animation:girar 1s linear infinite; }
+@keyframes girar { to { transform:rotate(360deg); } }
+
+/* Botón "+ Agregar cliente" protagonista (Parte A) */
+.btn-agregar-cliente { display:inline-flex; align-items:center; gap:8px;
+  background:var(--marca); color:#fff; border:1px solid var(--marca);
+  border-radius:var(--radio); padding:11px 18px; font-weight:600; font-size:.95rem;
+  cursor:pointer; text-decoration:none; box-shadow:var(--sombra); }
+.btn-agregar-cliente:hover { filter:brightness(1.06); }
+.btn-agregar-cliente .ti { font-size:18px; }
