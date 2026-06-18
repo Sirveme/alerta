@@ -601,3 +601,73 @@ class PushSuscripcion(Base):
     activa: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 11. RucCache — caché incremental de la API RUC (zAlerta-10 D)
+# ═════════════════════════════════════════════════════════════════════
+class RucCache(Base):
+    """Caché simple ruc → razón social (germen del futuro 'padrón propio').
+
+    Se llena al consultar la API externa (apis.net.pe) durante la Fase 1 del
+    alta. NO es multi-tenant: el padrón RUC↔razón social es público, lo
+    comparten todos los estudios. Mantener simple (zAlerta-10 D).
+    """
+    __tablename__ = "ruc_cache"
+
+    ruc: Mapped[str] = mapped_column(String(11), primary_key=True)
+    razon_social: Mapped[str | None] = mapped_column(String(255))
+    estado_sunat: Mapped[str | None] = mapped_column(String(50))
+    consultado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 12. SolicitudValidacionCredencial — "Comprobar conexión" (zAlerta-10 B/D)
+# ═════════════════════════════════════════════════════════════════════
+class EstadoValidacion(str, enum.Enum):
+    """Estado del ciclo flag→worker→resultado de validar credenciales SOL."""
+    PENDIENTE = "pendiente"      # la web la encoló; el worker aún no la tomó
+    COMPROBANDO = "comprobando"  # el worker la está procesando (login real)
+    CONECTA = "conecta"          # login OK
+    NO_CONECTA = "no_conecta"    # login falló (clave/usuario incorrectos)
+    ERROR = "error"              # error técnico al intentar (no concluyente)
+
+
+class SolicitudValidacionCredencial(Base):
+    """Pedido de 'Comprobar conexión' del alta en 2 fases (zAlerta-10 B).
+
+    La WEB es liviana (sin Playwright) → NO valida el login ella misma. Encola
+    aquí la credencial CIFRADA (Fernet); el WORKER (que sí tiene Playwright)
+    hace un login-only real, escribe el resultado y BORRA la clave cifrada.
+    El front hace polling por id, igual que 'Actualizar ahora' (zAlerta-04).
+
+    Multi-tenant (estudio_id). La clave NUNCA va en texto plano ni en logs.
+    Esta tabla es efímera: las filas viejas pueden purgarse sin pérdida.
+    """
+    __tablename__ = "solicitudes_validacion_credencial"
+    __table_args__ = (
+        Index("ix_validacion_pendiente", "estado"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    estudio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+
+    ruc: Mapped[str] = mapped_column(String(11), nullable=False)
+    usuario_sol: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Clave SOL CIFRADA (Fernet). Se pone a NULL en cuanto el worker termina.
+    clave_sol_cifrada: Mapped[str | None] = mapped_column(Text)
+
+    # native_enum=False → se guarda como VARCHAR (nombre del miembro, p.ej.
+    # "PENDIENTE"), igual que lo crea la migración SIN Alembic. Evita depender
+    # de un TIPO nativo de Postgres que la migración no crea.
+    estado: Mapped[EstadoValidacion] = mapped_column(
+        Enum(EstadoValidacion, native_enum=False, length=20),
+        default=EstadoValidacion.PENDIENTE, nullable=False)
+
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+    procesado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -32,4 +32,7 @@ apscheduler>=3.10.0
 # Web Push (para 13c)
 pywebpush>=2.0.0
 
+# Carga por archivo de RUCs (zAlerta-10 Parte C): lectura de .xlsx
+openpyxl>=3.1.0
+
 tzdata

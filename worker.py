@@ -36,9 +36,15 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from db import get_session
-from models import Contribuyente, EstadoContribuyente, Notificacion
+from models import (
+    Contribuyente, EstadoContribuyente, Notificacion,
+    SolicitudValidacionCredencial, EstadoValidacion, ahora_lima,
+)
 # Reutilizamos la lógica validada del orquestador (scraper + ingesta + dedup).
 from run_scraper import procesar_contribuyente, log, FRESCURA_HORAS_DEFAULT
+from cifrado import descifrar_clave_sol
+# Login-only para "Comprobar conexión" (reusa el login del scraper, no lo toca).
+from validar_login import validar_login_sync
 import push_service
 
 TZ_LIMA = ZoneInfo("America/Lima")
@@ -95,6 +101,45 @@ async def _procesar_solicitudes_manuales(session) -> int:
     return len(solicitados)
 
 
+async def _procesar_validaciones_credencial(session) -> int:
+    """Procesa las solicitudes de "Comprobar conexión" (zAlerta-10 B).
+
+    Hace un login-only REAL a SUNAT con la credencial cifrada que encoló la
+    web, escribe el resultado (CONECTA / NO_CONECTA / ERROR) y BORRA la clave
+    cifrada (higiene: la solicitud es efímera). Cada fallo se aísla: una
+    validación que reviente no detiene a las demás ni al ciclo.
+    """
+    pendientes = list(await session.scalars(
+        select(SolicitudValidacionCredencial)
+        .where(SolicitudValidacionCredencial.estado == EstadoValidacion.PENDIENTE)
+        .order_by(SolicitudValidacionCredencial.creado_at)))
+
+    if not pendientes:
+        return 0
+
+    log(f"VALIDACIÓN: {len(pendientes)} credencial(es) por comprobar.")
+    for sol in pendientes:
+        sol.estado = EstadoValidacion.COMPROBANDO
+        await session.commit()
+        try:
+            clave = descifrar_clave_sol(sol.clave_sol_cifrada)
+            conecta = await asyncio.to_thread(
+                validar_login_sync, sol.ruc, sol.usuario_sol, clave)
+            sol.estado = (EstadoValidacion.CONECTA if conecta
+                          else EstadoValidacion.NO_CONECTA)
+            log(f"  {sol.ruc}: {'conecta' if conecta else 'NO conecta'}.",
+                "OK" if conecta else "WARN")
+        except Exception as e:
+            sol.estado = EstadoValidacion.ERROR
+            log(f"  {sol.ruc}: error al validar (sigo): {e}", "ERROR")
+        finally:
+            # Nunca conservar la clave cifrada más allá del intento.
+            sol.clave_sol_cifrada = None
+            sol.procesado_at = ahora_lima()
+            await session.commit()
+    return len(pendientes)
+
+
 async def _procesar_fondo(session) -> int:
     """Scrapea por frescura vencida (ciclo de fondo, no fuerza)."""
     activos = list(await session.scalars(
@@ -113,6 +158,7 @@ async def _procesar_fondo(session) -> int:
 async def ciclo() -> None:
     """Un ciclo: primero solicitudes manuales (prioridad), luego frescura."""
     async with get_session() as session:
+        await _procesar_validaciones_credencial(session)
         await _procesar_solicitudes_manuales(session)
         n = await _procesar_fondo(session)
     log(f"Ciclo completo ({n} activo(s) revisado(s)).", "OK")
