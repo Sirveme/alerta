@@ -18,7 +18,7 @@ from sqlalchemy import select
 from db import get_session
 from models import (
     EstudioContable, Usuario, RolUsuario,
-    TipoCuenta, EstadoSuscripcion,
+    TipoCuenta, EstadoSuscripcion, Contribuyente, EstadoContribuyente,
     LIMITES_PLAN, PLANES_POR_TIPO, limites_de,
 )
 from ..core import templates
@@ -41,19 +41,30 @@ def _planes_para_template() -> list[dict]:
     return planes
 
 
-def _error(request: Request, msg: str, status: int = 400):
+def _error(request: Request, msg: str, status: int = 400,
+           ruc_pre: str = "", empresario_pre: str = ""):
     return templates.TemplateResponse(
         request, "registro.html",
-        {"planes": _planes_para_template(), "error": msg}, status_code=status)
+        {"planes": _planes_para_template(), "error": msg,
+         "ruc_pre": ruc_pre, "empresario_pre": empresario_pre, "tipo_pre": ""},
+        status_code=status)
 
 
 @router.get("/registro", response_class=HTMLResponse)
-async def registro_form(request: Request):
+async def registro_form(request: Request, ruc: str = "", empresario: str = "",
+                        tipo: str = ""):
     # Si ya hay sesión, no tiene sentido registrarse: al dashboard.
     if leer_sesion(request.cookies.get(COOKIE_NOMBRE)):
         return RedirectResponse("/", status_code=303)
+    # Link viral (zAlerta-11a B.4): el empresario manda a su contador aquí con
+    # su RUC ya puesto. El contador registra su estudio y queda vigilando ese RUC.
+    ruc = (ruc or "").strip()
+    ruc_pre = ruc if (ruc.isdigit() and len(ruc) == 11) else ""
     return templates.TemplateResponse(
-        request, "registro.html", {"planes": _planes_para_template(), "error": None})
+        request, "registro.html", {
+            "planes": _planes_para_template(), "error": None,
+            "ruc_pre": ruc_pre, "empresario_pre": (empresario or "").strip(),
+            "tipo_pre": (tipo or "").strip()})
 
 
 @router.post("/registro", response_class=HTMLResponse)
@@ -66,6 +77,8 @@ async def registro_post(
     clave: str = Form(...),
     whatsapp: str = Form(""),
     correo: str = Form(""),
+    ruc_precarga: str = Form(""),
+    empresario_precarga: str = Form(""),
 ):
     tipo_cuenta = (tipo_cuenta or "").strip()
     plan = (plan or "").strip()
@@ -73,6 +86,9 @@ async def registro_post(
     dni = (dni or "").strip()
     whatsapp = (whatsapp or "").strip()
     correo = (correo or "").strip() or None
+    ruc_precarga = (ruc_precarga or "").strip()
+    empresario_precarga = (empresario_precarga or "").strip()
+    ruc_valido = ruc_precarga.isdigit() and len(ruc_precarga) == 11
 
     # ── Validaciones ──
     if tipo_cuenta not in (TipoCuenta.EMPRESARIO.value, TipoCuenta.ESTUDIO.value):
@@ -117,6 +133,21 @@ async def registro_post(
             debe_cambiar_clave=False,   # la clave la eligió él mismo
         )
         session.add(usuario)
+        await session.flush()
+
+        # Link viral (zAlerta-11a B.4): si vino con un RUC pre-cargado y es un
+        # estudio, dejarlo ya vigilando ese RUC (pendiente de credenciales SOL,
+        # que el contador cargará desde su alta). No bloquea el registro.
+        if ruc_valido and tipo_cuenta == TipoCuenta.ESTUDIO.value:
+            ya = await session.scalar(select(Contribuyente.id).where(
+                Contribuyente.estudio_id == estudio.id,
+                Contribuyente.ruc == ruc_precarga))
+            if not ya:
+                session.add(Contribuyente(
+                    estudio_id=estudio.id, ruc=ruc_precarga,
+                    razon_social=empresario_precarga or None,
+                    estado=EstadoContribuyente.ACTIVO))
+
         await session.commit()
         await session.refresh(usuario)
 

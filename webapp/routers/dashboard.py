@@ -23,8 +23,10 @@ from models import (
     Grupo, Contribuyente, ContribuyenteGrupo, Notificacion, Urgencia, Usuario,
     ETIQUETA_TIPO_DOCUMENTO, ahora_lima,
 )
-from ..core import templates
-from ..deps import UsuarioActual, usuario_actual, requiere_escritura
+from ..core import templates, WHATSAPP_SOPORTE
+from ..deps import (
+    UsuarioActual, usuario_actual, usuario_actual_opcional, requiere_escritura,
+)
 
 router = APIRouter(tags=["dashboard"])
 
@@ -198,7 +200,12 @@ async def _vista_empresario(request: Request, session, user: UsuarioActual):
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, user: UsuarioActual = Depends(usuario_actual)):
+async def dashboard(request: Request,
+                    user: UsuarioActual | None = Depends(usuario_actual_opcional)):
+    # Anónimo → landing pública (zAlerta-11a). Logueado → su panel.
+    if user is None:
+        return templates.TemplateResponse(request, "landing.html", {
+            "logueado": False, "whatsapp_soporte": WHATSAPP_SOPORTE})
     if user.es_empresario:
         async with get_session() as session:
             return await _vista_empresario(request, session, user)
