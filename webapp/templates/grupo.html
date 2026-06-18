@@ -10,6 +10,11 @@
   <span class="muted">{{ tarjetas|length }} cliente(s)</span>
 </div>
 
+{% if not user.solo_lectura %}
+<a class="btn-agregar-cliente mt" href="/clientes/nuevo?grupo={{ grupo.id }}">
+  <i class="ti ti-user-plus" aria-hidden="true"></i> Agregar cliente a este grupo</a>
+{% endif %}
+
 {% if sugerir_dividir %}
 <div class="tarjeta acento acento--importante">
   <strong>Sugerencia:</strong> este grupo tiene más de 20 clientes.

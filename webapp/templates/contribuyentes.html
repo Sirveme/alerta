@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% block titulo %}Todos los clientes · alerta.pe{% endblock %}
 {% block contenido %}
-<h1 class="titulo-pagina">Todos los clientes</h1>
-<p class="subtitulo">Vista masiva ({{ filas|length }} cliente(s)).</p>
+<div class="fila spread">
+  <h1 class="titulo-pagina" style="margin:0">Todos los clientes</h1>
+  {% if not user.solo_lectura %}
+  <a class="btn-agregar-cliente" href="/clientes/nuevo">
+    <i class="ti ti-user-plus" aria-hidden="true"></i> Agregar cliente</a>
+  {% endif %}
+</div>
+<p class="subtitulo mt">Vista masiva ({{ filas|length }} cliente(s)).</p>
 
 <table class="tabla">
   <thead>

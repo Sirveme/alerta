@@ -6,6 +6,11 @@
   <span class="muted">{{ total_clientes }} cliente(s)</span>
 </div>
 
+{% if not user.solo_lectura %}
+<a class="btn-agregar-cliente mt" href="/clientes/nuevo">
+  <i class="ti ti-user-plus" aria-hidden="true"></i> Agregar cliente</a>
+{% endif %}
+
 {% include "_resumen.html" %}
 
 {% if not grupos %}

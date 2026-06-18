@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titulo %}Agregar clientes · alerta.pe{% endblock %}
+{% block contenido %}
+<a href="/" class="muted">‹ Volver</a>
+
+<div class="alta" id="alta"
+     data-grupo-pre="{{ grupo_pre or '' }}"
+     data-restantes="{{ restantes }}"
+     data-max="{{ max_contribuyentes }}">
+
+  <h1 class="titulo-pagina" style="margin-bottom:2px">Agregar clientes</h1>
+  <p class="subtitulo" id="alta-cupo">
+    {% if max_contribuyentes %}
+      Tu plan permite {{ max_contribuyentes }} RUCs · te quedan
+      <strong>{{ restantes }}</strong>.
+    {% else %}
+      Captura tus RUCs y completa sus datos con calma.
+    {% endif %}
+  </p>
+
+  <!-- Pasos -->
+  <div class="alta-pasos">
+    <span class="alta-paso activo" data-paso="1"><b>1</b> Capturar RUCs</span>
+    <span class="alta-paso" data-paso="2"><b>2</b> Completar detalle</span>
+  </div>
+
+  <!-- ════════ FASE 1 — Capturar RUCs ════════ -->
+  <section class="alta-fase" data-fase="1">
+    <div class="tarjeta">
+      <label for="ruc-input" style="font-weight:600;display:block;margin-bottom:8px">
+        Escribe un RUC (11 dígitos)
+      </label>
+      <div class="alta-captura">
+        <input id="ruc-input" inputmode="numeric" pattern="[0-9]{11}" maxlength="11"
+               autocomplete="off" placeholder="Ej. 20512345678" enterkeyhint="done">
+        <button class="btn" id="ruc-add" type="button">Agregar</button>
+      </div>
+      <div class="alta-estado muted" id="ruc-feedback" aria-live="polite"></div>
+
+      <div class="alta-archivo">
+        <span class="muted">o también</span>
+        <label class="btn btn--sec" for="alta-file" style="margin:0">
+          <i class="ti ti-upload" aria-hidden="true"></i> Subir lista (Excel o TXT)
+        </label>
+        <input id="alta-file" type="file" accept=".xlsx,.xls,.txt,.csv" hidden>
+      </div>
+      <div class="alta-estado muted" id="file-feedback" aria-live="polite"></div>
+    </div>
+
+    <table class="tabla alta-tabla" id="tabla-rucs" hidden>
+      <thead>
+        <tr><th></th><th>RUC</th><th>Razón social</th><th></th></tr>
+      </thead>
+      <tbody id="tbody-rucs"></tbody>
+    </table>
+    <p class="muted alta-vacio" id="alta-vacio">Aún no agregaste RUCs.
+      Escribe uno arriba: verás su razón social al instante.</p>
+
+    <div class="alta-acciones">
+      <button class="btn btn--bloque" id="ir-fase2" type="button" disabled>
+        Continuar (<span id="conteo-rucs">0</span>) →
+      </button>
+    </div>
+  </section>
+
+  <!-- ════════ FASE 2 — Completar detalle ════════ -->
+  <section class="alta-fase" data-fase="2" hidden>
+    <p class="muted">Completa las credenciales SOL de cada cliente. La clave se
+      cifra y nunca se muestra. Puedes <strong>comprobar la conexión</strong>
+      antes de guardar.</p>
+
+    <div id="fase2-lista"></div>
+
+    <div class="alta-acciones">
+      <button class="btn btn--sec" id="volver-fase1" type="button">‹ Volver</button>
+      <button class="btn btn--bloque" id="guardar-todo" type="button">
+        Guardar <span id="conteo-guardar"></span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Plantilla de tarjeta de grupos (para Fase 2, clonada por JS) -->
+  <template id="tpl-grupos">
+    {% for g in grupos %}
+    <label class="alta-grupo-chk">
+      <input type="checkbox" value="{{ g.id }}">
+      <span class="grupo-punto" style="--acento:{{ g.color }}"></span>{{ g.nombre }}
+    </label>
+    {% endfor %}
+    {% if not grupos %}<span class="muted">No hay grupos todavía.</span>{% endif %}
+  </template>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/alta.js"></script>
+{% endblock %}
