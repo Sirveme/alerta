@@ -11,9 +11,21 @@
 
     {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
 
+    {% if ruc_pre %}
+    <div class="tarjeta acento acento--al_dia" style="--acento:#1D9E75;margin-bottom:14px">
+      <strong>Te invitaron a vigilar el RUC {{ ruc_pre }}</strong>
+      {% if empresario_pre %}<div class="muted">{{ empresario_pre }}</div>{% endif %}
+      <div class="muted" style="font-size:.85rem;margin-top:4px">
+        Regístrate como estudio y quedará en tu lista de clientes.
+      </div>
+    </div>
+    {% endif %}
+
     <form method="post" action="/registro" autocomplete="off" id="form-registro">
-      <input type="hidden" name="tipo_cuenta" id="f-tipo" value="">
+      <input type="hidden" name="tipo_cuenta" id="f-tipo" value="{{ 'estudio' if ruc_pre else '' }}">
       <input type="hidden" name="plan" id="f-plan" value="">
+      <input type="hidden" name="ruc_precarga" value="{{ ruc_pre or '' }}">
+      <input type="hidden" name="empresario_precarga" value="{{ empresario_pre or '' }}">
 
       <!-- Paso 1: tipo de cuenta -->
       <h3 class="paso-titulo">1 · ¿Quién eres?</h3>

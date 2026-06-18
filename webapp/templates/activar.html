@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block titulo %}Activar mis alertas · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="act" id="act" data-ruc-pre="{{ ruc_pre or '' }}"
+     data-wa-soporte="{{ whatsapp_soporte }}">
+  <div class="act-marca"><span class="marca-punto"></span> alerta.pe</div>
+  <h1 class="act-titulo">Activa tus alertas</h1>
+  <p class="muted">7 días gratis · sin pagar nada. Conecta tu RUC en menos de un minuto.</p>
+
+  <!-- ════════ B.1 · RUC (borde verde) ════════ -->
+  <section class="tarjeta acento act-bloque" style="--acento:#1D9E75">
+    <label class="act-label" for="act-ruc">Tu RUC</label>
+    <input id="act-ruc" inputmode="numeric" pattern="[0-9]{11}" maxlength="11"
+           autocomplete="off" placeholder="11 dígitos" enterkeyhint="done">
+    <div class="act-ruc-ok" id="act-ruc-ok" hidden>
+      <i class="ti ti-circle-check"></i>
+      <div><div class="act-rs" id="act-rs"></div>
+        <div class="muted" id="act-intel"></div></div>
+    </div>
+    <input id="act-rs-edit" class="act-rs-edit" placeholder="Escribe tu razón social" hidden>
+    <div class="act-estado muted" id="act-ruc-msg" aria-live="polite"></div>
+  </section>
+
+  <!-- ════════ B.2 · ¿Tienes Clave SOL? ════════ -->
+  <section class="tarjeta act-bloque">
+    <div class="act-pregunta">¿Tienes tu Clave SOL?</div>
+    <div class="act-bifurca">
+      <button type="button" class="act-opt" data-clave="si">Sí, la tengo</button>
+      <button type="button" class="act-opt" data-clave="no">No la tengo</button>
+    </div>
+
+    <!-- Rama SÍ -->
+    <div class="act-rama" id="rama-si" hidden>
+      <div class="act-cred">
+        <div class="campo"><label>Usuario SOL</label>
+          <input id="act-user" autocomplete="off"></div>
+        <div class="campo"><label>Clave SOL</label>
+          <input id="act-clave" type="password" autocomplete="new-password"></div>
+      </div>
+      <div class="act-comprobar-fila">
+        <button type="button" class="btn btn--sec" id="act-comprobar">
+          <i class="ti ti-plug-connected"></i> Comprobar conexión</button>
+        <span class="act-conexion" id="act-conexion"></span>
+      </div>
+    </div>
+
+    <!-- Rama NO -->
+    <div class="act-rama" id="rama-no" hidden>
+      <p class="muted">No hay problema. Le pedimos las credenciales a tu contador
+        con este mensaje:</p>
+      <div class="act-mensaje" id="act-mensaje"></div>
+      <label class="act-check">
+        <input type="checkbox" id="act-quitar-gratis">
+        Quitar “tú también tendrás cuenta gratis”
+      </label>
+      <div class="campo"><label>WhatsApp de tu contador</label>
+        <input id="act-wa-contador" inputmode="numeric" placeholder="51XXXXXXXXX"></div>
+      <button type="button" class="btn btn--whatsapp btn--bloque" id="act-enviar-contador">
+        <i class="ti ti-brand-whatsapp"></i> Enviar a mi contador</button>
+    </div>
+  </section>
+
+  <!-- ════════ B.3 · Canal privado (borde violeta) ════════ -->
+  <section class="tarjeta acento act-bloque" style="--acento:#8B7CF0">
+    <div class="act-pregunta" style="font-size:1rem">Tus avisos, por un canal privado</div>
+    <p class="muted">Llegan sin usar tu WhatsApp. Quedan grabados en tu celular.</p>
+    <div class="act-canal">
+      <button type="button" class="btn btn--sec" id="act-compruebalo">
+        <i class="ti ti-bell"></i> Compruébalo</button>
+      <div class="act-avatares" aria-hidden="true">
+        <span class="act-av"><i class="ti ti-building-store"></i></span>
+        <span class="act-av"><i class="ti ti-briefcase"></i></span>
+        <span class="act-av"><i class="ti ti-user"></i></span>
+      </div>
+    </div>
+    <div class="act-estado muted" id="act-push-msg" aria-live="polite"></div>
+  </section>
+
+  <!-- ════════ B.5 · Rol (opcional) ════════ -->
+  <section class="tarjeta act-bloque">
+    <div class="campo"><label for="act-cargo">¿Cuál es tu rol? (opcional)</label>
+      <select id="act-cargo">
+        <option value="">Prefiero no decir</option>
+        <option value="dueño">Dueño</option>
+        <option value="administrador">Administrador</option>
+        <option value="gerente">Gerente</option>
+        <option value="encargado">Encargado</option>
+      </select></div>
+  </section>
+
+  <!-- ════════ B.6 · Activar ════════ -->
+  <button type="button" class="lp-cta act-activar" id="act-activar">Activar mis alertas</button>
+  <p class="muted" style="text-align:center;margin-top:12px">
+    ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/push.js"></script>
+<script src="/static/js/activar.js"></script>
+{% endblock %}
