@@ -694,15 +694,16 @@ a.tarjeta-link { display:block; color:inherit; }
 .borde-chicha-1, .borde-chicha-2, .borde-chicha-3 {
   border-style:solid; border-width:3px; border-radius:0; }
 .borde-chicha-1 { border-top-color:#FCC014; border-right-color:#E5337E;
-  border-bottom-color:#175331; border-left-color:#16B0D8; }
-.borde-chicha-2 { border-top-color:#E5337E; border-right-color:#175331;
+  border-bottom-color:#1E8F4E; border-left-color:#16B0D8; }
+.borde-chicha-2 { border-top-color:#E5337E; border-right-color:#1E8F4E;
   border-bottom-color:#16B0D8; border-left-color:#FCC014; }
 .borde-chicha-3 { border-top-color:#16B0D8; border-right-color:#FCC014;
-  border-bottom-color:#E5337E; border-left-color:#175331; }
+  border-bottom-color:#E5337E; border-left-color:#1E8F4E; }
 
 /* ── PATRÓN 2 · SECCIONES CON FONDO ALTERNADO (ritmo vibrante ↔ respiro) ──
    Sangran al borde del .lp (full-width en celular). */
-.lp-sec { margin:0 -4px; padding:30px 18px; }
+.lp-sec { margin:0 -4px; padding:36px 18px; text-align:left; }
+.lp-sec + .lp-sec { border-top:0; }
 .lp-sec--crema  { background:#F7F5EF; color:#1A2B20; }
 .lp-sec--cielo  { background:linear-gradient(170deg,#D8F2F9,#BfE8F4); color:#0F3D22; }
 .lp-sec--oscura { background:linear-gradient(170deg,#0B2C19,#05120A); color:#F7F5EF; }
@@ -716,9 +717,10 @@ a.tarjeta-link { display:block; color:inherit; }
 .lp-sec--crema .lp-soft, .lp-sec--cielo .lp-soft { color:#4A5A50; }
 .lp-sec--oscura .lp-soft, .lp-sec--verde .lp-soft { color:rgba(247,245,239,.78); }
 
-.lp-h2 { font-size:1.4rem; margin:0 0 12px; letter-spacing:-.01em; font-weight:800; }
+.lp-h2 { font-size:1.4rem; margin:0 0 18px; letter-spacing:-.01em; font-weight:800; }
+.lp-h2--centro { text-align:center; margin-bottom:22px; }
 .lp-h3 { font-size:1.05rem; margin:20px 0 10px; }
-.lp-parrafo { line-height:1.55; font-size:1rem; }
+.lp-parrafo { line-height:1.6; font-size:1rem; margin:0; }
 .hl-verde { color:#1D9E75; }
 /* Acento de color en los títulos según el fondo (energía sin saturar) */
 .lp-sec--crema .lp-h2 { color:#15402A; }
@@ -775,19 +777,22 @@ a.tarjeta-link { display:block; color:inherit; }
 .lp-cita { font-style:italic; font-size:1.1rem; line-height:1.5; margin:18px 0 0;
   padding-left:14px; border-left:4px solid var(--sol); }
 
-/* A.3b Videos dentro de silueta de celular */
-.lp-videos { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; }
-.lp-video-phone { width:150px; background:#05120A; border-style:solid; border-width:6px;
-  border-radius:24px; padding-top:16px; position:relative; }
-.lp-video-screen { position:relative; width:100%; aspect-ratio:9/16;
-  background:#0B1A12; border-radius:6px; overflow:hidden; display:grid; place-items:center; }
-.lp-video-el { position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
-  background:#0B1A12; }
+/* A.3b Videos dentro de SILUETA DE CELULAR (reusa .phone del héroe) */
+.lp-videos { display:flex; gap:24px; flex-wrap:wrap; justify-content:center;
+  align-items:flex-start; }
+.lp-video-item { display:flex; flex-direction:column; align-items:center; width:168px; }
+/* Variante chica del celular del héroe: mismo marco/forma, menor tamaño. */
+.phone--video { width:168px; height:300px; border-width:6px; border-radius:28px;
+  box-shadow:0 12px 30px rgba(0,0,0,.5); }
+.phone-pantalla--video { padding:0; background:#0B1A12; }
+.lp-video-el { position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; background:#0B1A12; border:none; display:block; }
 .lp-video-ph { position:absolute; inset:0; display:grid; place-items:center;
-  color:var(--sol); font-size:34px; pointer-events:none; }
-.lp-video-cap { padding:8px 6px 12px; font-size:.78rem; line-height:1.3;
+  color:var(--sol); font-size:40px; pointer-events:none;
+  background:radial-gradient(circle at 50% 45%, rgba(252,192,20,.12), transparent 60%); }
+.lp-video-cap { margin-top:14px; font-size:.84rem; line-height:1.4;
   color:#F7F5EF; text-align:center; }
-.lp-video-dur { display:block; color:rgba(247,245,239,.6); margin-top:2px; }
+.lp-video-dur { display:block; color:rgba(247,245,239,.6); margin-top:4px; }
 
 /* A.5 Pasos */
 .lp-pasos { display:grid; gap:12px; }
