@@ -681,21 +681,60 @@ a.tarjeta-link { display:block; color:inherit; }
 .lp-cta-gancho { font-size:.9rem; font-weight:700; opacity:.92; }
 .lp-cta-resp { font-size:1.3rem; font-weight:800; letter-spacing:-.01em; }
 
-/* Bloques */
-.lp-bloque { margin:28px 0; }
-.lp-h2 { font-size:1.35rem; margin:0 0 12px; letter-spacing:-.01em; }
+/* ── Paleta chicha disponible para TODA la landing ── */
+.lp {
+  --selva-1:#0F3D22; --selva-2:#175331; --selva-3:#2E8F4E;
+  --sol:#FCC014; --sol-claro:#FFD23F; --naranja:#F0612F;
+  --fucsia:#E5337E; --celeste:#16B0D8; --crema:#F7F5EF;
+}
+
+/* ── PATRÓN 1 · BORDES MULTICOLOR (esquinas rectas) ──
+   Cada lado un color andino/amazónico. 3 variantes con rotación distinta
+   para dar ritmo entre bloques. */
+.borde-chicha-1, .borde-chicha-2, .borde-chicha-3 {
+  border-style:solid; border-width:3px; border-radius:0; }
+.borde-chicha-1 { border-top-color:#FCC014; border-right-color:#E5337E;
+  border-bottom-color:#175331; border-left-color:#16B0D8; }
+.borde-chicha-2 { border-top-color:#E5337E; border-right-color:#175331;
+  border-bottom-color:#16B0D8; border-left-color:#FCC014; }
+.borde-chicha-3 { border-top-color:#16B0D8; border-right-color:#FCC014;
+  border-bottom-color:#E5337E; border-left-color:#175331; }
+
+/* ── PATRÓN 2 · SECCIONES CON FONDO ALTERNADO (ritmo vibrante ↔ respiro) ──
+   Sangran al borde del .lp (full-width en celular). */
+.lp-sec { margin:0 -4px; padding:30px 18px; }
+.lp-sec--crema  { background:#F7F5EF; color:#1A2B20; }
+.lp-sec--cielo  { background:linear-gradient(170deg,#D8F2F9,#BfE8F4); color:#0F3D22; }
+.lp-sec--oscura { background:linear-gradient(170deg,#0B2C19,#05120A); color:#F7F5EF; }
+.lp-sec--verde  {
+  color:#F7F5EF;
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgba(252,192,20,.28), transparent 55%),
+    radial-gradient(90% 60% at 110% 110%, rgba(229,51,126,.30), transparent 60%),
+    linear-gradient(165deg,#175331 0%,#0F3D22 100%); }
+/* Texto secundario legible según el fondo */
+.lp-sec--crema .lp-soft, .lp-sec--cielo .lp-soft { color:#4A5A50; }
+.lp-sec--oscura .lp-soft, .lp-sec--verde .lp-soft { color:rgba(247,245,239,.78); }
+
+.lp-h2 { font-size:1.4rem; margin:0 0 12px; letter-spacing:-.01em; font-weight:800; }
 .lp-h3 { font-size:1.05rem; margin:20px 0 10px; }
-.lp-parrafo { color:var(--texto); line-height:1.55; }
-.lp-pie { text-align:center; color:var(--texto-suave); margin-top:14px; font-size:.92rem; }
+.lp-parrafo { line-height:1.55; font-size:1rem; }
+.hl-verde { color:#1D9E75; }
+/* Acento de color en los títulos según el fondo (energía sin saturar) */
+.lp-sec--crema .lp-h2 { color:#15402A; }
+.lp-sec--cielo .lp-h2 { color:#0F3D22; }
+.lp-sec--oscura .lp-h2, .lp-sec--verde .lp-h2 { color:var(--sol); }
 
 /* Demo del celular (CSS). Marco verde-selva chicha; pantalla oscura para
    mantener legible la notificación de SUNAT. */
 .lp-demo { display:flex; justify-content:center; margin:18px auto 4px; }
-.phone { width:232px; height:464px; border-radius:32px; background:#05120A;
-  border:8px solid #0B2C19; box-shadow:0 18px 44px rgba(0,0,0,.5),
-  0 0 0 2px rgba(252,192,20,.18); position:relative; overflow:hidden; }
+/* El marco toma los 4 colores del .borde-chicha-* del HTML; aquí solo el
+   grosor y la forma de teléfono (radius gana por ir después en el cascade). */
+.phone { width:232px; height:464px; border-style:solid; border-width:7px;
+  border-radius:32px; background:#05120A;
+  box-shadow:0 18px 44px rgba(0,0,0,.5); position:relative; overflow:hidden; }
 .phone-notch { position:absolute; top:0; left:50%; transform:translateX(-50%);
-  width:96px; height:20px; background:#0B2C19; border-radius:0 0 12px 12px; z-index:3; }
+  width:90px; height:18px; background:#0B2C19; border-radius:0 0 12px 12px; z-index:3; }
 .phone-pantalla { position:absolute; inset:0; padding:34px 14px 14px;
   background:linear-gradient(180deg,#0E1117,#10231A); }
 .ph-push, .ph-card { position:absolute; left:14px; right:14px;
@@ -726,41 +765,59 @@ a.tarjeta-link { display:block; color:inherit; }
   border-radius:8px; padding:8px; font-size:.76rem; font-weight:600; }
 .ph-btn--sec { background:#232a3a; color:#c7cdda; }
 
-/* A.3 Autoridad */
-.lp-autoridad { display:flex; gap:14px; align-items:flex-start; }
-.lp-foto-ph { flex:0 0 72px; width:72px; height:72px; border-radius:50%;
-  background:var(--superficie-2); border:1px solid var(--borde);
-  display:grid; place-items:center; color:var(--texto-suave); font-size:30px; }
-.lp-autor-nombre { font-weight:700; font-size:1.1rem; }
-.lp-cita { font-style:italic; margin:10px 0 0; color:var(--texto); }
-.lp-videos { display:grid; gap:10px; }
-.lp-video { display:flex; align-items:center; gap:12px; border:1px solid var(--borde);
-  border-radius:var(--radio); padding:10px; background:var(--superficie); cursor:pointer; }
-.lp-video:hover { border-color:var(--borde-fuerte); }
-.lp-video-play { flex:0 0 48px; width:48px; height:48px; border-radius:10px;
-  background:var(--superficie-2); display:grid; place-items:center; color:var(--fab); font-size:22px; }
-.lp-video-tit { font-weight:600; font-size:.92rem; }
+/* A.3 Autoridad — dos filas (foto+texto / cita ancho completo) */
+.lp-autoridad { display:flex; gap:16px; align-items:center; }
+.lp-foto { position:relative; flex:0 0 96px; width:96px; height:96px;
+  background:#E9E5DB; display:grid; place-items:center; overflow:hidden; }
+.lp-foto-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.lp-foto-ph { color:#9aa08f; font-size:40px; }
+.lp-autor-nombre { font-weight:800; font-size:1.2rem; }
+.lp-cita { font-style:italic; font-size:1.1rem; line-height:1.5; margin:18px 0 0;
+  padding-left:14px; border-left:4px solid var(--sol); }
+
+/* A.3b Videos dentro de silueta de celular */
+.lp-videos { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; }
+.lp-video-phone { width:150px; background:#05120A; border-style:solid; border-width:6px;
+  border-radius:24px; padding-top:16px; position:relative; }
+.lp-video-screen { position:relative; width:100%; aspect-ratio:9/16;
+  background:#0B1A12; border-radius:6px; overflow:hidden; display:grid; place-items:center; }
+.lp-video-el { position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+  background:#0B1A12; }
+.lp-video-ph { position:absolute; inset:0; display:grid; place-items:center;
+  color:var(--sol); font-size:34px; pointer-events:none; }
+.lp-video-cap { padding:8px 6px 12px; font-size:.78rem; line-height:1.3;
+  color:#F7F5EF; text-align:center; }
+.lp-video-dur { display:block; color:rgba(247,245,239,.6); margin-top:2px; }
 
 /* A.5 Pasos */
-.lp-pasos { display:grid; gap:10px; }
-.lp-paso { display:flex; align-items:center; gap:12px; }
-.lp-num { flex:0 0 34px; width:34px; height:34px; border-radius:50%;
-  background:var(--marca); color:#fff; display:grid; place-items:center; font-weight:700; }
+.lp-pasos { display:grid; gap:12px; }
+.lp-paso { display:flex; align-items:center; gap:12px; background:#fff; padding:14px; }
+.lp-num { flex:0 0 38px; width:38px; height:38px; border-radius:50%;
+  color:#fff; display:grid; place-items:center; font-weight:800; font-size:1.1rem; }
+.lp-num--sol { background:var(--naranja); }
+.lp-num--fucsia { background:var(--fucsia); }
+.lp-num--celeste { background:var(--celeste); }
+.lp-paso b { color:#15402A; } .lp-paso > div { color:#15402A; }
 
-/* A.8 Testimonios */
-.lp-testis { display:grid; gap:14px; }
-.lp-testi { display:flex; flex-direction:column; gap:10px; }
-.lp-testi-foto { width:64px; height:64px; border-radius:50%; background:var(--superficie-2);
-  border:1px solid var(--borde); display:grid; place-items:center; color:var(--texto-suave); font-size:26px; }
-.lp-testi-frase { margin:0; font-size:1.15rem; line-height:1.4; font-weight:500; }
-.lp-testi figcaption { font-size:.9rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-.lp-testi-i { background:none; border:none; color:var(--texto-suave); cursor:pointer; padding:2px; }
-.lp-testi-i:hover { color:var(--marca); }
+/* A.8 Testimonios — en grande, con borde chicha */
+.lp-testis { display:grid; gap:16px; }
+.lp-testi { display:flex; flex-direction:column; gap:12px; background:#fff; padding:18px; }
+.lp-testi-foto { position:relative; width:84px; height:84px; background:#E9E5DB;
+  display:grid; place-items:center; overflow:hidden; }
+.lp-testi-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.lp-testi-ph { color:#9aa08f; font-size:34px; }
+.lp-testi-frase { margin:0; font-size:1.25rem; line-height:1.4; font-weight:600; color:#15402A; }
+.lp-testi figcaption { font-size:.92rem; display:flex; align-items:center; gap:6px;
+  flex-wrap:wrap; color:#15402A; }
+.lp-testi-i { background:none; border:none; color:var(--fucsia); cursor:pointer; padding:2px; }
+.lp-testi-i:hover { filter:brightness(1.1); }
 
 /* A.10 Cierre */
-.lp-cierre { text-align:center; padding:24px; margin-top:30px;
-  background:color-mix(in srgb,#1D9E75 7%,transparent); }
-.lp-foot { text-align:center; margin-top:26px; font-size:.82rem; }
+.lp-cierre { text-align:center; border-radius:0 0 26px 26px; }
+.lp-cierre .lp-cta { margin-top:6px; }
+.lp-cierre-dudas { margin:16px 0 0; color:rgba(247,245,239,.85); font-size:.92rem; }
+.lp-cierre-dudas a { color:var(--sol-claro); }
+.lp-foot { text-align:center; margin:22px 0 4px; font-size:.82rem; color:var(--texto-suave); }
 
 /* ── Alta del empresario (/activar) ── */
 .act { max-width:520px; margin:0 auto; padding:24px 6px 48px; }
