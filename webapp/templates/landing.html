@@ -3,12 +3,17 @@
 {% block contenido %}
 <div class="lp">
 
-  <!-- ════════ A.1 · HÉROE ════════ -->
+  <!-- ════════ A.1 · HÉROE — identidad "chicha amazónico" (zAlerta-11a-heroe) ══
+       Orden: marca sutil → titular → precio grande → demo del celular →
+       mensaje resaltado → CTA jalador. La demo (.phone) vive AQUÍ (antes en A.2)
+       para que se vea en la primera pantalla. -->
   <header class="lp-hero">
-    <div class="lp-marca"><span class="marca-punto"></span> alerta.pe
+    <div class="lp-topbar">
+      <span class="lp-wordmark">alerta<b>.pe</b></span>
       {% if logueado %}<a href="/" class="lp-volver">Ir a mi panel ›</a>{% endif %}
     </div>
-    <h1 class="lp-titular">Nunca más una multa por no enterarte</h1>
+
+    <h1 class="lp-titular">Nunca más una <span class="hl">multa</span> por no enterarte</h1>
     <p class="lp-sub">Vigilamos tu buzón SUNAT y SUNAFIL las 24 horas y te avisamos
       al celular apenas llegue algo.</p>
 
@@ -17,14 +22,8 @@
       <div class="lp-precio-prueba">7 días gratis · prueba sin pagar nada</div>
     </div>
 
-    <a href="/activar" class="lp-cta">Activar mis alertas gratis</a>
-    <a href="#demo" class="lp-link-demo">▾ Mira cómo funciona</a>
-  </header>
-
-  <!-- ════════ A.2 · DEMO DEL CELULAR (CSS) ════════ -->
-  <section class="lp-bloque" id="demo">
-    <h2 class="lp-h2">Mira cómo funciona</h2>
-    <div class="lp-demo">
+    <!-- Demo del celular (pieza estrella, en la primera pantalla) -->
+    <div class="lp-demo" id="demo">
       <div class="phone" id="phone">
         <div class="phone-notch"></div>
         <div class="phone-pantalla">
@@ -57,9 +56,15 @@
         </div>
       </div>
     </div>
-    <p class="lp-pie">Te llega el aviso, el detalle, el PDF y qué hacer. Todo en tu
-      celular, sin entrar a SUNAT.</p>
-  </section>
+
+    <p class="lp-mensaje-destacado">Te llega el aviso, el detalle, el PDF y qué
+      hacer. <b>Todo en tu celular, sin entrar a SUNAT.</b></p>
+
+    <a href="/activar" class="lp-cta">
+      <span class="lp-cta-gancho">Solo S/5 para que NO me multen</span>
+      <span class="lp-cta-resp">¡Me apunto! →</span>
+    </a>
+  </header>
 
   <!-- ════════ A.3 · AUTORIDAD ════════ -->
   <section class="lp-bloque">
