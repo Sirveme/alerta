@@ -90,7 +90,7 @@
 
   <!-- ════════ A.3b · CONSEJOS / VIDEOS (impacto: oscura) ════════ -->
   <section class="lp-sec lp-sec--oscura">
-    <h2 class="lp-h2">Consejos que te conviene saber</h2>
+    <h2 class="lp-h2 lp-h2--centro">Consejos que te conviene saber</h2>
     <div class="lp-videos">
       {% set videos = [
         ('¿Qué pasa si ignoras una notificación de SUNAT?', '1:20'),
@@ -99,13 +99,16 @@
       {% for titulo, dur in videos %}
       <!-- VIDEO REAL #{{ loop.index }}: pon la URL del mp4 vertical en <video src="">
            (y un poster=""), o reemplaza el <video> por un <iframe> de YouTube
-           vertical. Son 3 videos DISTINTOS. El overlay de play es solo placeholder. -->
-      <figure class="lp-video-phone borde-chicha-{{ loop.index }}">
-        <div class="phone-notch"></div>
-        <div class="lp-video-screen">
-          <video class="lp-video-el" playsinline controls preload="none"
-                 src="" poster=""></video>
-          <div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div>
+           vertical. Son 3 videos DISTINTOS. El overlay de play es solo placeholder.
+           El video va DENTRO de la silueta de celular (.phone, reusada del héroe). -->
+      <figure class="lp-video-item">
+        <div class="phone phone--video borde-chicha-{{ loop.index }}">
+          <div class="phone-notch"></div>
+          <div class="phone-pantalla phone-pantalla--video">
+            <video class="lp-video-el" playsinline controls preload="none"
+                   src="" poster=""></video>
+            <div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div>
+          </div>
         </div>
         <figcaption class="lp-video-cap">{{ titulo }}
           <span class="lp-video-dur">{{ dur }}</span></figcaption>
@@ -191,8 +194,8 @@
   <section class="lp-sec lp-sec--verde lp-cierre">
     <h2 class="lp-h2">Empieza tranquilo, hoy mismo</h2>
     <a href="/activar" class="lp-cta">
-      <span class="lp-cta-gancho">Más barato que una multa</span>
-      <span class="lp-cta-resp">¡Tocó y me apunto! →</span>
+      <span class="lp-cta-gancho">Solo S/5 para que NO me multen</span>
+      <span class="lp-cta-resp">¡Toco y me apunto! →</span>
     </a>
     <p class="lp-cierre-dudas">¿Tienes dudas?
       <a href="https://wa.me/{{ whatsapp_soporte }}" target="_blank" rel="noopener">
