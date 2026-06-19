@@ -24,7 +24,7 @@
 
     <!-- Demo del celular (pieza estrella, en la primera pantalla) -->
     <div class="lp-demo" id="demo">
-      <div class="phone" id="phone">
+      <div class="phone borde-chicha-1" id="phone">
         <div class="phone-notch"></div>
         <div class="phone-pantalla">
           <!-- Estado 1: notificación push -->
@@ -62,47 +62,60 @@
 
     <a href="/activar" class="lp-cta">
       <span class="lp-cta-gancho">Solo S/5 para que NO me multen</span>
-      <span class="lp-cta-resp">¡Me apunto! →</span>
+      <span class="lp-cta-resp">¡Toco y me apunto! →</span>
     </a>
   </header>
 
-  <!-- ════════ A.3 · AUTORIDAD ════════ -->
-  <section class="lp-bloque">
-    <div class="lp-autoridad tarjeta">
-      <!-- PLACEHOLDER FOTO: el usuario subirá la foto real de Duilio aquí
-           (reemplazar el .lp-foto-ph por <img src="/static/img/duilio.jpg">). -->
-      <div class="lp-foto-ph"><i class="ti ti-user"></i></div>
-      <div>
+  <!-- ════════ A.3 · AUTORIDAD (respiro: crema) ════════ -->
+  <section class="lp-sec lp-sec--crema">
+    <!-- FILA 1: foto (borde chicha) + texto -->
+    <div class="lp-autoridad">
+      <!-- FOTO REAL DE DUILIO: pon la URL en src (ej. /static/img/duilio.jpg).
+           Si aún no existe, onerror muestra el placeholder de abajo. -->
+      <div class="lp-foto borde-chicha-2">
+        <img class="lp-foto-img" src="/static/img/duilio.jpg"
+             alt="Duilio Restuccia" onerror="this.remove()">
+        <span class="lp-foto-ph"><i class="ti ti-user"></i></span>
+      </div>
+      <div class="lp-autoridad-txt">
         <div class="lp-autor-nombre">Duilio Restuccia</div>
-        <div class="muted">Más de 20 años difundiendo normas tributarias y
+        <div class="lp-soft">Más de 20 años difundiendo normas tributarias y
           asesorando negocios.</div>
-        <p class="lp-cita">“Mi compromiso siempre ha sido que los negocios estén
-          tranquilos y al día, sin sustos. Por eso creé alerta.pe.”</p>
       </div>
     </div>
+    <!-- FILA 2: cita a ancho completo -->
+    <p class="lp-cita">“Mi compromiso siempre ha sido que los negocios estén
+      tranquilos y al día, sin sustos. Por eso creé alerta.pe.”</p>
+  </section>
 
-    <h3 class="lp-h3">Consejos que te conviene saber</h3>
+  <!-- ════════ A.3b · CONSEJOS / VIDEOS (impacto: oscura) ════════ -->
+  <section class="lp-sec lp-sec--oscura">
+    <h2 class="lp-h2">Consejos que te conviene saber</h2>
     <div class="lp-videos">
-      <!-- PLACEHOLDER VIDEOS: reemplazar cada .lp-video por un <video> vertical
-           (mp4) o un iframe de YouTube vertical cuando se suban. -->
       {% set videos = [
         ('¿Qué pasa si ignoras una notificación de SUNAT?', '1:20'),
         ('El error que le costó S/3,700 a una bodega', '0:55'),
         ('Multa por no presentar vs. fuera de plazo: la diferencia', '1:05')] %}
       {% for titulo, dur in videos %}
-      <div class="lp-video">
-        <div class="lp-video-play"><i class="ti ti-player-play-filled"></i></div>
-        <div class="lp-video-meta">
-          <div class="lp-video-tit">{{ titulo }}</div>
-          <div class="muted">{{ dur }}</div>
+      <!-- VIDEO REAL #{{ loop.index }}: pon la URL del mp4 vertical en <video src="">
+           (y un poster=""), o reemplaza el <video> por un <iframe> de YouTube
+           vertical. Son 3 videos DISTINTOS. El overlay de play es solo placeholder. -->
+      <figure class="lp-video-phone borde-chicha-{{ loop.index }}">
+        <div class="phone-notch"></div>
+        <div class="lp-video-screen">
+          <video class="lp-video-el" playsinline controls preload="none"
+                 src="" poster=""></video>
+          <div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div>
         </div>
-      </div>
+        <figcaption class="lp-video-cap">{{ titulo }}
+          <span class="lp-video-dur">{{ dur }}</span></figcaption>
+      </figure>
       {% endfor %}
     </div>
   </section>
 
-  <!-- ════════ A.4 · ¿QUÉ ES? ════════ -->
-  <section class="lp-bloque">
+  <!-- ════════ A.4 · ¿QUÉ ES? (amazónica: celeste) ════════ -->
+  <section class="lp-sec lp-sec--cielo">
     <h2 class="lp-h2">¿Qué es alerta.pe?</h2>
     <p class="lp-parrafo">Es un servicio que revisa tu buzón electrónico de SUNAT y
       SUNAFIL por ti, todos los días, y te avisa al celular cuando llega una
@@ -110,52 +123,54 @@
       una multa por no enterarte a tiempo.</p>
   </section>
 
-  <!-- ════════ A.5 · ¿CÓMO FUNCIONA? ════════ -->
-  <section class="lp-bloque">
+  <!-- ════════ A.5 · ¿CÓMO FUNCIONA? (respiro: crema) ════════ -->
+  <section class="lp-sec lp-sec--crema">
     <h2 class="lp-h2">¿Cómo funciona?</h2>
     <div class="lp-pasos">
-      <div class="lp-paso tarjeta"><span class="lp-num">1</span>
-        <div><b>Conectas tu RUC</b><div class="muted">En menos de un minuto, desde tu celular.</div></div></div>
-      <div class="lp-paso tarjeta"><span class="lp-num">2</span>
-        <div><b>Vigilamos tu buzón</b><div class="muted">Día y noche, SUNAT y SUNAFIL.</div></div></div>
-      <div class="lp-paso tarjeta"><span class="lp-num">3</span>
-        <div><b>Te avisamos al instante</b><div class="muted">Con el detalle, para que sepas qué hacer.</div></div></div>
+      <div class="lp-paso borde-chicha-1"><span class="lp-num lp-num--sol">1</span>
+        <div><b>Conectas tu RUC</b><div class="lp-soft">En menos de un minuto, desde tu celular.</div></div></div>
+      <div class="lp-paso borde-chicha-2"><span class="lp-num lp-num--fucsia">2</span>
+        <div><b>Vigilamos tu buzón</b><div class="lp-soft">Día y noche, SUNAT y SUNAFIL.</div></div></div>
+      <div class="lp-paso borde-chicha-3"><span class="lp-num lp-num--celeste">3</span>
+        <div><b>Te avisamos al instante</b><div class="lp-soft">Con el detalle, para que sepas qué hacer.</div></div></div>
     </div>
   </section>
 
-  <!-- ════════ A.6 · CANAL PRIVADO ════════ -->
-  <section class="lp-bloque">
-    <div class="tarjeta acento" style="--acento:#8B7CF0;border-left-width:4px">
-      <h3 class="lp-h3" style="margin-top:0">¿Cómo te avisamos?</h3>
-      <p class="lp-parrafo" style="margin-bottom:0">Por un canal privado propio,
-        directo a tu celular. No usamos tu WhatsApp ni lo compartimos con nadie. Tus
-        avisos quedan guardados en tu teléfono, listos cuando los necesites.</p>
-    </div>
+  <!-- ════════ A.6 · CANAL PRIVADO (impacto: verde selva) ════════ -->
+  <section class="lp-sec lp-sec--verde">
+    <h2 class="lp-h2">¿Cómo te avisamos?</h2>
+    <p class="lp-parrafo">Por un canal privado propio, directo a tu celular. No
+      usamos tu WhatsApp ni lo compartimos con nadie. Tus avisos quedan guardados en
+      tu teléfono, listos cuando los necesites.</p>
   </section>
 
-  <!-- ════════ A.7 · ¿POR QUÉ S/5? ════════ -->
-  <section class="lp-bloque">
-    <h2 class="lp-h2">¿Por qué cuesta solo S/5?</h2>
+  <!-- ════════ A.7 · ¿POR QUÉ S/5? (respiro: crema) ════════ -->
+  <section class="lp-sec lp-sec--crema">
+    <h2 class="lp-h2">¿Por qué cuesta solo <span class="hl-verde">S/5</span>?</h2>
     <p class="lp-parrafo">Porque la tecnología nos permite vigilar tu buzón de forma
       automática, sin costos altos. Queremos que cada negocio, grande o pequeño,
       pueda estar tranquilo por el precio de un refresco. Sin letra chica.</p>
   </section>
 
-  <!-- ════════ A.8 · TESTIMONIOS ════════ -->
-  <section class="lp-bloque">
+  <!-- ════════ A.8 · TESTIMONIOS (amazónica: celeste) ════════ -->
+  <section class="lp-sec lp-sec--cielo">
     <h2 class="lp-h2">Lo que dicen los negocios</h2>
-    <!-- PLACEHOLDER TESTIMONIOS: el usuario cargará los reales (foto, nombre,
-         negocio, frase y RUC autorizado). Estructura lista para rotar. -->
     {% set testimonios = [
       ('Pedro', 'Multiservicios Shevalche · Iquitos', 'Ya no me pierdo ninguna notificación.', '20615643735'),
       ('Rosa', 'Bodega La Esquina · Iquitos', 'Me avisaron de una esquela el mismo día. Me salvó de una multa.', '10456789012')] %}
     <div class="lp-testis">
       {% for nombre, negocio, frase, ruc in testimonios %}
-      <figure class="lp-testi tarjeta">
-        <div class="lp-testi-foto"><i class="ti ti-user"></i></div>
+      <figure class="lp-testi borde-chicha-{{ loop.index0 % 3 + 1 }}">
+        <!-- FOTO REAL del testimonio: pon la URL en src. Si no existe, onerror
+             revela el placeholder. -->
+        <div class="lp-testi-foto">
+          <img class="lp-testi-img" src="/static/img/testi-{{ loop.index }}.jpg"
+               alt="{{ nombre }}" onerror="this.remove()">
+          <span class="lp-testi-ph"><i class="ti ti-user"></i></span>
+        </div>
         <blockquote class="lp-testi-frase">“{{ frase }}”</blockquote>
         <figcaption>
-          <b>{{ nombre }}</b> <span class="muted">· {{ negocio }}</span>
+          <b>{{ nombre }}</b> <span class="lp-soft">· {{ negocio }}</span>
           <button class="lp-testi-i" data-nombre="{{ nombre }}" data-ruc="{{ ruc }}"
                   aria-label="Ver autorización"><i class="ti ti-info-circle"></i></button>
         </figcaption>
@@ -164,24 +179,27 @@
     </div>
   </section>
 
-  <!-- ════════ A.9 · ¿CÓMO PAGO? ════════ -->
-  <section class="lp-bloque">
+  <!-- ════════ A.9 · ¿CÓMO PAGO? (respiro: crema) ════════ -->
+  <section class="lp-sec lp-sec--crema">
     <h2 class="lp-h2">¿Cómo pago? ¿Dan comprobante?</h2>
     <p class="lp-parrafo">Pruebas 7 días gratis. Si te sirve, pagas con Yape o Plin
       —rápido y desde tu celular—. Sí, te damos tu comprobante. Si no te convence, no
       pagas nada y listo.</p>
   </section>
 
-  <!-- ════════ A.10 · CIERRE + CONTACTO ════════ -->
-  <section class="lp-cierre tarjeta acento" style="--acento:#1D9E75">
-    <h2 class="lp-h2" style="margin-top:0">Empieza tranquilo, hoy mismo</h2>
-    <a href="/activar" class="lp-cta">Activar mis alertas gratis</a>
-    <p class="muted" style="margin:14px 0 0">¿Tienes dudas?
+  <!-- ════════ A.10 · CIERRE + CONTACTO (impacto: verde selva) ════════ -->
+  <section class="lp-sec lp-sec--verde lp-cierre">
+    <h2 class="lp-h2">Empieza tranquilo, hoy mismo</h2>
+    <a href="/activar" class="lp-cta">
+      <span class="lp-cta-gancho">Más barato que una multa</span>
+      <span class="lp-cta-resp">¡Tocó y me apunto! →</span>
+    </a>
+    <p class="lp-cierre-dudas">¿Tienes dudas?
       <a href="https://wa.me/{{ whatsapp_soporte }}" target="_blank" rel="noopener">
         Escríbenos por WhatsApp</a>.</p>
   </section>
 
-  <footer class="lp-foot muted">alerta.pe · Hecho en Perú · Iquitos</footer>
+  <footer class="lp-foot">alerta.pe · Hecho en Perú · Iquitos</footer>
 </div>
 {% endblock %}
 
