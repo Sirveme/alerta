@@ -727,6 +727,83 @@ a.tarjeta-link { display:block; color:inherit; }
 .lp-sec--cielo .lp-h2 { color:#0F3D22; }
 .lp-sec--oscura .lp-h2, .lp-sec--verde .lp-h2 { color:var(--sol); }
 
+/* ══════════════════════════════════════════════════════════════════
+   SISTEMA DE IDENTIDAD (zAlerta-11a-identidad)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── PARTE 1 · LOGOTIPO "alerta.pe" en CSS (3 variantes regionales) ──
+   Wordmark de texto (NO imagen), estética afiche chicha. Pensados para
+   fondo OSCURO. Tamaño fluido con clamp. */
+.logo-selva, .logo-andino, .logo-costeno {
+  font-family:Georgia,"Times New Roman",serif; font-style:italic;
+  font-weight:700; letter-spacing:.005em; line-height:1; display:inline-block;
+  font-size:clamp(1.5rem, 7vw, 2.6rem); }
+.logo-selva i, .logo-andino i, .logo-costeno i { font-style:inherit; }
+
+/* 1) Selva Amazónica — verde neón, contorno sol, glow verde+celeste */
+.logo-selva { color:#26D07C; -webkit-text-stroke:1.4px #FCC014;
+  text-shadow:0 0 8px rgba(38,208,124,.65), 0 0 18px rgba(22,176,216,.4),
+              0 2px 0 rgba(10,46,28,.6); }
+.logo-selva i { -webkit-text-stroke-color:#16B0D8; color:#26D07C; }
+
+/* 2) Chicha Andino — degradado fucsia→naranja→sol, sombra dura escalonada */
+.logo-andino { background:linear-gradient(90deg,#E5337E,#F0612F,#FCC014);
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:#FCC014; /* fallback si no clip */
+  -webkit-text-stroke:1.4px #0A2E1C;
+  text-shadow:3px 3px 0 rgba(229,51,126,.85), 6px 6px 0 rgba(22,176,216,.7); }
+
+/* 3) Chicha Costeño — degradado sol→fucsia, contorno celeste, glow neón */
+.logo-costeno { background:linear-gradient(90deg,#FFD23F,#E5337E);
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:#FFD23F; /* fallback */
+  -webkit-text-stroke:1.2px #16B0D8;
+  filter:drop-shadow(0 0 7px rgba(22,176,216,.55)); }
+
+/* Logo discreto en el topbar del héroe (no roba alto) */
+.lp-logo-top { font-size:1.3rem; }
+
+/* ── PARTE 2 · MARCA DE AGUA (texto "alerta.pe" repetido, MUY tenue) ──
+   SVG inline tileado (sin imagen rasterizada). Solo en secciones oscuras. */
+.lp-watermark { position:relative; isolation:isolate; }
+.lp-watermark::before {
+  content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+  opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='130'%3E%3Ctext x='14' y='72' font-family='Georgia,serif' font-style='italic' font-weight='700' font-size='30' fill='%23F7F5EF' transform='rotate(-16 120 65)'%3Ealerta.pe%3C/text%3E%3C/svg%3E");
+  background-repeat:repeat; background-size:200px 108px; }
+.lp-watermark > * { position:relative; z-index:1; }
+
+/* ── PARTE 3 · FRANJAS DE ENTRADA (puntuación vibrante, no párrafo) ──
+   Banner al inicio de una sección con el título chicha encima; el contenido
+   que sigue respira en fondo claro. Sangra al borde de la sección. */
+.lp-franja { margin:-36px -18px 26px; padding:32px 20px 28px; text-align:center; }
+.franja-selva { background:
+  radial-gradient(60% 55% at 18% 22%, rgba(229,51,126,.38), transparent 60%),
+  radial-gradient(55% 55% at 86% 28%, rgba(22,176,216,.32), transparent 60%),
+  radial-gradient(70% 70% at 60% 115%, rgba(252,192,20,.26), transparent 60%),
+  linear-gradient(165deg,#0C3B24,#0A2E1C); }
+.franja-aura {
+  background:
+    radial-gradient(120% 95% at 50% 50%, transparent 26%, rgba(7,18,10,.62) 100%),
+    conic-gradient(from 200deg at 50% 50%,
+      #1E8F4E,#16B0D8,#6B2DB5,#E5337E,#F0612F,#FCC014,#1E8F4E); }
+/* Variantes regionales LISTAS para testimonios por región (aún no forzadas) */
+.franja-andina { background:
+  radial-gradient(60% 55% at 20% 25%, rgba(252,192,20,.32), transparent 60%),
+  radial-gradient(60% 55% at 85% 30%, rgba(22,176,216,.28), transparent 60%),
+  linear-gradient(165deg,#7A1B52,#3A1133); }
+.franja-costena { background:
+  radial-gradient(60% 55% at 25% 25%, rgba(255,210,63,.30), transparent 60%),
+  radial-gradient(60% 60% at 80% 70%, rgba(229,51,126,.30), transparent 60%),
+  linear-gradient(165deg,#0E5A6E,#08323D); }
+
+/* Título en estilo chicha (para usar SOBRE franjas oscuras/vibrantes) */
+.titulo-chicha { color:#FFFFFF; font-weight:800; margin:0;
+  text-shadow:0 1px 0 #0A2E1C, 0 0 12px rgba(252,192,20,.5),
+              2px 2px 0 rgba(229,51,126,.7); }
+.lp-franja .lp-franja-sub { margin:8px 0 0; color:rgba(247,245,239,.9);
+  font-size:.95rem; }
+
 /* Demo del celular (CSS). Marco verde-selva chicha; pantalla oscura para
    mantener legible la notificación de SUNAT. */
 .lp-demo { display:flex; justify-content:center; margin:18px auto 4px; }
