@@ -9,7 +9,7 @@
        para que se vea en la primera pantalla. -->
   <header class="lp-hero">
     <div class="lp-topbar">
-      <span class="lp-wordmark">alerta<b>.pe</b></span>
+      <span class="logo-selva lp-logo-top">alerta<i>.pe</i></span>
       {% if logueado %}<a href="/" class="lp-volver">Ir a mi panel ›</a>{% endif %}
     </div>
 
@@ -88,9 +88,12 @@
       tranquilos y al día, sin sustos. Por eso creé alerta.pe.”</p>
   </section>
 
-  <!-- ════════ A.3b · CONSEJOS / VIDEOS (impacto: oscura) ════════ -->
-  <section class="lp-sec lp-sec--oscura">
-    <h2 class="lp-h2 lp-h2--centro">Consejos que te conviene saber</h2>
+  <!-- ════════ A.3b · CONSEJOS / VIDEOS (impacto: oscura + marca de agua) ════════ -->
+  <section class="lp-sec lp-sec--oscura lp-watermark">
+    <!-- Franja de entrada "aura chicha" con el título chicha encima -->
+    <div class="lp-franja franja-aura">
+      <h2 class="lp-h2 titulo-chicha">Consejos que te conviene saber</h2>
+    </div>
     <div class="lp-videos">
       {% set videos = [
         ('¿Qué pasa si ignoras una notificación de SUNAT?', '1:20'),
@@ -155,9 +158,15 @@
       pueda estar tranquilo por el precio de un refresco. Sin letra chica.</p>
   </section>
 
-  <!-- ════════ A.8 · TESTIMONIOS (amazónica: celeste) ════════ -->
-  <section class="lp-sec lp-sec--cielo">
-    <h2 class="lp-h2">Lo que dicen los negocios</h2>
+  <!-- ════════ A.8 · TESTIMONIOS — franja de entrada (selva) + respiro ════════
+       Los testimonios iniciales son de la SELVA (Iquitos) → franja-selva.
+       Para testimonios de otras regiones, usar .franja-andina / .franja-costena
+       (ya listas en el CSS) en su propia franja de entrada. -->
+  <section class="lp-sec lp-sec--crema">
+    <div class="lp-franja franja-selva">
+      <h2 class="lp-h2 titulo-chicha">Lo que dicen los negocios</h2>
+      <p class="lp-franja-sub">Negocios reales de la selva, ya tranquilos.</p>
+    </div>
     {% set testimonios = [
       ('Pedro', 'Multiservicios Shevalche · Iquitos', 'Ya no me pierdo ninguna notificación.', '20615643735'),
       ('Rosa', 'Bodega La Esquina · Iquitos', 'Me avisaron de una esquela el mismo día. Me salvó de una multa.', '10456789012')] %}
@@ -190,8 +199,8 @@
       pagas nada y listo.</p>
   </section>
 
-  <!-- ════════ A.10 · CIERRE + CONTACTO (impacto: verde selva) ════════ -->
-  <section class="lp-sec lp-sec--verde lp-cierre">
+  <!-- ════════ A.10 · CIERRE + CONTACTO (impacto: verde selva + marca de agua) ════════ -->
+  <section class="lp-sec lp-sec--verde lp-cierre lp-watermark">
     <h2 class="lp-h2">Empieza tranquilo, hoy mismo</h2>
     <a href="/activar" class="lp-cta">
       <span class="lp-cta-gancho">Solo S/5 para que NO me multen</span>
