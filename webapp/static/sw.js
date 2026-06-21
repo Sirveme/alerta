@@ -5,7 +5,7 @@
    Push: handler listo; el ENVÍO real es una fase aparte.
    ═══════════════════════════════════════════════════════════════════ */
 
-const CACHE = 'alertape-v8';
+const CACHE = 'alertape-v11';
 const ASSETS = [
   '/static/css/app.css',
   '/static/js/app.js',
@@ -57,27 +57,44 @@ self.addEventListener('fetch', (e) => {
   }
 });
 
-// ── Push (zAlerta-07): muestra la notificación enviada por el worker ──
+// ── Push (zAlerta-07 / zAlerta-12): muestra el aviso enviado por el worker ──
 self.addEventListener('push', (e) => {
-  let data = { title: 'alerta.pe', body: 'Tienes una novedad de SUNAT.', url: '/' };
+  let data = { title: 'alerta.pe', body: 'Tienes una novedad de SUNAT.', url: '/resumen' };
   try { if (e.data) data = e.data.json(); } catch (_) {}
-  e.waitUntil(self.registration.showNotification(data.title || 'alerta.pe', {
+  const opts = {
     body: data.body || '',
     icon: '/static/img/icono.svg',
     badge: '/static/img/icono.svg',
-    data: data.url || '/',
-  }));
+    data: { url: data.url || '/resumen' },
+  };
+  // Acciones GRACIAS / ENTRAR (si el navegador las soporta). Si no, al tocar
+  // se abre la app (equivale a ENTRAR) y el GRACIAS se ofrece dentro de la app.
+  if (data.acciones) {
+    opts.actions = [
+      { action: 'gracias', title: 'GRACIAS' },
+      { action: 'entrar', title: 'ENTRAR' },
+    ];
+  }
+  e.waitUntil(self.registration.showNotification(data.title || 'alerta.pe', opts));
 });
 
-// Al tocar: enfocar una pestaña de alerta.pe ya abierta, o abrir una nueva
-// en la pantalla de bienvenida/resumen.
+// Al tocar: GRACIAS registra la lectura (métrica) sin abrir; ENTRAR / toque
+// normal abre la WebApp en el resumen.
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const destino = e.notification.data || '/';
+  const destino = (e.notification.data && e.notification.data.url) || '/resumen';
+
+  if (e.action === 'gracias') {
+    e.waitUntil(
+      fetch('/api/alerta/vista', { method: 'POST', credentials: 'include' })
+        .catch(() => {}));
+    return;   // GRACIAS no abre la app
+  }
+
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
       for (const w of wins) {
-        if ('focus' in w) { w.navigate?.(destino); return w.focus(); }
+        if ('focus' in w) { w.navigate && w.navigate(destino); return w.focus(); }
       }
       return clients.openWindow(destino);
     })
