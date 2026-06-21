@@ -1301,6 +1301,9 @@ a.tarjeta-link { display:block; color:inherit; }
 .pay-titular { font-weight:600; flex:1; }
 .pay-hora { color:var(--texto-suave); font-size:.85rem; }
 .pay-mt { font-weight:700; color:#1D9E75; }
+.pay-simio { flex-basis:100%; margin-top:6px; color:#1D9E75; font-weight:700;
+  font-size:.85rem; text-align:right; }
+.pay-transferir { margin-top:8px; padding-top:14px; border-top:1px solid var(--borde); }
 
 .pay-estado { margin-top:12px; font-size:.92rem; font-weight:600; min-height:1.1em; text-align:center; }
 .pay-estado.no { color:var(--u-urgente); } .pay-estado.warn { color:var(--u-importante); }
