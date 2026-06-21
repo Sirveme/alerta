@@ -1225,9 +1225,95 @@ a.tarjeta-link { display:block; color:inherit; }
   background:color-mix(in srgb,var(--u-importante) 12%,transparent);
   border:1px solid color-mix(in srgb,var(--u-importante) 40%,transparent); }
 
-/* P3 · empresario: desconectar RUC */
-.emp-bloque { margin-bottom:12px; }
-.emp-desconectar { margin-top:4px; background:none; border:none; cursor:pointer;
-  color:var(--texto-suave); font-size:.8rem; display:inline-flex; align-items:center;
-  gap:5px; padding:4px 2px; }
+/* P3 · empresario: acciones (actualizar / desconectar) */
+.emp-bloque { margin-bottom:14px; }
+.emp-acciones { display:flex; gap:14px; flex-wrap:wrap; margin-top:5px; }
+.emp-accion { background:none; border:none; cursor:pointer; color:var(--texto-suave);
+  font-size:.8rem; display:inline-flex; align-items:center; gap:5px; padding:4px 2px; }
+.emp-actualizar:hover { color:var(--marca); }
 .emp-desconectar:hover { color:var(--u-urgente); }
+.ec-estado { margin-top:8px; font-size:.88rem; font-weight:600; min-height:1.1em; }
+.ec-estado.ok { color:var(--u-aldia); } .ec-estado.no { color:var(--u-urgente); }
+.ec-estado.run { color:var(--texto-suave); }
+
+/* ══════════════════════════════════════════════════════════════════
+   zAlerta-13 · Recuérdame, pulse "Qué hacer", checkbox notorio, /resumen
+   ══════════════════════════════════════════════════════════════════ */
+/* P3.1 · pulse/latido sutil en los botones "Qué hacer" */
+@keyframes pulseQ {
+  0%,100% { box-shadow:0 0 0 0 color-mix(in srgb,var(--marca) 45%,transparent); }
+  50%     { box-shadow:0 0 0 5px color-mix(in srgb,var(--marca) 0%,transparent); }
+}
+.rsm-b, .demo-b { animation:pulseQ 2.4s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .rsm-b, .demo-b { animation:none; } }
+
+/* P3.2 · checkbox de responsabilidad MÁS notorio + rojo/shake al fallar */
+.act-resp { border-width:2px; border-color:color-mix(in srgb,var(--marca) 40%,var(--borde)); }
+.act-resp input { width:22px; height:22px; }
+@keyframes shake {
+  0%,100% { transform:translateX(0); } 20% { transform:translateX(-6px); }
+  40% { transform:translateX(6px); } 60% { transform:translateX(-4px); }
+  80% { transform:translateX(4px); }
+}
+.act-resp--falta { animation:shake .4s ease; }
+
+/* P1 · control "Recuérdame esto" en /resumen */
+.rsm-recordar { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  margin-top:8px; font-size:.82rem; }
+.rsm-recordar-lbl { color:var(--texto-suave); display:inline-flex; align-items:center; gap:5px; }
+.rsm-recordar-lbl .ti { color:var(--u-importante); }
+.rsm-rec-sel { flex:1; min-width:160px; padding:7px 9px; background:var(--superficie-2);
+  color:var(--texto); border:1px solid var(--borde); border-radius:var(--radio);
+  min-height:auto; }
+.rsm-rec-ok { color:var(--u-aldia); font-weight:600; }
+
+/* P3.3 · /resumen: volver + estado vacío tranquilizador */
+.rsm-volver { display:inline-flex; align-items:center; gap:6px; color:var(--texto-suave);
+  text-decoration:none; font-size:.9rem; margin-bottom:8px; }
+.rsm-volver:hover { color:var(--texto); }
+.rsm-vacio { text-align:center; padding:28px 20px; }
+.rsm-vacio-icono { font-size:42px; color:var(--u-aldia); }
+.rsm-vacio-tit { font-weight:700; font-size:1.15rem; margin:8px 0 4px; }
+.rsm-vacio .btn { margin-top:14px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   zAlerta-14 · Pantalla de pago (PagoOK)
+   ══════════════════════════════════════════════════════════════════ */
+.pay { max-width:520px; margin:0 auto; }
+.pay-bloque { margin-top:16px; }
+.tarjeta.pay-bloque { text-align:center; }
+.pay-monto { font-size:2.4rem; font-weight:800; color:#1D9E75; line-height:1; }
+.pay-instru { margin:10px 0 4px; }
+.pay-numero { font-size:1.6rem; font-weight:800; letter-spacing:.06em;
+  color:var(--texto); background:var(--superficie-2); border:1.5px dashed var(--borde);
+  border-radius:var(--radio); padding:10px; margin:6px 0 4px; }
+.pay-yapague { margin-top:14px; }
+
+.pay-opcion { display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+  background:var(--superficie); border:1.5px solid var(--borde); border-radius:var(--radio);
+  padding:12px; margin-bottom:10px; cursor:pointer; }
+.pay-opcion:hover { border-color:var(--marca); }
+.pay-opcion:disabled { opacity:.5; }
+.pay-met { font-size:.72rem; font-weight:800; color:#fff; border-radius:999px;
+  padding:3px 9px; flex:0 0 auto; background:var(--texto-suave); }
+.pay-met--yape { background:#742384; }
+.pay-met--plin { background:#00bcd4; }
+.pay-titular { font-weight:600; flex:1; }
+.pay-hora { color:var(--texto-suave); font-size:.85rem; }
+.pay-mt { font-weight:700; color:#1D9E75; }
+
+.pay-estado { margin-top:12px; font-size:.92rem; font-weight:600; min-height:1.1em; text-align:center; }
+.pay-estado.no { color:var(--u-urgente); } .pay-estado.warn { color:var(--u-importante); }
+.pay-estado.run { color:var(--texto-suave); }
+.pay-reintentar { background:var(--marca); color:#fff; border:none; border-radius:8px;
+  padding:6px 12px; font-weight:600; cursor:pointer; margin-left:8px; }
+
+.pay-celebra { max-width:520px; margin:18px auto 0; }
+.pay-celebra-card { background:var(--superficie); padding:24px; text-align:center; border-radius:var(--radio); }
+.pay-celebra-icono { font-size:44px; color:var(--sol, #FCC014); }
+.pay-celebra-tit { font-size:1.4rem; font-weight:800; margin:8px 0; }
+.pay-celebra-vence { font-size:1rem; margin-bottom:8px; }
+.pay-celebra-gracias { color:var(--texto-suave); }
+.pay-pagook { margin-top:14px; padding:10px; border-radius:12px; font-size:.82rem;
+  background:color-mix(in srgb,#16B0D8 12%,transparent);
+  border:1px solid color-mix(in srgb,#16B0D8 40%,transparent); }
