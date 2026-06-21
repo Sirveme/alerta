@@ -17,15 +17,31 @@
     <p class="pay-instru">Yapéa o Plinea <b>S/{{ monto }} exactos</b> al número:</p>
     <div class="pay-numero">{{ numero_cobro }}</div>
     <p class="muted" style="font-size:.85rem">A nombre de Perú Sistemas Pro.</p>
-    <button class="lp-cta act-cta-full pay-yapague" id="pay-yapague">
-      <span class="lp-cta-resp">Ya pagué</span>
-      <span class="lp-cta-gancho">Validar mi pago al instante</span>
-    </button>
+
+    <!-- Dos caminos -->
+    <div class="pay-caminos" id="pay-caminos">
+      <button class="lp-cta act-cta-full" id="pay-ahora">
+        <span class="lp-cta-resp">Voy a pagar ahora</span>
+        <span class="lp-cta-gancho">Lo validamos al instante</span>
+      </button>
+      <button class="btn btn--sec btn--bloque" id="pay-antes" style="margin-top:10px">
+        Ya pagué antes</button>
+    </div>
+
+    <!-- Flujo A: tras "Voy a pagar ahora" -->
+    <div class="pay-transferir" id="pay-transferir" hidden>
+      <p class="pay-instru"><b>Yapéa/Plinea S/{{ monto }} ahora</b> al
+        <b>{{ numero_cobro }}</b> y vuelve aquí.</p>
+      <button class="lp-cta act-cta-full" id="pay-transferi">
+        <span class="lp-cta-resp">Ya transferí</span>
+        <span class="lp-cta-gancho">Buscar mi pago</span>
+      </button>
+    </div>
   </section>
 
   <!-- Resultados de la búsqueda de pagos -->
   <section class="pay-bloque" id="pay-lista-wrap" hidden>
-    <h3 class="lp-h3" style="margin-top:0">¿Cuál es tu pago?</h3>
+    <h3 class="lp-h3" style="margin-top:0" id="pay-lista-tit">¿Cuál es tu pago?</h3>
     <p class="muted" style="margin:-4px 0 10px;font-size:.85rem">Reconócelo por tu
       nombre y la hora de tu voucher.</p>
     <div id="pay-lista"></div>
