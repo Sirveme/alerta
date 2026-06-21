@@ -269,6 +269,12 @@ class Usuario(Base, TimestampMixin):
     # Cargo declarado del empresario en su negocio (zAlerta-11a B.5): dueño /
     # administrador / gerente / encargado. Opcional, solo informativo.
     cargo: Mapped[str | None] = mapped_column(String(30))
+    # Declaración de responsabilidad del acceso (zAlerta-12 P3): evidencia de que
+    # aceptó estar autorizado a acceder al RUC. Timestamp + RUC declarado.
+    responsabilidad_aceptada_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    responsabilidad_ruc: Mapped[str | None] = mapped_column(String(11))
+    # Métrica de lectura del push (botón GRACIAS, zAlerta-12 P1.d).
+    ultima_alerta_vista_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     debe_cambiar_clave: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Empresario cuya clave aún la entrega Soporte manualmente (zAlerta-06 C.4).
@@ -677,3 +683,29 @@ class SolicitudValidacionCredencial(Base):
     creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
     procesado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 13. LeadActivacion — captura temprana del alta del empresario (zAlerta-11bb B)
+# ═════════════════════════════════════════════════════════════════════
+class LeadActivacion(Base):
+    """RUC + WhatsApp capturados en /activar ANTES de terminar el alta.
+
+    Si el empresario escribe su RUC y WhatsApp pero no completa la activación,
+    igual queda un lead recuperable (no perder el contacto). Upsert por RUC.
+    El WhatsApp se guarda normalizado (con 51 antepuesto). NO es multi-tenant:
+    es un prospecto, todavía no tiene organización.
+    """
+    __tablename__ = "leads_activacion"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    ruc: Mapped[str] = mapped_column(String(11), unique=True, nullable=False, index=True)
+    whatsapp: Mapped[str | None] = mapped_column(String(20))
+    razon_social: Mapped[str | None] = mapped_column(String(255))
+    # 'lead' mientras no termine; 'activado' cuando completa el alta.
+    estado: Mapped[str] = mapped_column(String(20), default="lead", nullable=False)
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+    actualizado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, onupdate=ahora_lima, nullable=False)

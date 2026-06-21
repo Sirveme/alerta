@@ -36,10 +36,16 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from db import get_session
+from datetime import timedelta
+
 from models import (
     Contribuyente, EstadoContribuyente, Notificacion,
     SolicitudValidacionCredencial, EstadoValidacion, ahora_lima,
+    EstudioContable, CredencialSol, EstadoSuscripcion, TipoCuenta,
 )
+
+# Días de prueba (zAlerta-11c D): arrancan al CONFIRMAR la conexión, no antes.
+DIAS_PRUEBA_EMPRESARIO = 7
 # Reutilizamos la lógica validada del orquestador (scraper + ingesta + dedup).
 from run_scraper import procesar_contribuyente, log, FRESCURA_HORAS_DEFAULT
 from cifrado import descifrar_clave_sol
@@ -52,6 +58,46 @@ TZ_LIMA = ZoneInfo("America/Lima")
 INTERVALO_SEGUNDOS = int(os.getenv("WORKER_INTERVALO_SEG", "90"))
 FRESCURA_HORAS = int(os.getenv("WORKER_FRESCURA_HORAS", str(FRESCURA_HORAS_DEFAULT)))
 
+# Ventana NOCTURNA de lectura (zAlerta-12 P1.a): la conexión a SUNAT es mejor de
+# noche. El ciclo de FONDO (scrapeo masivo) solo corre dentro de esta franja
+# (hora Lima). Las validaciones y las solicitudes manuales (botón "Actualizar
+# ahora") corren SIEMPRE. Configurable por env. Si INICIO==FIN, fondo 24h.
+VENTANA_INICIO = int(os.getenv("WORKER_VENTANA_INICIO", "23"))   # 23:00
+VENTANA_FIN = int(os.getenv("WORKER_VENTANA_FIN", "6"))          # 06:00
+
+
+def _en_ventana_nocturna() -> bool:
+    if VENTANA_INICIO == VENTANA_FIN:
+        return True   # sin restricción
+    h = datetime.now(TZ_LIMA).hour
+    if VENTANA_INICIO < VENTANA_FIN:
+        return VENTANA_INICIO <= h < VENTANA_FIN
+    # Franja que cruza medianoche (ej. 23 → 6)
+    return h >= VENTANA_INICIO or h < VENTANA_FIN
+
+
+async def _arrancar_prueba_si_corresponde(session, contrib) -> None:
+    """Prueba diferida del empresario (zAlerta-11c D): si este contribuyente
+    pertenece a una cuenta-empresario en PRUEBA cuyo vence_at aún es NULL y el
+    último scrapeo fue OK (login real confirmado), AHORA arranca la prueba:
+    fija vence_at = hoy+7 y sella la credencial como verificada. Idempotente
+    (si ya tenía vence_at, no hace nada). No toca el motor de login."""
+    if not contrib.ultimo_scrapeo_ok:
+        return
+    estudio = await session.get(EstudioContable, contrib.estudio_id)
+    if (estudio and estudio.tipo_cuenta == TipoCuenta.EMPRESARIO.value
+            and estudio.estado_suscripcion == EstadoSuscripcion.PRUEBA.value
+            and estudio.suscripcion_vence_at is None):
+        ahora = ahora_lima()
+        estudio.suscripcion_vence_at = ahora + timedelta(days=DIAS_PRUEBA_EMPRESARIO)
+        cred = await session.scalar(
+            select(CredencialSol).where(
+                CredencialSol.contribuyente_id == contrib.id))
+        if cred and cred.ultimo_login_ok_at is None:
+            cred.ultimo_login_ok_at = ahora
+        log(f"  {contrib.ruc}: prueba de 7 días iniciada (conexión confirmada).",
+            "OK")
+
 
 async def _procesar_y_notificar(session, contrib, forzar: bool) -> None:
     """Scrapea/ingesta y, si aparecieron notificaciones NUEVAS, envía push.
@@ -63,6 +109,8 @@ async def _procesar_y_notificar(session, contrib, forzar: bool) -> None:
         select(func.count(Notificacion.id)).where(
             Notificacion.contribuyente_id == contrib.id)) or 0
     await procesar_contribuyente(session, contrib, FRESCURA_HORAS, forzar=forzar)
+    # Prueba diferida del empresario: si el login real recién se confirmó, arranca.
+    await _arrancar_prueba_si_corresponde(session, contrib)
     n_despues = await session.scalar(
         select(func.count(Notificacion.id)).where(
             Notificacion.contribuyente_id == contrib.id)) or 0
@@ -158,10 +206,16 @@ async def _procesar_fondo(session) -> int:
 async def ciclo() -> None:
     """Un ciclo: primero solicitudes manuales (prioridad), luego frescura."""
     async with get_session() as session:
+        # Validaciones y solicitudes manuales: SIEMPRE (no esperan a la noche).
         await _procesar_validaciones_credencial(session)
         await _procesar_solicitudes_manuales(session)
-        n = await _procesar_fondo(session)
-    log(f"Ciclo completo ({n} activo(s) revisado(s)).", "OK")
+        # Lectura masiva de buzones: SOLO en la ventana nocturna (zAlerta-12 P1.a).
+        if _en_ventana_nocturna():
+            n = await _procesar_fondo(session)
+            log(f"Ciclo completo ({n} activo(s) revisado(s)).", "OK")
+        else:
+            log(f"Fuera de ventana nocturna ({VENTANA_INICIO}h–{VENTANA_FIN}h "
+                "Lima): fondo en pausa; validaciones/manuales activas.", "INFO")
 
 
 async def main() -> None:

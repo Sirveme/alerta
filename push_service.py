@@ -116,13 +116,15 @@ async def notificar_nuevas(session, contrib: Contribuyente, n_nuevas: int) -> di
         logger.warning("push: VAPID_PRIVATE_KEY no configurada; push desactivado.")
         return {"usuarios": 0, "enviadas": 0}
 
-    razon = contrib.razon_social or contrib.ruc
-    plural = "" if n_nuevas == 1 else "es"
+    plural = "" if n_nuevas == 1 else "s"
     payload = json.dumps({
-        "title": f"alerta.pe — {razon}",
-        "body": (f"{n_nuevas} nueva{plural} notificaci{'ón' if n_nuevas == 1 else 'ones'} "
-                 f"de SUNAT. Entra para verlas."),
-        "url": "/",   # abre la pantalla de bienvenida/resumen
+        # Identidad alerta.pe (NO SUNAT). Cuerpo breve.
+        "title": "Novedades en tu Buzón SUNAT",
+        "body": f"Tienes {n_nuevas} aviso{plural} nuevo{plural}. Toca para ver.",
+        "url": "/resumen",   # ENTRAR → tabla resumen (offline tras 1ª entrada)
+        # El service worker añade las acciones GRACIAS / ENTRAR si el navegador
+        # las soporta (zAlerta-12 P1.b).
+        "acciones": True,
     })
 
     enviadas = 0
