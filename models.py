@@ -216,6 +216,8 @@ class EstudioContable(Base, TimestampMixin):
     estado_suscripcion: Mapped[str] = mapped_column(
         String(20), default=EstadoSuscripcion.PRUEBA.value, nullable=False)
     suscripcion_vence_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Fecha del último pago que activó/renovó la suscripción (zAlerta-14).
+    fecha_ultimo_pago: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # WhatsApp de contacto (con código país). Clave para el onboarding viral
     # del empresario (zAlerta-06 A.4 / C).
@@ -329,6 +331,10 @@ class Contribuyente(Base, TimestampMixin):
     # Control de scraping
     ultimo_scrapeo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ultimo_scrapeo_ok: Mapped[bool | None] = mapped_column(Boolean)
+    # Aviso (push) "tu credencial dejó de servir" enviado UNA vez al entrar en
+    # ERROR_CREDENCIAL (zAlerta-13 P2). Se limpia al reconectar.
+    credencial_error_avisada: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False)
 
     # Actualización bajo demanda (zAlerta-04): el botón "Actualizar ahora" de la
     # WebApp NO scrapea en el proceso web (liviano, sin Playwright). Marca este
@@ -709,3 +715,79 @@ class LeadActivacion(Base):
         DateTime(timezone=True), default=ahora_lima, nullable=False)
     actualizado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, onupdate=ahora_lima, nullable=False)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 14. Recordatorio — "Recuérdame esto" (zAlerta-13 P1)
+# ═════════════════════════════════════════════════════════════════════
+class ModoRecordatorio(str, enum.Enum):
+    """Cómo insistir con una notificación hasta su vencimiento."""
+    PROXIMOS_3 = "proximos_3"   # los próximos 3 días (desde que lo activó)
+    ULTIMOS_3 = "ultimos_3"     # los últimos 3 días antes de vencer
+    HASTA_VENCER = "hasta_vencer"  # todos los días hasta el vencimiento
+
+
+class Recordatorio(Base):
+    """Re-notificación de una notificación a un usuario hasta su vencimiento.
+
+    El worker revisa los activos y reenvía un Web Push según el modo y la fecha
+    de hoy vs `fecha_vencimiento`, máximo una vez al día (ultimo_envio_at) y solo
+    en los horarios definidos. Multi-tenant (estudio_id). Único por
+    (notificacion_id, usuario_id): re-activar actualiza el modo.
+    """
+    __tablename__ = "recordatorios"
+    __table_args__ = (
+        UniqueConstraint("notificacion_id", "usuario_id", name="uq_recordatorio"),
+        Index("ix_recordatorio_activo", "activo"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    estudio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    notificacion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    usuario_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+
+    modo: Mapped[ModoRecordatorio] = mapped_column(
+        Enum(ModoRecordatorio, native_enum=False, length=20), nullable=False)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Copiada de la notificación para calcular sin re-consultarla.
+    fecha_vencimiento: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ultimo_envio_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# 15. Pago — pago Yape/Plin validado vía PagoOK que activó una suscripción
+#     (zAlerta-14). Trazabilidad + base para la futura emisión (Facturalo).
+# ═════════════════════════════════════════════════════════════════════
+class Pago(Base):
+    __tablename__ = "pagos"
+    __table_args__ = (
+        # Un pago de PagoOK activa UNA sola suscripción (idempotencia local;
+        # el reclamo atómico en PagoOK es la garantía dura).
+        UniqueConstraint("pagook_id", name="uq_pago_pagook"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    estudio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+
+    pagook_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    codigo_operacion: Mapped[str | None] = mapped_column(String(64))
+    metodo: Mapped[str | None] = mapped_column(String(20))     # yape / plin
+    monto: Mapped[str | None] = mapped_column(String(20))      # "5.00"
+    titular: Mapped[str | None] = mapped_column(String(160))
+    recibido_en: Mapped[str | None] = mapped_column(String(40))  # del voucher
+    # Vigencia que dejó este pago (para conciliación).
+    vence_resultante: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
