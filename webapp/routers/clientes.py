@@ -84,7 +84,7 @@ def construir_invitacion_whatsapp(
             "soporte_link": soporte_link}
 
 
-async def consultar_ruc_api(session, ruc: str) -> dict:
+async def consultar_ruc_api(session, ruc: str, timeout: float = 8.0) -> dict:
     """Trae {ruc, razon_social, estado} para un RUC (zAlerta-10 D).
 
     1) Mira la caché local (tabla ruc_cache, padrón incremental propio).
@@ -94,6 +94,9 @@ async def consultar_ruc_api(session, ruc: str) -> dict:
     Devuelve siempre un dict {ruc, razon_social, estado, origen}. Si la API no
     devuelve datos, razon_social = None (la UI deja editar a mano: estado ⚠️).
     Nunca lanza: ante error de red devuelve razon_social None (no bloquea).
+
+    `timeout` permite un corte corto (BUG 2 zAlerta-11b): en /activar usamos
+    3-4s para no hacer esperar al empresario si la API RUC está caída.
     """
     ruc = (ruc or "").strip()
     # 1) Caché
@@ -106,7 +109,7 @@ async def consultar_ruc_api(session, ruc: str) -> dict:
     razon_social = estado = None
     if APIS_NET_PE_TOKEN:
         try:
-            async with httpx.AsyncClient(timeout=8.0) as cli:
+            async with httpx.AsyncClient(timeout=timeout) as cli:
                 r = await cli.get(
                     APIS_NET_PE_URL,
                     params={"numero": ruc},
