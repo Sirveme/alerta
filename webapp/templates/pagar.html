@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Activar mi suscripción · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="pay" id="pay" data-numero="{{ numero_cobro }}" data-monto="{{ monto }}">
+  <a href="/" class="rsm-volver"><i class="ti ti-arrow-left"></i> Volver</a>
+  <h1 class="titulo-pagina" style="margin:0 0 4px">Activa tu suscripción</h1>
+  {% if vence_actual %}
+  <p class="subtitulo">Tu alerta.pe está {{ estado_suscripcion }} hasta el
+    <b>{{ vence_actual }}</b>. Paga para sumar otro mes.</p>
+  {% else %}
+  <p class="subtitulo">Paga S/{{ monto }} al mes y sigue tranquilo.</p>
+  {% endif %}
+
+  <!-- Instrucción de pago -->
+  <section class="tarjeta act-borde act-borde--verde pay-bloque" style="--acento:#1D9E75">
+    <div class="pay-monto">S/ {{ monto }}</div>
+    <p class="pay-instru">Yapéa o Plinea <b>S/{{ monto }} exactos</b> al número:</p>
+    <div class="pay-numero">{{ numero_cobro }}</div>
+    <p class="muted" style="font-size:.85rem">A nombre de Perú Sistemas Pro.</p>
+    <button class="lp-cta act-cta-full pay-yapague" id="pay-yapague">
+      <span class="lp-cta-resp">Ya pagué</span>
+      <span class="lp-cta-gancho">Validar mi pago al instante</span>
+    </button>
+  </section>
+
+  <!-- Resultados de la búsqueda de pagos -->
+  <section class="pay-bloque" id="pay-lista-wrap" hidden>
+    <h3 class="lp-h3" style="margin-top:0">¿Cuál es tu pago?</h3>
+    <p class="muted" style="margin:-4px 0 10px;font-size:.85rem">Reconócelo por tu
+      nombre y la hora de tu voucher.</p>
+    <div id="pay-lista"></div>
+  </section>
+
+  <div class="pay-estado" id="pay-estado" aria-live="polite"></div>
+</div>
+
+<!-- Celebración tras activar (la arma pagar.js) -->
+<div class="pay-celebra" id="pay-celebra" hidden></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pagar.js"></script>
+{% endblock %}
