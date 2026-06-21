@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titulo %}¡Bienvenido! · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="bv">
+  <div class="bv-marca"><span class="logo-selva bv-logo">alerta<i>.pe</i></span></div>
+
+  {% if estado == 'conecto' %}
+  <!-- D.1 · Conectó OK -->
+  <div class="bv-card bv-ok borde-chicha-1">
+    <div class="bv-icono bv-icono--ok"><i class="ti ti-circle-check"></i></div>
+    <h1 class="bv-tit">¡Bienvenido!</h1>
+    <p class="bv-txt">Serás notificado en estos horarios:
+      <b>{{ horarios }}</b>.</p>
+    <p class="bv-semilla">Cuando te suscribas al <b>plan Fundadores</b> (S/5 al mes),
+      podrás variar el horario de tus alertas.</p>
+    <a href="/" class="lp-cta bv-cta"><span class="lp-cta-resp">Ir a mis alertas →</span></a>
+  </div>
+
+  {% elif estado == 'pendiente' %}
+  <!-- D.2 · No conectó: corregir credenciales -->
+  <div class="bv-card bv-pend borde-chicha-2" id="bv-pend"
+       data-ruc="{{ ruc }}">
+    <div class="bv-icono bv-icono--pend"><i class="ti ti-clock-bolt"></i></div>
+    <h1 class="bv-tit">Tenemos tus datos</h1>
+    <p class="bv-txt">Intentaremos conectar <b>1 día más</b>. Si ingresaste mal tus
+      credenciales, corrígelas aquí:</p>
+    <div class="campo"><label>RUC</label>
+      <input id="bv-ruc" value="{{ ruc }}" disabled></div>
+    <div class="campo"><label>Usuario SOL</label>
+      <input id="bv-user" autocomplete="off" value="{{ usuario_sol }}"></div>
+    <div class="campo"><label>Clave SOL</label>
+      <input id="bv-clave" type="password" autocomplete="new-password"></div>
+    <div class="bv-conx" id="bv-conx" aria-live="polite"></div>
+    <p class="bv-txt muted">Te avisaremos en cuanto validemos la conexión. Tus
+      <b>7 días de prueba se inician desde que te confirmemos la conexión</b>.</p>
+    <a href="/" class="lp-cta bv-cta"><span class="lp-cta-resp">Ir a mi panel →</span></a>
+  </div>
+
+  {% else %}
+  <!-- D.3 · Pidió al contador -->
+  <div class="bv-card bv-cont borde-chicha-3">
+    <div class="bv-icono bv-icono--cont"><i class="ti ti-send"></i></div>
+    <h1 class="bv-tit">Le enviamos el mensaje a tu contador</h1>
+    <p class="bv-txt">Te avisaremos en cuanto conecte tu buzón. Tus
+      <b>7 días de prueba se inician desde que se confirme la conexión</b>.</p>
+    <a href="/" class="lp-cta bv-cta"><span class="lp-cta-resp">Ir a mi panel →</span></a>
+  </div>
+  {% endif %}
+
+  <!-- F · Disclaimer legal -->
+  <p class="bv-legal">SUNAT es una institución pública y no está asociada ni
+    promueve los servicios de alerta.pe. alerta.pe facilita la difusión de
+    notificaciones usando las propias credenciales de sus clientes, quienes son
+    los únicos responsables de la información notificada por SUNAT.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if estado == 'pendiente' %}
+<script>
+  // D.2 · corregir credenciales y revalidar al blur (con límite de polling).
+  (function () {
+    const user = document.getElementById('bv-user');
+    const clave = document.getElementById('bv-clave');
+    const conx = document.getElementById('bv-conx');
+    if (!clave) return;
+    function pinta(cls, txt) { conx.className = 'bv-conx ' + cls; conx.textContent = txt; }
+    let token = 0;
+    async function revalidar() {
+      const u = (user.value || '').trim(), c = clave.value;
+      if (!u || !c) return;
+      const t = ++token;
+      pinta('run', 'Comprobando…');
+      let id;
+      try {
+        const j = await (await fetch('/api/bienvenida/credenciales', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario_sol: u, clave_sol: c }) })).json();
+        if (!j.ok) throw new Error(); id = j.id;
+      } catch (_) { pinta('', 'No pudimos comprobar ahora; seguiremos intentando.'); return; }
+      let n = 0;
+      const iv = setInterval(async () => {
+        n++;
+        if (t !== token) { clearInterval(iv); return; }
+        let est; try { est = await (await fetch('/contribuyentes/validar-credenciales/' + id)).json(); } catch (_) { est = null; }
+        if (est && est.ok && est.listo) {
+          clearInterval(iv);
+          if (est.estado === 'conecta') pinta('ok', '✓ ¡Conectado! Tu prueba de 7 días ya arrancó.');
+          // si no conecta: silencio (no frustrar); seguimos intentando en background.
+        } else if (n >= 6) { clearInterval(iv); }   // E · límite ~30s
+      }, 5000);
+    }
+    clave.addEventListener('blur', revalidar);
+    user.addEventListener('blur', () => { if (clave.value) revalidar(); });
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -3,15 +3,30 @@
 {% block contenido %}
 <div class="act" id="act" data-ruc-pre="{{ ruc_pre or '' }}"
      data-wa-soporte="{{ whatsapp_soporte }}">
-  <div class="act-marca"><span class="marca-punto"></span> alerta.pe</div>
-  <h1 class="act-titulo">Activa tus alertas</h1>
-  <p class="muted">7 días gratis · sin pagar nada. Conecta tu RUC en menos de un minuto.</p>
 
-  <!-- ════════ B.1 · RUC (borde verde) ════════ -->
-  <section class="tarjeta acento act-bloque" style="--acento:#1D9E75">
+  <!-- Título + logo chicha (misma marca que la landing) -->
+  <h1 class="act-titulo">
+    Activa tus alertas
+    <span class="logo-selva act-logo">alerta<i>.pe</i></span>
+  </h1>
+
+  <!-- ════════ A · GANCHO (banner amarillo sol, letras negras) ════════ -->
+  <div class="act-gancho">
+    <div class="act-gancho-tit">7 días GRATIS si ingresas HOY!!</div>
+    <div class="act-gancho-sub">Conecta tu RUC en menos de un minuto.</div>
+  </div>
+
+  <!-- Valor de la multa evitada (recuerda el dolor) -->
+  <p class="act-dolor">
+    Una sola multa puede costar <b>cientos o miles de soles</b>. Por <b>S/5 al mes</b>
+    te avisamos apenas SUNAT o SUNAFIL te envíen algo.
+  </p>
+
+  <!-- ════════ B · RUC + WhatsApp TEMPRANO ════════ -->
+  <section class="tarjeta act-bloque act-borde act-borde--verde">
     <label class="act-label" for="act-ruc">Tu RUC</label>
     <input id="act-ruc" inputmode="numeric" pattern="[0-9]{11}" maxlength="11"
-           autocomplete="off" placeholder="11 dígitos" enterkeyhint="done">
+           autocomplete="off" placeholder="11 dígitos" enterkeyhint="next">
     <div class="act-ruc-ok" id="act-ruc-ok" hidden>
       <i class="ti ti-circle-check"></i>
       <div><div class="act-rs" id="act-rs"></div>
@@ -19,32 +34,71 @@
     </div>
     <input id="act-rs-edit" class="act-rs-edit" placeholder="Escribe tu razón social" hidden>
     <div class="act-estado muted" id="act-ruc-msg" aria-live="polite"></div>
+
+    <label class="act-label act-label--mt" for="act-wa">Tu WhatsApp
+      <span class="muted">(para no perder tus avisos)</span></label>
+    <div class="act-wa-campo">
+      <span class="act-wa-pre">+51</span>
+      <input id="act-wa" inputmode="numeric" maxlength="9" autocomplete="off"
+             placeholder="Tu número">
+    </div>
   </section>
 
-  <!-- ════════ B.2 · ¿Tienes Clave SOL? ════════ -->
-  <section class="tarjeta act-bloque">
+  <!-- ════════ F · BENEFICIO TANGIBLE (4 franjas chicha sobrias) ════════ -->
+  <section class="act-bloque">
+    <div class="act-benef-tit">
+      <i class="ti ti-bell-ringing"></i> Cuando SUNAT o SUNAFIL te notifiquen, recibirás:
+    </div>
+    <div class="act-benef">
+      <div class="act-benef-item fr-sol"><i class="ti ti-bolt"></i>
+        <span>El aviso <b>al instante</b></span></div>
+      <div class="act-benef-item fr-celeste"><i class="ti ti-file-text"></i>
+        <span>Qué tipo de documento es</span></div>
+      <div class="act-benef-item fr-naranja"><i class="ti ti-calendar-due"></i>
+        <span>La fecha límite para responder</span></div>
+      <div class="act-benef-item fr-historial"><i class="ti ti-device-mobile-message"></i>
+        <span>El historial guardado en tu celular</span>
+        <span class="act-benef-badge">Solo en alerta.pe</span></div>
+    </div>
+  </section>
+
+  <!-- ════════ C · ¿Tienes tu Clave SOL? ════════ -->
+  <section class="tarjeta act-bloque act-borde">
     <div class="act-pregunta">¿Tienes tu Clave SOL?</div>
     <div class="act-bifurca">
       <button type="button" class="act-opt" data-clave="si">Sí, la tengo</button>
-      <button type="button" class="act-opt" data-clave="no">No la tengo</button>
+      <button type="button" class="act-opt" data-clave="no">Pido al contador</button>
     </div>
 
     <!-- Rama SÍ -->
     <div class="act-rama" id="rama-si" hidden>
+      <!-- E · Bloque de confianza ANTES de pedir la Clave SOL -->
+      <div class="act-confianza">
+        <i class="ti ti-shield-lock"></i>
+        <div>
+          <strong>¿Por qué te pedimos tu Clave SOL?</strong>
+          <ul>
+            <li>Solo la usamos para <b>leer</b> si tienes notificaciones nuevas.</li>
+            <li><b>No</b> presentamos declaraciones. <b>No</b> modificamos nada.</li>
+            <li>Tu clave viaja cifrada y puedes desconectarla cuando quieras.</li>
+          </ul>
+        </div>
+      </div>
+
       <div class="act-cred">
         <div class="campo"><label>Usuario SOL</label>
           <input id="act-user" autocomplete="off"></div>
         <div class="campo"><label>Clave SOL</label>
           <input id="act-clave" type="password" autocomplete="new-password"></div>
       </div>
-      <div class="act-comprobar-fila">
-        <button type="button" class="btn btn--sec" id="act-comprobar">
-          <i class="ti ti-plug-connected"></i> Comprobar conexión</button>
-        <span class="act-conexion" id="act-conexion"></span>
-      </div>
+      <!-- C · La validación corre sola al salir del campo (sin botón). -->
+      <p class="act-comprobar-nota muted">Verificamos tu conexión sola, en
+        segundo plano. No necesitas hacer nada.</p>
+      <!-- Celebración (solo si conecta de verdad) -->
+      <div class="act-celebra" id="act-celebra" hidden></div>
     </div>
 
-    <!-- Rama NO -->
+    <!-- Rama NO (pido al contador) -->
     <div class="act-rama" id="rama-no" hidden>
       <p class="muted">No hay problema. Le pedimos las credenciales a tu contador
         con este mensaje:</p>
@@ -53,45 +107,85 @@
         <input type="checkbox" id="act-quitar-gratis">
         Quitar “tú también tendrás cuenta gratis”
       </label>
-      <div class="campo"><label>WhatsApp de tu contador</label>
-        <input id="act-wa-contador" inputmode="numeric" placeholder="51XXXXXXXXX"></div>
-      <button type="button" class="btn btn--whatsapp btn--bloque" id="act-enviar-contador">
+      <label class="act-label" for="act-wa-contador">WhatsApp de tu contador</label>
+      <div class="act-wa-campo">
+        <span class="act-wa-pre">+51</span>
+        <input id="act-wa-contador" inputmode="numeric" maxlength="9"
+               placeholder="Su número">
+      </div>
+      <button type="button" class="btn btn--whatsapp btn--bloque" id="act-enviar-contador"
+              style="margin-top:12px">
         <i class="ti ti-brand-whatsapp"></i> Enviar a mi contador</button>
     </div>
   </section>
 
-  <!-- ════════ B.3 · Canal privado (borde violeta) ════════ -->
-  <section class="tarjeta acento act-bloque" style="--acento:#8B7CF0">
-    <div class="act-pregunta" style="font-size:1rem">Tus avisos, por un canal privado</div>
-    <p class="muted">Llegan sin usar tu WhatsApp. Quedan grabados en tu celular.</p>
-    <div class="act-canal">
-      <button type="button" class="btn btn--sec" id="act-compruebalo">
-        <i class="ti ti-bell"></i> Compruébalo</button>
-      <div class="act-avatares" aria-hidden="true">
-        <span class="act-av"><i class="ti ti-building-store"></i></span>
-        <span class="act-av"><i class="ti ti-briefcase"></i></span>
-        <span class="act-av"><i class="ti ti-user"></i></span>
-      </div>
+  <!-- ════════ B · "GUARDADO EN TU CELULAR · Toca!" → modal interactivo ════════ -->
+  <section class="act-bloque act-prueba-bloque">
+    <button type="button" class="act-prueba" id="act-prueba">
+      <i class="ti ti-device-mobile-message"></i> GUARDADO EN TU CELULAR · ¡Toca!</button>
+    <p class="muted act-prueba-nota">Toca y juega con tus avisos: mira qué llega y
+      qué hacer con cada uno.</p>
+  </section>
+
+  <!-- ════════ G · AUTORIDAD (sustentable, sin inflar) ════════ -->
+  <section class="tarjeta act-bloque act-borde act-autoridad">
+    <!-- FOTO REAL DE DUILIO: pon la URL en src. Si no existe, onerror muestra el placeholder. -->
+    <div class="act-foto borde-chicha-2">
+      <img class="act-foto-img" src="/static/img/duilio.jpg" alt="Duilio Restuccia"
+           onerror="this.remove()">
+      <span class="act-foto-ph"><i class="ti ti-user"></i></span>
     </div>
-    <div class="act-estado muted" id="act-push-msg" aria-live="polite"></div>
+    <div class="act-autoridad-txt">
+      <div>Creado por <b>Duilio Restuccia</b> · más de 20 años difundiendo normas
+        tributarias y asesorando negocios.</div>
+      <div class="muted act-autoridad-tech">La misma tecnología de alertas que ya
+        funciona en sistemas usados por el Colegio de Contadores de Loreto y otros
+        negocios.</div>
+    </div>
   </section>
 
-  <!-- ════════ B.5 · Rol (opcional) ════════ -->
-  <section class="tarjeta act-bloque">
-    <div class="campo"><label for="act-cargo">¿Cuál es tu rol? (opcional)</label>
-      <select id="act-cargo">
-        <option value="">Prefiero no decir</option>
-        <option value="dueño">Dueño</option>
-        <option value="administrador">Administrador</option>
-        <option value="gerente">Gerente</option>
-        <option value="encargado">Encargado</option>
-      </select></div>
-  </section>
+  <!-- ════════ P3 · Declaración de responsabilidad (obligatoria) ════════ -->
+  <label class="act-resp" id="act-resp">
+    <input type="checkbox" id="act-resp-chk">
+    <span>Declaro que estoy autorizado a acceder a este RUC y que las credenciales
+      SOL son legítimamente mías o me fueron entregadas por su titular. Entiendo que
+      alerta.pe solo difunde las notificaciones; la responsabilidad del acceso es mía.</span>
+  </label>
 
-  <!-- ════════ B.6 · Activar ════════ -->
-  <button type="button" class="lp-cta act-activar" id="act-activar">Activar mis alertas</button>
+  <!-- ════════ Activar (P4 · CTA imponente a todo el ancho) ════════ -->
+  <button type="button" class="lp-cta act-activar act-cta-full" id="act-activar">
+    <span class="lp-cta-resp">¡ME APUNTO!</span>
+    <span class="lp-cta-gancho">7 días gratis, luego S/5 al mes</span>
+  </button>
+
+  <!-- Prueba social en línea SECUNDARIA debajo del botón -->
+  <div class="act-social">
+    <div class="act-avatares" aria-hidden="true">
+      <span class="act-av"><i class="ti ti-building-store"></i></span>
+      <span class="act-av"><i class="ti ti-briefcase"></i></span>
+      <span class="act-av"><i class="ti ti-user"></i></span>
+    </div>
+    <span class="act-social-txt">Negocios de todo el Perú ya activaron sus alertas.</span>
+  </div>
+
   <p class="muted" style="text-align:center;margin-top:12px">
     ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>.</p>
+
+  <!-- F · Disclaimer legal -->
+  <p class="act-legal">SUNAT es una institución pública y no está asociada ni
+    promueve los servicios de alerta.pe. alerta.pe facilita la difusión de
+    notificaciones usando las propias credenciales de sus clientes, quienes son
+    los únicos responsables de la información notificada por SUNAT.</p>
+</div>
+
+<!-- FOMO repetible (patrón del Colegio): lo llena/oculta activar.js -->
+<div class="act-fomo" id="act-fomo" role="status" aria-live="polite" hidden></div>
+<!-- Simulación de push que CAE DESDE EL TOP (A): lo arma activar.js -->
+<div class="act-pushsim" id="act-pushsim" aria-live="polite" hidden></div>
+<!-- B · Modal grande interactivo (tabla de notificaciones-ejemplo): lo arma activar.js -->
+<div class="act-demo" id="act-demo" hidden>
+  <div class="act-demo-fondo" id="act-demo-fondo"></div>
+  <div class="act-demo-panel" role="dialog" aria-modal="true" id="act-demo-panel"></div>
 </div>
 {% endblock %}
 

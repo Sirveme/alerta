@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titulo %}Mi resumen · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="rsm" id="rsm">
+  <div class="fila spread">
+    <h1 class="titulo-pagina" style="margin:0">Tu Buzón SUNAT</h1>
+    <span class="rsm-estado" id="rsm-estado"></span>
+  </div>
+  <p class="subtitulo">Lo que llegó a tu buzón. Queda <b>guardado en tu celular</b>:
+    lo revisas cuando quieras, incluso sin internet.</p>
+
+  <div id="rsm-tabla-wrap"></div>
+  <p class="muted rsm-vacio" id="rsm-vacio" hidden>Aún no hay notificaciones.
+    En cuanto SUNAT te envíe algo, lo verás aquí.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/resumen.js"></script>
+{% endblock %}

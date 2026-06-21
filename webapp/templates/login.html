@@ -13,16 +13,17 @@
 
     <form method="post" action="/login" autocomplete="off">
       <div class="campo">
-        <label for="dni">DNI o WhatsApp</label>
+        <label for="dni">WhatsApp o DNI</label>
         <input id="dni" name="dni" type="text" inputmode="numeric"
           pattern="[0-9]{8,12}" maxlength="12" autocomplete="off"
-          required placeholder="DNI (8 dígitos) o WhatsApp (51XXXXXXXXX)">
+          required placeholder="Tu WhatsApp (51XXXXXXXXX) o DNI">
+        <small class="muted">Usamos tu WhatsApp como acceso porque nadie lo olvida.</small>
       </div>
       <div class="campo">
         <label for="clave">Clave</label>
         <input id="clave" name="clave" type="password"
                autocomplete="current-password" required
-               placeholder="Tu clave (inicial = tu DNI)">
+               placeholder="Tu clave (inicial = últimos 6 dígitos de tu WhatsApp)">
       </div>
       <button class="btn btn--bloque" type="submit">Ingresar</button>
     </form>

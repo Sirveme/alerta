@@ -19,7 +19,7 @@
 
     <div class="lp-precio">
       <div class="lp-precio-monto">S/5 <span>al mes</span></div>
-      <div class="lp-precio-prueba">7 días gratis · prueba sin pagar nada</div>
+      <div class="lp-precio-prueba">Evita multas de S/ 300, S/ 500 y hasta de S/ 1000</div>
     </div>
 
     <!-- Demo del celular (pieza estrella, en la primera pantalla) -->
@@ -73,7 +73,7 @@
       <!-- FOTO REAL DE DUILIO: pon la URL en src (ej. /static/img/duilio.jpg).
            Si aún no existe, onerror muestra el placeholder de abajo. -->
       <div class="lp-foto borde-chicha-2">
-        <img class="lp-foto-img" src="/static/img/duilio.jpg"
+        <img class="lp-foto-img" src="static/img/duilio.png"
              alt="Duilio Restuccia" onerror="this.remove()">
         <span class="lp-foto-ph"><i class="ti ti-user"></i></span>
       </div>
@@ -89,36 +89,39 @@
   </section>
 
   <!-- ════════ A.3b · CONSEJOS / VIDEOS (impacto: oscura + marca de agua) ════════ -->
-  <section class="lp-sec lp-sec--oscura lp-watermark">
-    <!-- Franja de entrada "aura chicha" con el título chicha encima -->
-    <div class="lp-franja franja-aura">
-      <h2 class="lp-h2 titulo-chicha">Consejos que te conviene saber</h2>
-    </div>
-    <div class="lp-videos">
-      {% set videos = [
-        ('¿Qué pasa si ignoras una notificación de SUNAT?', '1:20'),
-        ('El error que le costó S/3,700 a una bodega', '0:55'),
-        ('Multa por no presentar vs. fuera de plazo: la diferencia', '1:05')] %}
-      {% for titulo, dur in videos %}
-      <!-- VIDEO REAL #{{ loop.index }}: pon la URL del mp4 vertical en <video src="">
-           (y un poster=""), o reemplaza el <video> por un <iframe> de YouTube
-           vertical. Son 3 videos DISTINTOS. El overlay de play es solo placeholder.
-           El video va DENTRO de la silueta de celular (.phone, reusada del héroe). -->
-      <figure class="lp-video-item">
-        <div class="phone phone--video borde-chicha-{{ loop.index }}">
-          <div class="phone-notch"></div>
-          <div class="phone-pantalla phone-pantalla--video">
-            <video class="lp-video-el" playsinline controls preload="none"
-                   src="" poster=""></video>
-            <div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div>
-          </div>
+<section class="lp-sec lp-sec--oscura lp-watermark">
+  <!-- Franja de entrada "aura chicha" con el título chicha encima -->
+  <div class="lp-franja franja-aura">
+    <h2 class="lp-h2 titulo-chicha">Consejos que te conviene saber</h2>
+  </div>
+  <div class="lp-videos">
+    <!-- VIDEOS REALES: cada uno con (título, duración, archivo .mp4, poster).
+         Sube los .mp4 y los poster a /static/vid/ y /static/img/.
+         Si un video aún no existe, deja src vacío ('') y se muestra el placeholder. -->
+    {% set videos = [
+      ('¿Qué pasa si ignoras una notificación de SUNAT?', '1:20', 'video-1.mp4', 'video-1.jpg'),
+      ('El error que le costó S/3,700 a una bodega', '0:55', 'video-2.mp4', 'video-2.jpg'),
+      ('Multa por no presentar vs. fuera de plazo: la diferencia', '1:05', 'video-3.mp4', 'video-3.jpg')] %}
+    {% for titulo, dur, mp4, poster in videos %}
+    <figure class="lp-video-item">
+      <div class="phone phone--video borde-chicha-{{ loop.index }}">
+        <div class="phone-notch"></div>
+        <div class="phone-pantalla phone-pantalla--video">
+          {% if mp4 %}
+          <video class="lp-video-el" playsinline controls preload="none"
+                 src="/static/vid/{{ mp4 }}"
+                 poster="/static/img/{{ poster }}"></video>
+          {% else %}
+          <div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div>
+          {% endif %}
         </div>
-        <figcaption class="lp-video-cap">{{ titulo }}
-          <span class="lp-video-dur">{{ dur }}</span></figcaption>
-      </figure>
-      {% endfor %}
-    </div>
-  </section>
+      </div>
+      <figcaption class="lp-video-cap">{{ titulo }}
+        <span class="lp-video-dur">{{ dur }}</span></figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+</section>
 
   <!-- ════════ A.4 · ¿QUÉ ES? (amazónica: celeste) ════════ -->
   <section class="lp-sec lp-sec--cielo">

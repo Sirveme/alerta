@@ -8,24 +8,52 @@
 
 {% include "_resumen.html" %}
 
+<p class="muted" style="margin:-4px 0 10px">
+  <a href="/resumen">Ver mi resumen (queda guardado en mi celular) ›</a></p>
+
 {% for c in tarjetas %}
 {% set m = c.urgencia | urgencia_meta %}
-<a class="tarjeta notif-item acento tarjeta-link acento--{{ c.urgencia }}"
-   href="/contribuyentes/{{ c.id }}/notificaciones">
-  <div class="fila spread">
-    <div>
-      <div class="notif-asunto">{{ c.razon_social }}</div>
-      <div class="notif-linea">RUC {{ c.ruc }}
-        {% if c.no_leidas %}· <span class="badge-conteo">{{ c.no_leidas }} sin leer</span>{% endif %}
+<div class="emp-bloque">
+  <a class="tarjeta notif-item acento tarjeta-link acento--{{ c.urgencia }}"
+     href="/contribuyentes/{{ c.id }}/notificaciones">
+    <div class="fila spread">
+      <div>
+        <div class="notif-asunto">{{ c.razon_social }}</div>
+        <div class="notif-linea">RUC {{ c.ruc }}
+          {% if c.no_leidas %}· <span class="badge-conteo">{{ c.no_leidas }} sin leer</span>{% endif %}
+        </div>
       </div>
+      <span class="badge badge--{{ c.urgencia }}">{{ m.label }}</span>
     </div>
-    <span class="badge badge--{{ c.urgencia }}">{{ m.label }}</span>
-  </div>
-</a>
+  </a>
+  <button class="emp-desconectar" data-id="{{ c.id }}" data-nombre="{{ c.razon_social }}">
+    <i class="ti ti-plug-off" aria-hidden="true"></i> Desconectar este RUC</button>
+</div>
 {% else %}
 <div class="tarjeta"><p class="muted">
   Aún no hay información para tu RUC. En cuanto tu contador active el monitoreo,
   verás aquí tus notificaciones de SUNAT.
 </p></div>
 {% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // P3 · Derecho de corte: desconectar un RUC (modal propio, sin diálogo nativo).
+  document.querySelectorAll('.emp-desconectar').forEach((b) => {
+    b.addEventListener('click', () => {
+      confirmarModal('Desconectar este RUC',
+        '¿Seguro? Dejaremos de revisar el buzón de «' + b.dataset.nombre +
+        '» y borraremos la clave SOL guardada. Podrás volver a conectarlo después.',
+        async () => {
+          try {
+            const r = await fetch('/contribuyentes/' + b.dataset.id + '/desconectar',
+              { method: 'POST' });
+            if (r.ok) location.reload();
+            else confirmarModal('No se pudo', 'Inténtalo de nuevo.', () => {});
+          } catch (_) { confirmarModal('Error', 'Error de red.', () => {}); }
+        });
+    });
+  });
+</script>
 {% endblock %}
