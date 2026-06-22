@@ -5,7 +5,7 @@
    Push: handler listo; el ENVÍO real es una fase aparte.
    ═══════════════════════════════════════════════════════════════════ */
 
-const CACHE = 'alertape-v14';
+const CACHE = 'alertape-v17';
 const ASSETS = [
   '/static/css/app.css',
   '/static/js/app.js',
@@ -57,32 +57,37 @@ self.addEventListener('fetch', (e) => {
   }
 });
 
-// ── Push (zAlerta-07 / zAlerta-12): muestra el aviso enviado por el worker ──
+// ── Push (zAlerta-17): aviso enriquecido (icono + imagen leyenda + acciones) ──
 self.addEventListener('push', (e) => {
-  let data = { title: 'alerta.pe', body: 'Tienes una novedad de SUNAT.', url: '/resumen' };
+  let data = { title: 'Novedades en tu Buzón SUNAT',
+               body: 'Tienes novedades de SUNAT.', url: '/resumen?from=push' };
   try { if (e.data) data = e.data.json(); } catch (_) {}
   const opts = {
     body: data.body || '',
-    icon: '/static/img/icono.svg',
+    icon: '/static/img/icono.svg',     // logo alerta.pe (colapsado)
     badge: '/static/img/icono.svg',
-    data: { url: data.url || '/resumen' },
+    data: { url: data.url || '/resumen?from=push' },
   };
-  // Acciones GRACIAS / ENTRAR (si el navegador las soporta). Si no, al tocar
-  // se abre la app (equivale a ENTRAR) y el GRACIAS se ofrece dentro de la app.
+  // Imagen grande FIJA = leyenda de colores del semáforo (la sirve el backend).
+  // Si el archivo no existe, el navegador simplemente la ignora (degrada bien).
+  if (data.image) opts.image = data.image;
+  // Acciones GRACIAS / RESUMEN (si el navegador las soporta). Si no, al tocar
+  // se abre /resumen (equivale a RESUMEN).
   if (data.acciones) {
     opts.actions = [
       { action: 'gracias', title: 'GRACIAS' },
-      { action: 'entrar', title: 'ENTRAR' },
+      { action: 'resumen', title: 'RESUMEN' },
     ];
   }
-  e.waitUntil(self.registration.showNotification(data.title || 'alerta.pe', opts));
+  e.waitUntil(self.registration.showNotification(
+    data.title || 'Novedades en tu Buzón SUNAT', opts));
 });
 
-// Al tocar: GRACIAS registra la lectura (métrica) sin abrir; ENTRAR / toque
-// normal abre la WebApp en el resumen.
+// GRACIAS → registra la lectura (métrica) sin abrir. RESUMEN / toque → abre
+// /resumen (con ?from=push para el splash de bienvenida).
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const destino = (e.notification.data && e.notification.data.url) || '/resumen';
+  const destino = (e.notification.data && e.notification.data.url) || '/resumen?from=push';
 
   if (e.action === 'gracias') {
     e.waitUntil(
