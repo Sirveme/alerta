@@ -4,6 +4,12 @@
 <div class="bv">
   <div class="bv-marca"><span class="logo-selva bv-logo">alerta<i>.pe</i></span></div>
 
+  <!-- Estado de conexión HONESTO (zAlerta-18) -->
+  <div class="conx-banner conx--{{ conexion.clase }}" style="margin-bottom:14px">
+    <span class="conx-badge conx-badge--{{ conexion.clase }}">{{ conexion.badge }}</span>
+    <span class="conx-msg"><b>{{ conexion.titulo }}.</b> {{ conexion.mensaje }}</span>
+  </div>
+
   {% if estado == 'conecto' %}
   <!-- D.1 · Conectó OK -->
   <div class="bv-card bv-ok borde-chicha-1">
@@ -37,12 +43,17 @@
   </div>
 
   {% else %}
-  <!-- D.3 · Pidió al contador -->
-  <div class="bv-card bv-cont borde-chicha-3">
+  <!-- D.3 · Pidió al contador (sin limbo: invita a avisarle) -->
+  <div class="bv-card bv-cont borde-chicha-3" id="bv-cont"
+       data-ruc="{{ ruc }}" data-rs="{{ razon_social }}">
     <div class="bv-icono bv-icono--cont"><i class="ti ti-send"></i></div>
-    <h1 class="bv-tit">Le enviamos el mensaje a tu contador</h1>
-    <p class="bv-txt">Te avisaremos en cuanto conecte tu buzón. Tus
-      <b>7 días de prueba se inician desde que se confirme la conexión</b>.</p>
+    <h1 class="bv-tit">Falta conectar tu buzón</h1>
+    <p class="bv-txt">Para empezar a vigilar, tu contador debe darte (o cargar) tus
+      credenciales SOL. Avísale ahora:</p>
+    <button class="btn btn--whatsapp btn--bloque" id="bv-avisar-contador">
+      <i class="ti ti-brand-whatsapp"></i> Avisar a mi contador</button>
+    <p class="bv-txt muted" style="margin-top:12px">Te avisaremos en cuanto conecte.
+      Tus <b>7 días de prueba se inician desde que se confirme la conexión</b>.</p>
     <a href="/" class="lp-cta bv-cta"><span class="lp-cta-resp">Ir a mi panel →</span></a>
   </div>
   {% endif %}
@@ -92,6 +103,46 @@
     }
     clave.addEventListener('blur', revalidar);
     user.addEventListener('blur', () => { if (clave.value) revalidar(); });
+  })();
+</script>
+{% endif %}
+{% if estado == 'contador' %}
+<script>
+  // D.3 · Avisar al contador (modal propio + wa.me con el mensaje armado).
+  (function () {
+    const card = document.getElementById('bv-cont');
+    const btn = document.getElementById('bv-avisar-contador');
+    if (!btn || !card) return;
+    const ruc = card.dataset.ruc || '', rs = card.dataset.rs || '';
+    function attr(s){return String(s==null?'':s).replace(/"/g,'&quot;');}
+    function linkRegistro() {
+      const u = new URL('/registro', location.origin);
+      u.searchParams.set('tipo', 'estudio');
+      if (ruc) u.searchParams.set('ruc', ruc);
+      if (rs) u.searchParams.set('empresario', rs);
+      return u.toString();
+    }
+    btn.addEventListener('click', () => {
+      modalHTML('Avisar a mi contador',
+        '<p class="muted">Le enviaremos este mensaje para que conecte tu buzón:</p>'
+        + '<div class="act-mensaje">Por S/5 me avisarán todos los días los avisos '
+        + 'de SUNAT y SUNAFIL. Pásame <b class="hl">URGENTE</b> mis credenciales SOL, '
+        + 'o regístrame tú <a href="' + attr(linkRegistro()) + '" target="_blank" rel="noopener">aquí</a>. '
+        + 'Tú también tendrás cuenta, <b class="hl">GRATIS</b>.</div>'
+        + '<div class="campo"><label>WhatsApp de tu contador</label>'
+        + '<div class="act-wa-campo"><span class="act-wa-pre">+51</span>'
+        + '<input id="bv-wa-cont" inputmode="numeric" maxlength="9" placeholder="Su número"></div></div>',
+        () => {
+          let num = (document.getElementById('bv-wa-cont').value || '').replace(/\\D/g, '');
+          if (num.length < 8) { confirmarModal('WhatsApp del contador', 'Escribe el número de tu contador (sin código país).', () => {}); return; }
+          if (!num.startsWith('51')) num = '51' + num;
+          const msg = 'Por S/5 me avisarán todos los días los avisos de SUNAT y SUNAFIL. '
+            + 'Pásame URGENTE mis credenciales SOL, o regístrame tú aquí: ' + linkRegistro()
+            + '. Tú también tendrás cuenta, GRATIS.';
+          window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+          cerrarModal();
+        }, 'Enviar por WhatsApp');
+    });
   })();
 </script>
 {% endif %}

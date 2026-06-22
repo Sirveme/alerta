@@ -13,7 +13,13 @@
 
 {% for c in tarjetas %}
 {% set m = c.urgencia | urgencia_meta %}
+{% set cx = c.conexion %}
 <div class="emp-bloque">
+  <!-- Estado de conexión HONESTO (zAlerta-18): solo "vigilado" si se confirmó. -->
+  <div class="conx-banner conx--{{ cx.clase }}">
+    <span class="conx-badge conx-badge--{{ cx.clase }}">{{ cx.badge }}</span>
+    <span class="conx-msg"><b>{{ cx.titulo }}.</b> {{ cx.mensaje }}</span>
+  </div>
   <a class="tarjeta notif-item acento tarjeta-link acento--{{ c.urgencia }}"
      href="/contribuyentes/{{ c.id }}/notificaciones">
     <div class="fila spread">
@@ -26,8 +32,12 @@
       <span class="badge badge--{{ c.urgencia }}">{{ m.label }}</span>
     </div>
   </a>
-  <button class="emp-desconectar" data-id="{{ c.id }}" data-nombre="{{ c.razon_social }}">
-    <i class="ti ti-plug-off" aria-hidden="true"></i> Desconectar este RUC</button>
+  <div class="emp-acciones">
+    <button class="emp-accion emp-actualizar" data-id="{{ c.id }}" data-nombre="{{ c.razon_social }}">
+      <i class="ti ti-key" aria-hidden="true"></i> Actualizar Clave SOL</button>
+    <button class="emp-accion emp-desconectar" data-id="{{ c.id }}" data-nombre="{{ c.razon_social }}">
+      <i class="ti ti-plug-off" aria-hidden="true"></i> Desconectar</button>
+  </div>
 </div>
 {% else %}
 <div class="tarjeta"><p class="muted">
@@ -39,6 +49,67 @@
 
 {% block scripts %}
 <script>
+  // P2 · Actualizar Clave SOL (validación al blur + guardar al conectar).
+  function _esc(s){return String(s==null?'':s).replace(/"/g,'&quot;');}
+  document.querySelectorAll('.emp-actualizar').forEach((b) => {
+    b.addEventListener('click', () => {
+      modalHTML('Actualizar Clave SOL · ' + b.dataset.nombre, `
+        <div class="act-confianza" style="margin-bottom:12px">
+          <i class="ti ti-shield-lock"></i>
+          <div><strong>Tus credenciales están seguras</strong>
+          <ul><li>Solo <b>leemos</b> si tienes notificaciones nuevas.</li>
+          <li><b>No</b> presentamos ni modificamos nada.</li>
+          <li>Tu clave viaja cifrada y puedes desconectarla cuando quieras.</li></ul></div>
+        </div>
+        <div class="campo"><label>Usuario SOL</label>
+          <input id="ec-user" autocomplete="off"></div>
+        <div class="campo"><label>Clave SOL</label>
+          <input id="ec-clave" type="password" autocomplete="new-password"></div>
+        <div class="ec-estado" id="ec-estado" aria-live="polite"></div>`,
+        () => intentarCred(b.dataset.id), 'Validar y guardar');
+      const clave = document.getElementById('ec-clave');
+      clave.addEventListener('blur', () => intentarCred(b.dataset.id, true));
+    });
+  });
+
+  let _ecToken = 0;
+  async function intentarCred(id, silencioso) {
+    const u = (document.getElementById('ec-user').value || '').trim();
+    const c = document.getElementById('ec-clave').value;
+    const est = document.getElementById('ec-estado');
+    if (!u || !c) { if (!silencioso && est) { est.className = 'ec-estado no'; est.textContent = 'Ingresa usuario y clave SOL.'; } return; }
+    const t = ++_ecToken;
+    est.className = 'ec-estado run'; est.innerHTML = '<i class="ti ti-loader-2"></i> Comprobando…';
+    let sid;
+    try {
+      const j = await (await fetch('/contribuyentes/' + id + '/cred/validar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario_sol: u, clave_sol: c }) })).json();
+      if (!j.ok) throw new Error(); sid = j.id;
+    } catch (_) { est.className = 'ec-estado no'; est.textContent = 'No pudimos comprobar ahora; reintenta.'; return; }
+    let n = 0;
+    const iv = setInterval(async () => {
+      n++;
+      if (t !== _ecToken) { clearInterval(iv); return; }
+      let s; try { s = await (await fetch('/contribuyentes/validar-credenciales/' + sid)).json(); } catch (_) { s = null; }
+      if (s && s.ok && s.listo) {
+        clearInterval(iv);
+        if (s.estado === 'conecta') {
+          try {
+            await fetch('/contribuyentes/' + id + '/cred/guardar', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ usuario_sol: u, clave_sol: c }) });
+            est.className = 'ec-estado ok';
+            est.textContent = '¡Listo! Credenciales actualizadas, seguimos vigilando tu buzón.';
+            setTimeout(() => location.reload(), 1600);
+          } catch (_) { est.className = 'ec-estado no'; est.textContent = 'Conectó pero no se pudo guardar; reintenta.'; }
+        } else {
+          est.className = 'ec-estado no'; est.textContent = '✗ No conecta. Revisa la clave y reintenta (no borramos la anterior).';
+        }
+      } else if (n >= 6) { clearInterval(iv); est.className = 'ec-estado run'; est.textContent = 'La red está lenta. Reintenta en un momento.'; }
+    }, 5000);
+  }
+
   // P3 · Derecho de corte: desconectar un RUC (modal propio, sin diálogo nativo).
   document.querySelectorAll('.emp-desconectar').forEach((b) => {
     b.addEventListener('click', () => {

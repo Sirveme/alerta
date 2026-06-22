@@ -2,6 +2,7 @@
 {% block titulo %}Mi resumen · alerta.pe{% endblock %}
 {% block contenido %}
 <div class="rsm" id="rsm">
+  <a href="/" class="rsm-volver"><i class="ti ti-arrow-left"></i> Volver al inicio</a>
   <div class="fila spread">
     <h1 class="titulo-pagina" style="margin:0">Tu Buzón SUNAT</h1>
     <span class="rsm-estado" id="rsm-estado"></span>
@@ -9,9 +10,28 @@
   <p class="subtitulo">Lo que llegó a tu buzón. Queda <b>guardado en tu celular</b>:
     lo revisas cuando quieras, incluso sin internet.</p>
 
+  <!-- Estado de conexión HONESTO por RUC (zAlerta-18) -->
+  {% for cx in conexiones %}
+  <div class="conx-banner conx--{{ cx.clase }}">
+    <span class="conx-badge conx-badge--{{ cx.clase }}">{{ cx.badge }}</span>
+    <span class="conx-msg">
+      {% if conexiones|length > 1 %}<b>RUC {{ cx.ruc }}:</b> {% endif %}<b>{{ cx.titulo }}.</b>
+      {{ cx.mensaje }}
+      {% if cx.clave in ('error', 'verificando', 'pendiente') %}
+      <a href="/">Completar ›</a>{% endif %}
+    </span>
+  </div>
+  {% endfor %}
+
   <div id="rsm-tabla-wrap"></div>
-  <p class="muted rsm-vacio" id="rsm-vacio" hidden>Aún no hay notificaciones.
-    En cuanto SUNAT te envíe algo, lo verás aquí.</p>
+
+  <div class="rsm-vacio tarjeta" id="rsm-vacio" hidden>
+    <i class="ti ti-shield-check rsm-vacio-icono"></i>
+    <p class="rsm-vacio-tit">Todo tranquilo</p>
+    <p class="muted" id="rsm-vacio-txt">Te avisaremos apenas SUNAT te envíe algo.
+      Puedes cerrar; nosotros vigilamos por ti.</p>
+    <a href="/" class="btn btn--sec">Volver al inicio</a>
+  </div>
 </div>
 {% endblock %}
 
