@@ -66,21 +66,65 @@
 
   function pintarEstado(txt, cls) { estadoEl.textContent = txt; estadoEl.className = 'rsm-estado ' + (cls || ''); }
 
+  // ── Semáforo de urgencia (zAlerta-17 P2) ──
+  // rojo: vence en <=7 días (o vencido) · ámbar: vence en >7 días ·
+  // verde: SIN plazo explícito (informativo). NO se infieren plazos.
+  function semColor(venceIso) {
+    if (!venceIso) return 'verde';
+    const v = new Date(venceIso);
+    if (isNaN(v)) return 'verde';
+    const dias = Math.ceil((v - new Date()) / 86400000);
+    return dias <= 7 ? 'rojo' : 'ambar';
+  }
+  const SEM_TXT = {
+    rojo: 'Vence pronto: lee y envía a tu contador ¡ya!',
+    ambar: 'Importante: tiene plazo, no lo olvides.',
+    verde: 'Informativo, sin apuro — se recomienda leer.',
+  };
+
+  // "Recuérdame esto": opciones (value = modo del backend; '' = desactivar).
+  const REC_OPTS = [
+    ['', 'Sin recordatorio'],
+    ['proximos_3', 'Los próximos 3 días'],
+    ['ultimos_3', 'Los últimos 3 días antes de vencer'],
+    ['hasta_vencer', 'Todos los días hasta el vencimiento'],
+  ];
+
   function render(data, offline) {
     const filas = (data && data.filas) || [];
     vacioEl.hidden = filas.length > 0;
     if (!filas.length) { wrap.innerHTML = ''; return; }
-    const cuerpo = filas.map((f, i) =>
-      '<tr class="rsm-row estado--' + esc(f.urgencia) + '">'
-      + '<td><b>' + esc(f.documento) + '</b></td>'
-      + '<td>' + esc(f.periodo) + '</td>'
-      + '<td>' + esc(f.detalle) + '</td>'
-      + '<td>' + esc(f.vence) + '</td>'
-      + '<td><button class="rsm-b" data-i="' + i + '">Qué hacer</button></td>'
-      + '</tr>'
-      + '<tr class="rsm-orient-row"><td colspan="5">'
-      + '<div class="rsm-orient" data-orient="' + i + '" hidden></div></td></tr>'
-    ).join('');
+    const cuerpo = filas.map((f, i) => {
+      const sem = semColor(f.vence_iso);
+      const conPlazo = !!f.vence_iso;
+      // CTA de recordatorio (solo si hay plazo) + sugerencia en rojo/ámbar.
+      const recSel = conPlazo
+        ? '<div class="rsm-recordar">'
+          + ((sem === 'rojo' || sem === 'ambar')
+              ? '<div class="rsm-sugerencia"><i class="ti ti-bell-plus"></i> '
+                + 'Te sugerimos programar recordatorios</div>' : '')
+          + '<span class="rsm-recordar-lbl"><i class="ti ti-bell"></i> Recuérdame</span>'
+          + '<select class="rsm-rec-sel" data-id="' + esc(f.id) + '">'
+          + REC_OPTS.map(([v, t]) => '<option value="' + v + '"'
+              + (((f.recordatorio || '') === v) ? ' selected' : '') + '>'
+              + esc(t) + '</option>').join('')
+          + '</select>'
+          + '<span class="rsm-rec-ok" hidden>✓ Te recordaremos</span></div>'
+        : '';
+      const venceCol = conPlazo
+        ? 'Vence ' + esc(f.vence)
+        : '<span class="rsm-info-lbl">Informativo</span>';
+      return '<tr class="rsm-row sem--' + sem + '" title="' + esc(SEM_TXT[sem]) + '">'
+        + '<td><span class="rsm-punto sem-bg--' + sem + '"></span><b>' + esc(f.documento) + '</b></td>'
+        + '<td>' + esc(f.periodo) + '</td>'
+        + '<td>' + esc(f.detalle) + '</td>'
+        + '<td>' + venceCol + '</td>'
+        + '<td><button class="rsm-b" data-i="' + i + '">Qué hacer</button></td>'
+        + '</tr>'
+        + '<tr class="rsm-orient-row sem--' + sem + '"><td colspan="5">'
+        + '<div class="rsm-orient" data-orient="' + i + '" hidden></div>'
+        + recSel + '</td></tr>';
+    }).join('');
     wrap.innerHTML =
       '<table class="rsm-tabla"><thead><tr>'
       + '<th>Documento</th><th>Periodo</th><th>Detalle</th><th>Vence</th><th></th>'
@@ -90,6 +134,21 @@
       if (!cont) return;
       cont.textContent = ORIENTA[filas[+b.dataset.i].tipo] || ORIENTA.otro;
       cont.hidden = !cont.hidden;
+    }));
+    // Cambio de recordatorio → guardar (no disponible offline).
+    wrap.querySelectorAll('.rsm-rec-sel').forEach((s) => s.addEventListener('change', async () => {
+      const ok = s.parentElement.querySelector('.rsm-rec-ok');
+      try {
+        const r = await fetch('/api/recordatorio', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ notificacion_id: s.dataset.id, modo: s.value || null }) });
+        const j = await r.json();
+        if (j.ok && ok) {
+          ok.textContent = s.value ? '✓ Te recordaremos' : 'Recordatorio desactivado';
+          ok.hidden = false; setTimeout(() => { ok.hidden = true; }, 2500);
+        }
+      } catch (_) { /* sin red: el cambio no persiste */ }
     }));
   }
 
@@ -114,11 +173,46 @@
       } else {
         pintarEstado('Sin conexión', 'off');
         vacioEl.hidden = false;
-        vacioEl.textContent = 'Sin conexión y aún no hay datos guardados. '
+        const txt = document.getElementById('rsm-vacio-txt');
+        if (txt) txt.textContent = 'Sin conexión y aún no hay datos guardados. '
           + 'Conéctate una vez para guardarlos en tu celular.';
       }
     }
   }
 
+  // ── Mini-leyenda del semáforo (siempre visible, discreta) ──
+  function leyendaHTML() {
+    return '<div class="rsm-leyenda">'
+      + '<span><span class="rsm-punto sem-bg--rojo"></span> Urgente</span>'
+      + '<span><span class="rsm-punto sem-bg--ambar"></span> Tiene plazo</span>'
+      + '<span><span class="rsm-punto sem-bg--verde"></span> Informativo</span>'
+      + '</div>';
+  }
+
+  // ── Splash al entrar DESDE el push (zAlerta-17 P3), una vez por sesión ──
+  function mostrarSplash() {
+    const desdePush = new URLSearchParams(location.search).get('from') === 'push';
+    const cont = document.getElementById('rsm');
+    if (!cont) return;
+    // La mini-leyenda va siempre; el splash solo si vino del push.
+    if (desdePush && !sessionStorage.getItem('rsm_splash')) {
+      sessionStorage.setItem('rsm_splash', '1');
+      const s = document.createElement('div');
+      s.className = 'rsm-splash';
+      s.innerHTML = '<button class="rsm-splash-x" aria-label="Cerrar">&times;</button>'
+        + '<div class="rsm-splash-tit"><i class="ti ti-device-mobile-check"></i> '
+        + 'Esto es lo que dejamos en tu celular</div>'
+        + '<p class="rsm-splash-txt">Revisa con calma; queda guardado aquí, '
+        + 'incluso sin internet.</p>' + leyendaHTML();
+      cont.insertBefore(s, cont.firstChild);
+      s.querySelector('.rsm-splash-x').onclick = () => s.remove();
+    }
+    // Leyenda persistente sobre la tabla.
+    const ley = document.createElement('div');
+    ley.innerHTML = leyendaHTML();
+    wrap.parentNode.insertBefore(ley.firstChild, wrap);
+  }
+
+  mostrarSplash();
   cargar();
 })();

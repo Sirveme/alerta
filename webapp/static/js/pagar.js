@@ -66,14 +66,16 @@
       listaTit.textContent = '¿Cuál es tu pago?';
     }
     const unico = (flujo === 'ahora' && j.pagos.length === 1);
+    const etiqueta = (mt) => mt === 'plin' ? 'PLIN' : mt === 'yape' ? 'YAPE'
+      : (mt === 'transferencia' || mt === 'transf') ? 'TRANSF.' : (mt ? mt.toUpperCase() : 'PAGO');
     lista.innerHTML = j.pagos.map((p) => {
-      const met = p.metodo === 'plin' ? 'Plin' : (p.metodo === 'yape' ? 'Yape' : (p.metodo || 'Pago'));
+      const cuando = ((p.fecha ? p.fecha + ' ' : '') + (p.hora || '')).trim() || '—';
       const cta = unico ? '<span class="pay-simio">Sí, es mío →</span>' : '';
       return '<button class="pay-opcion" data-id="' + esc(p.id) + '">'
-        + '<span class="pay-met pay-met--' + esc(p.metodo) + '">' + esc(met) + '</span>'
-        + '<span class="pay-titular">' + esc(p.titular) + '</span>'
-        + '<span class="pay-hora">' + esc(p.hora) + '</span>'
-        + '<span class="pay-mt">S/ ' + esc(p.monto) + '</span>' + cta + '</button>';
+        + '<span class="pay-met pay-met--' + esc(p.metodo) + '">' + esc(etiqueta(p.metodo)) + '</span>'
+        + '<span class="pay-info"><span class="pay-titular">' + esc(p.nombre) + '</span>'
+        + '<span class="pay-cuando">' + esc(cuando) + ' · S/ ' + esc(p.monto) + '</span></span>'
+        + cta + '</button>';
     }).join('');
     listaWrap.hidden = false;
     listaWrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
