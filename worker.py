@@ -42,7 +42,11 @@ from models import (
     Contribuyente, EstadoContribuyente, Notificacion,
     SolicitudValidacionCredencial, EstadoValidacion, ahora_lima,
     EstudioContable, CredencialSol, EstadoSuscripcion, TipoCuenta,
+    Recordatorio, ModoRecordatorio, Usuario, ETIQUETA_TIPO_DOCUMENTO,
 )
+
+# Horarios (hora Lima) en que se permiten los push de recordatorio (no spamear).
+HORAS_RECORDATORIO = {8, 12, 17}
 
 # Días de prueba (zAlerta-11c D): arrancan al CONFIRMAR la conexión, no antes.
 DIAS_PRUEBA_EMPRESARIO = 7
@@ -97,6 +101,60 @@ async def _arrancar_prueba_si_corresponde(session, contrib) -> None:
             cred.ultimo_login_ok_at = ahora
         log(f"  {contrib.ruc}: prueba de 7 días iniciada (conexión confirmada).",
             "OK")
+        # zAlerta-18 P4: avisar que el buzón ya quedó VIGILADO.
+        for uid in await _usuarios_de(session, contrib):
+            try:
+                await push_service.notificar_usuario(
+                    session, uid, "¡Tu buzón ya está vigilado!",
+                    "Conectamos tu buzón SUNAT. Tus 7 días de prueba comienzan hoy.",
+                    url="/resumen?from=push")
+            except Exception as e:
+                log(f"  {contrib.ruc}: aviso 'vigilado' falló (sigo): {e}", "WARN")
+
+
+async def _revisar_credencial(session, contrib) -> None:
+    """Marca ERROR_CREDENCIAL y avisa por push cuando una credencial deja de
+    servir (zAlerta-13 P2). Al reconectar, vuelve a ACTIVO y limpia el aviso.
+
+    Heurística prudente: solo aplica si el contribuyente TIENE credencial (un
+    fallo con credencial cargada es, casi siempre, clave caducada). Si fue un
+    fallo transitorio de red, el próximo scrapeo OK lo reactiva."""
+    cred = await session.scalar(
+        select(CredencialSol).where(CredencialSol.contribuyente_id == contrib.id))
+    if not cred:
+        return
+    if contrib.ultimo_scrapeo_ok is False:
+        if contrib.estado != EstadoContribuyente.ERROR_CREDENCIAL:
+            contrib.estado = EstadoContribuyente.ERROR_CREDENCIAL
+        if not contrib.credencial_error_avisada:
+            usuarios = await _usuarios_de(session, contrib)
+            for uid in usuarios:
+                try:
+                    await push_service.notificar_usuario(
+                        session, uid, "No pudimos entrar a tu buzón",
+                        "¿Cambiaste tu Clave SOL? Actualízala para seguir vigilando.",
+                        url="/")
+                except Exception as e:
+                    log(f"  {contrib.ruc}: aviso credencial falló (sigo): {e}", "WARN")
+            contrib.credencial_error_avisada = True
+    elif contrib.ultimo_scrapeo_ok:
+        # Reconectó: limpiar el estado de error y el flag de aviso.
+        if contrib.estado == EstadoContribuyente.ERROR_CREDENCIAL:
+            contrib.estado = EstadoContribuyente.ACTIVO
+        contrib.credencial_error_avisada = False
+
+
+async def _usuarios_de(session, contrib) -> list:
+    """IDs de usuarios a notificar de este RUC (estudio que vigila + empresario)."""
+    ids = list(await session.scalars(
+        select(Usuario.id).where(Usuario.estudio_id == contrib.estudio_id,
+                                 Usuario.activo.is_(True))))
+    if contrib.cuenta_empresario_id:
+        ids += list(await session.scalars(
+            select(Usuario.id).where(
+                Usuario.estudio_id == contrib.cuenta_empresario_id,
+                Usuario.activo.is_(True))))
+    return ids
 
 
 async def _procesar_y_notificar(session, contrib, forzar: bool) -> None:
@@ -111,6 +169,8 @@ async def _procesar_y_notificar(session, contrib, forzar: bool) -> None:
     await procesar_contribuyente(session, contrib, FRESCURA_HORAS, forzar=forzar)
     # Prueba diferida del empresario: si el login real recién se confirmó, arranca.
     await _arrancar_prueba_si_corresponde(session, contrib)
+    # ¿La credencial dejó de servir? marcar ERROR_CREDENCIAL + avisar (1 vez).
+    await _revisar_credencial(session, contrib)
     n_despues = await session.scalar(
         select(func.count(Notificacion.id)).where(
             Notificacion.contribuyente_id == contrib.id)) or 0
@@ -188,6 +248,66 @@ async def _procesar_validaciones_credencial(session) -> int:
     return len(pendientes)
 
 
+def _debe_recordar(modo, dias_a_vencer: int, dias_desde_activacion: int) -> bool:
+    """¿Toca recordar hoy según el modo? (dias_a_vencer = venc - hoy)."""
+    if dias_a_vencer < 0:
+        return False                       # ya venció
+    if modo == ModoRecordatorio.HASTA_VENCER:
+        return True
+    if modo == ModoRecordatorio.ULTIMOS_3:
+        return 0 <= dias_a_vencer <= 3
+    if modo == ModoRecordatorio.PROXIMOS_3:
+        return dias_desde_activacion < 3
+    return False
+
+
+async def _procesar_recordatorios(session) -> int:
+    """"Recuérdame esto" (zAlerta-13 P1): reenvía push recordatorio según el modo,
+    máximo 1 vez al día y solo en los horarios definidos. Desactiva los vencidos."""
+    ahora = ahora_lima()
+    if ahora.hour not in HORAS_RECORDATORIO:
+        return 0   # fuera de los horarios 8/12/17: no spamear
+    hoy = ahora.date()
+    activos = list(await session.scalars(
+        select(Recordatorio).where(Recordatorio.activo.is_(True))))
+    enviados = 0
+    for rec in activos:
+        venc = rec.fecha_vencimiento
+        if not venc:
+            continue
+        dias_a_vencer = (venc.date() - hoy).days
+        if dias_a_vencer < 0:
+            rec.activo = False             # venció → dejar de recordar
+            continue
+        # Ya enviado hoy → no repetir.
+        if rec.ultimo_envio_at and rec.ultimo_envio_at.date() == hoy:
+            continue
+        dias_desde = (hoy - rec.creado_at.date()).days
+        if not _debe_recordar(rec.modo, dias_a_vencer, dias_desde):
+            continue
+        notif = await session.get(Notificacion, rec.notificacion_id)
+        if not notif:
+            rec.activo = False
+            continue
+        etq = ETIQUETA_TIPO_DOCUMENTO.get(
+            notif.tipo_documento_enum.value if notif.tipo_documento_enum else None,
+            notif.tipo_documento or "Notificación")
+        fecha_txt = venc.astimezone(TZ_LIMA).strftime("%d/%m/%Y")
+        try:
+            await push_service.notificar_usuario(
+                session, rec.usuario_id, "Recordatorio de alerta.pe",
+                f"{etq} vence el {fecha_txt}. No dejes pasar el plazo.",
+                url="/resumen")
+            enviados += 1
+        except Exception as e:
+            log(f"  recordatorio {rec.id}: push falló (sigo): {e}", "WARN")
+        rec.ultimo_envio_at = ahora
+    await session.commit()
+    if enviados:
+        log(f"RECORDATORIOS: {enviados} push enviado(s).", "OK")
+    return enviados
+
+
 async def _procesar_fondo(session) -> int:
     """Scrapea por frescura vencida (ciclo de fondo, no fuerza)."""
     activos = list(await session.scalars(
@@ -206,8 +326,10 @@ async def _procesar_fondo(session) -> int:
 async def ciclo() -> None:
     """Un ciclo: primero solicitudes manuales (prioridad), luego frescura."""
     async with get_session() as session:
-        # Validaciones y solicitudes manuales: SIEMPRE (no esperan a la noche).
+        # Validaciones, solicitudes manuales y recordatorios: SIEMPRE (los
+        # recordatorios solo disparan en sus horarios 8/12/17).
         await _procesar_validaciones_credencial(session)
+        await _procesar_recordatorios(session)
         await _procesar_solicitudes_manuales(session)
         # Lectura masiva de buzones: SOLO en la ventana nocturna (zAlerta-12 P1.a).
         if _en_ventana_nocturna():

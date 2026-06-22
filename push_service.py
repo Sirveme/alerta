@@ -21,10 +21,15 @@ import asyncio
 import json
 import logging
 import os
+from datetime import timedelta
 
 from sqlalchemy import select
 
-from models import PushSuscripcion, Usuario, Contribuyente
+from models import PushSuscripcion, Usuario, Contribuyente, Notificacion, ahora_lima, TZ_LIMA
+
+# Imagen FIJA del push expandido = leyenda del semáforo de colores (zAlerta-17).
+# La provee el fundador; si no existe, el navegador la ignora (degrada bien).
+LEYENDA_IMG = os.getenv("PUSH_LEYENDA_IMG", "/static/img/leyenda-colores.png")
 
 try:  # cargar .env en local; en Railway las env ya están en el entorno
     from dotenv import load_dotenv
@@ -87,6 +92,24 @@ async def _enviar_a_usuario(session, usuario_id, payload: str) -> int:
     return enviadas
 
 
+async def notificar_usuario(session, usuario_id, title: str, body: str,
+                            url: str = "/resumen", acciones: bool = False) -> int:
+    """Envía un push genérico a TODAS las suscripciones de un usuario (zAlerta-13:
+    recordatorios "Recuérdame esto" y avisos de credencial caída). Seguro ante
+    fallos. Devuelve cuántas salieron OK."""
+    if not _vapid_private_key():
+        return 0
+    payload = json.dumps({"title": title, "body": body, "url": url,
+                          "acciones": acciones})
+    try:
+        n = await _enviar_a_usuario(session, usuario_id, payload)
+        await session.commit()
+        return n
+    except Exception as e:
+        logger.warning("push: notificar_usuario %s falló: %s", usuario_id, e)
+        return 0
+
+
 async def _usuarios_objetivo(session, contrib: Contribuyente) -> list:
     """IDs de usuarios a notificar: del estudio que vigila + empresario dueño."""
     ids: list = []
@@ -117,14 +140,36 @@ async def notificar_nuevas(session, contrib: Contribuyente, n_nuevas: int) -> di
         return {"usuarios": 0, "enviadas": 0}
 
     plural = "" if n_nuevas == 1 else "s"
+    # Resumen de urgencia con el vencimiento más próximo (zAlerta-17 P1). Solo
+    # fechas EXPLÍCITAS; no se infiere nada.
+    ahora = ahora_lima()
+    proximos = list(await session.scalars(
+        select(Notificacion.plazo_vencimiento).where(
+            Notificacion.contribuyente_id == contrib.id,
+            Notificacion.plazo_vencimiento.is_not(None),
+            Notificacion.plazo_vencimiento >= ahora)
+        .order_by(Notificacion.plazo_vencimiento.asc())))
+    cuerpo = f"Tienes {n_nuevas} aviso{plural} nuevo{plural}."
+    if proximos:
+        venc = proximos[0]
+        try:
+            venc_txt = venc.astimezone(TZ_LIMA).strftime("%d/%m")
+        except Exception:
+            venc_txt = venc.strftime("%d/%m")
+        urgentes = sum(1 for v in proximos if v <= ahora + timedelta(days=7))
+        if urgentes > 0:
+            cuerpo += f" {urgentes} vence pronto el {venc_txt}."
+        else:
+            cuerpo += f" El más próximo vence el {venc_txt}."
+    cuerpo += " Toca RESUMEN para verlos."
+
     payload = json.dumps({
-        # Identidad alerta.pe (NO SUNAT). Cuerpo breve.
+        # Identidad alerta.pe (NO SUNAT). Cuerpo con resumen de urgencia.
         "title": "Novedades en tu Buzón SUNAT",
-        "body": f"Tienes {n_nuevas} aviso{plural} nuevo{plural}. Toca para ver.",
-        "url": "/resumen",   # ENTRAR → tabla resumen (offline tras 1ª entrada)
-        # El service worker añade las acciones GRACIAS / ENTRAR si el navegador
-        # las soporta (zAlerta-12 P1.b).
-        "acciones": True,
+        "body": cuerpo,
+        "url": "/resumen?from=push",   # RESUMEN → tabla con semáforo + splash
+        "image": LEYENDA_IMG,          # imagen grande fija = leyenda de colores
+        "acciones": True,              # el SW añade GRACIAS / RESUMEN
     })
 
     enviadas = 0
