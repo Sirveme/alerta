@@ -16,12 +16,15 @@ recibido_en (UTC) a hora Lima. La key vive solo en el backend (servicios/).
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
+
+logger = logging.getLogger("alertape.pagos")
 
 from db import get_session
 from models import EstudioContable, Pago, EstadoSuscripcion, ahora_lima, TZ_LIMA
@@ -45,10 +48,10 @@ def _ahora_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _hora_corta(valor) -> str:
-    """recibido_en (UTC, naive o con tz) → HH:MM:SS en hora Lima (FIX zAlerta-15)."""
+def _a_lima(valor):
+    """recibido_en (UTC, naive o con tz) → datetime en hora Lima (zAlerta-15)."""
     if not valor:
-        return ""
+        return None
     dt = None
     if isinstance(valor, datetime):
         dt = valor
@@ -56,20 +59,69 @@ def _hora_corta(valor) -> str:
         try:
             dt = datetime.fromisoformat(valor.replace("Z", "+00:00"))
         except Exception:
-            return valor[-8:] if len(valor) >= 8 else valor
+            return None
     else:
-        return str(valor)
-    # PagoOK guarda en UTC; si viene naive, lo tratamos como UTC.
-    if dt.tzinfo is None:
+        return None
+    if dt.tzinfo is None:           # PagoOK guarda en UTC; naive ⇒ UTC
         dt = dt.replace(tzinfo=timezone.utc)
     try:
-        return dt.astimezone(TZ_LIMA).strftime("%H:%M:%S")
+        return dt.astimezone(TZ_LIMA)
     except Exception:
-        return str(valor)
+        return None
 
 
-def _titular_corto(p: dict) -> str:
-    return str(p.get("titular_corto") or p.get("titular") or "Pago")
+def _hora_corta(valor) -> str:
+    dt = _a_lima(valor)
+    return dt.strftime("%H:%M:%S") if dt else (str(valor)[-8:] if valor else "")
+
+
+def _fecha_corta(valor) -> str:
+    dt = _a_lima(valor)
+    return dt.strftime("%d/%m") if dt else ""
+
+
+def _desempaquetar(p):
+    """Si el item envuelve el pago en una sola clave dict (p.ej. {'pago': {...}}),
+    devuelve el dict interno. Robustez ante variaciones de la respuesta."""
+    if isinstance(p, dict) and len(p) == 1:
+        v = next(iter(p.values()))
+        if isinstance(v, dict):
+            return v
+    return p if isinstance(p, dict) else {}
+
+
+def _campo(p: dict, *llaves):
+    """Primer valor no vacío entre varias claves candidatas."""
+    for k in llaves:
+        v = p.get(k)
+        if v not in (None, ""):
+            return v
+    return None
+
+
+def _nombre_pago(p: dict) -> str:
+    """Nombre del pagador: titular_corto → titular → '(sin nombre)' (zAlerta-16).
+    NUNCA 'Pago' (era el texto genérico confuso)."""
+    return str(_campo(p, "titular_corto", "titular", "nombre", "remitente")
+               or "(sin nombre)")
+
+
+def _pago_para_front(raw: dict) -> dict | None:
+    """Mapea un pago de PagoOK a {id, metodo, nombre, hora, fecha, monto}."""
+    p = _desempaquetar(raw)
+    pid = _campo(p, "id", "pago_id", "uuid")
+    if pid is None:
+        return None
+    recibido = _campo(p, "recibido_en", "recibido", "fecha", "created_at",
+                      "creado_at", "fecha_hora")
+    return {
+        "id": str(pid),
+        "metodo": str(_campo(p, "metodo", "method", "tipo") or "").lower(),
+        "nombre": _nombre_pago(p),
+        "hora": _hora_corta(recibido),
+        "fecha": _fecha_corta(recibido),
+        "monto": f"{MONTO_SUSCRIPCION:.2f}",
+    }
 
 
 @router.get("/pagar", response_class=HTMLResponse)
@@ -144,18 +196,15 @@ async def buscar_pago(request: Request,
     if not res.get("ok"):
         return JSONResponse({"ok": False, "error": res.get("error",
                              "No pudimos consultar los pagos ahora.")}, status_code=502)
-    pagos = []
-    for p in res.get("pagos", []):
-        pid = p.get("id")
-        if pid is None:
-            continue
-        pagos.append({
-            "id": str(pid),
-            "metodo": (p.get("metodo") or "").lower(),
-            "titular": _titular_corto(p),
-            "hora": _hora_corta(p.get("recibido_en")),
-            "monto": f"{MONTO_SUSCRIPCION:.2f}",
-        })
+    crudos = res.get("pagos", [])
+    # Diagnóstico (zAlerta-16): loguear SOLO las claves del 1er pago (sin valores
+    # → sin PII) para confirmar la forma real de la respuesta de PagoOK.
+    if crudos:
+        try:
+            logger.info("PagoOK pago keys: %s", list(_desempaquetar(crudos[0]).keys()))
+        except Exception:
+            pass
+    pagos = [m for m in (_pago_para_front(p) for p in crudos) if m]
     return JSONResponse({"ok": True, "pagos": pagos})
 
 
@@ -184,8 +233,11 @@ async def reclamar_pago(request: Request,
         hasta=ahora_utc + timedelta(minutes=1), limit=100)
     detalle = None
     if listado.get("ok"):
-        detalle = next((p for p in listado.get("pagos", [])
-                        if str(p.get("id")) == pago_id), None)
+        for p in listado.get("pagos", []):
+            dp = _desempaquetar(p)
+            if str(_campo(dp, "id", "pago_id", "uuid")) == pago_id:
+                detalle = dp
+                break
 
     ahora = ahora_lima()
     async with get_session() as session:
@@ -220,14 +272,14 @@ async def reclamar_pago(request: Request,
         estudio.fecha_ultimo_pago = ahora
         estudio.inicio_sesion_pago = None     # FIX 3: cerrar la sesión de pago
 
-        d = detalle or {}
+        d = _desempaquetar(detalle or {})
         session.add(Pago(
             estudio_id=user.estudio_id, pagook_id=pago_id,
-            codigo_operacion=str(d.get("codigo_operacion") or "") or None,
-            metodo=(d.get("metodo") or "") or None,
+            codigo_operacion=str(_campo(d, "codigo_operacion", "codigo") or "") or None,
+            metodo=str(_campo(d, "metodo", "method", "tipo") or "") or None,
             monto=f"{MONTO_SUSCRIPCION:.2f}",
-            titular=str(d.get("titular") or d.get("titular_corto") or "") or None,
-            recibido_en=str(d.get("recibido_en") or "") or None,
+            titular=str(_campo(d, "titular", "titular_corto", "nombre") or "") or None,
+            recibido_en=str(_campo(d, "recibido_en", "recibido", "fecha") or "") or None,
             vence_resultante=nuevo_vence))
         await session.commit()
         vence_txt = fecha_lima(nuevo_vence)

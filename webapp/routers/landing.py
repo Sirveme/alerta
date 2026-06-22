@@ -40,6 +40,7 @@ from ..auth import (
     leer_sesion, COOKIE_NOMBRE,
 )
 from ..deps import usuario_actual, UsuarioActual
+from ..estados import estado_conexion
 from .clientes import consultar_ruc_api
 
 router = APIRouter(tags=["landing"])
@@ -315,23 +316,24 @@ async def bienvenida(request: Request,
       - credencial verificada     → conectó (D.1)
       - credencial sin verificar  → pendiente (D.2)
     """
-    estado, contrib, cred = "contador", None, None
+    contrib, cred = None, None
     async with get_session() as session:
         contrib = await _contrib_empresario(session, user)
         if contrib:
             cred = await session.scalar(
                 select(CredencialSol).where(
                     CredencialSol.contribuyente_id == contrib.id))
-        if cred is None:
-            estado = "contador"
-        elif cred.ultimo_login_ok_at is not None:
-            estado = "conecto"
-        else:
-            estado = "pendiente"
+    cx = estado_conexion(contrib, cred)
+    # Mapeo a las pantallas existentes (zAlerta-18 alinea D.1/D.2/D.3 con los 3
+    # estados honestos): vigilado→conectó, verificando/error→corregir, pendiente→contador.
+    estado = {"vigilado": "conecto", "verificando": "pendiente",
+              "error": "pendiente", "pendiente": "contador"}[cx["clave"]]
     return templates.TemplateResponse(request, "bienvenida.html", {
         "user": user,
         "estado": estado,
+        "conexion": cx,
         "ruc": contrib.ruc if contrib else "",
+        "razon_social": (contrib.razon_social if contrib else "") or "",
         "usuario_sol": cred.usuario_sol if cred else "",
         "horarios": HORARIOS_PRUEBA,
         "whatsapp_soporte": WHATSAPP_SOPORTE,

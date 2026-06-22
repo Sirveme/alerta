@@ -21,9 +21,10 @@ from sqlalchemy import select, func
 from db import get_session
 from models import (
     Grupo, Contribuyente, ContribuyenteGrupo, Notificacion, Urgencia, Usuario,
-    ETIQUETA_TIPO_DOCUMENTO, ahora_lima,
+    CredencialSol, ETIQUETA_TIPO_DOCUMENTO, ahora_lima,
 )
 from ..core import templates, WHATSAPP_SOPORTE
+from ..estados import estado_conexion
 from ..deps import (
     UsuarioActual, usuario_actual, usuario_actual_opcional, requiere_escritura,
 )
@@ -190,10 +191,15 @@ async def _vista_empresario(request: Request, session, user: UsuarioActual):
             select(func.count(Notificacion.id)).where(
                 Notificacion.contribuyente_id == c.id,
                 Notificacion.leida == False)) or 0  # noqa: E712
+        # Estado REAL de conexión (zAlerta-18): honesto, nunca "vigilado" si no
+        # se confirmó el login.
+        cred = await session.scalar(
+            select(CredencialSol).where(CredencialSol.contribuyente_id == c.id))
         tarjetas.append({
             "id": str(c.id), "ruc": c.ruc,
             "razon_social": c.razon_social or c.ruc,
             "urgencia": _urgencia_max(urgencias), "no_leidas": no_leidas,
+            "conexion": estado_conexion(c, cred),
         })
     return templates.TemplateResponse(request, "empresario.html", {
         "user": user, "tarjetas": tarjetas, "resumen": resumen})
