@@ -1277,6 +1277,60 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-vacio .btn { margin-top:14px; }
 
 /* ══════════════════════════════════════════════════════════════════
+   zAlerta-17 · Semáforo de urgencia + leyenda + splash en /resumen
+   ══════════════════════════════════════════════════════════════════ */
+/* Punto/badge de color */
+.rsm-punto { display:inline-block; width:10px; height:10px; border-radius:50%;
+  margin-right:7px; vertical-align:middle; }
+.sem-bg--rojo  { background:var(--u-urgente); }
+.sem-bg--ambar { background:var(--u-importante); }
+.sem-bg--verde { background:var(--u-aldia); }
+/* Franja izquierda por fila según el semáforo */
+.rsm-row.sem--rojo  td:first-child { border-left:5px solid var(--u-urgente); }
+.rsm-row.sem--ambar td:first-child { border-left:5px solid var(--u-importante); }
+.rsm-row.sem--verde td:first-child { border-left:5px solid var(--u-aldia); }
+.rsm-info-lbl { color:var(--texto-suave); font-style:italic; }
+.rsm-sugerencia { display:flex; align-items:center; gap:6px; font-size:.82rem;
+  font-weight:600; color:var(--u-importante); margin-bottom:6px; }
+.rsm-sugerencia .ti { font-size:16px; }
+
+/* Mini-leyenda de colores (discreta, siempre visible) */
+.rsm-leyenda { display:flex; gap:14px; flex-wrap:wrap; margin:10px 0;
+  font-size:.8rem; color:var(--texto-suave); }
+.rsm-leyenda span { display:inline-flex; align-items:center; }
+
+/* Splash de bienvenida al entrar desde el push */
+.rsm-splash { position:relative; margin:10px 0 14px; padding:16px;
+  border-radius:var(--radio); color:#0F3D22;
+  background:linear-gradient(135deg,#FFE9A8,#FBD36B);
+  border:2px solid #fff; box-shadow:var(--sombra); }
+.rsm-splash-tit { font-weight:800; font-size:1.05rem; display:flex; align-items:center; gap:7px; }
+.rsm-splash-txt { margin:6px 0 8px; font-size:.9rem; }
+.rsm-splash .rsm-leyenda { color:#0F3D22; margin:0; }
+.rsm-splash-x { position:absolute; top:8px; right:10px; background:none; border:none;
+  font-size:22px; line-height:1; cursor:pointer; color:#0F3D22; }
+
+/* ══════════════════════════════════════════════════════════════════
+   zAlerta-18 · Banner de estado de conexión (honesto)
+   ══════════════════════════════════════════════════════════════════ */
+.conx-banner { display:flex; align-items:flex-start; gap:10px; padding:11px 13px;
+  border-radius:var(--radio); margin:10px 0; font-size:.88rem; line-height:1.4;
+  border:1.5px solid var(--borde); }
+.conx--verde { background:color-mix(in srgb,var(--u-aldia) 12%,var(--superficie));
+  border-color:color-mix(in srgb,var(--u-aldia) 45%,transparent); }
+.conx--ambar { background:color-mix(in srgb,var(--u-importante) 12%,var(--superficie));
+  border-color:color-mix(in srgb,var(--u-importante) 45%,transparent); }
+.conx--rojo { background:color-mix(in srgb,var(--u-urgente) 12%,var(--superficie));
+  border-color:color-mix(in srgb,var(--u-urgente) 45%,transparent); }
+.conx-badge { font-size:.68rem; font-weight:800; color:#fff; border-radius:999px;
+  padding:4px 10px; white-space:nowrap; flex:0 0 auto; letter-spacing:.02em; }
+.conx-badge--verde { background:var(--u-aldia); }
+.conx-badge--ambar { background:var(--u-importante); }
+.conx-badge--rojo { background:var(--u-urgente); }
+.conx-msg { color:var(--texto); }
+.conx-msg a { font-weight:700; color:var(--marca); white-space:nowrap; }
+
+/* ══════════════════════════════════════════════════════════════════
    zAlerta-14 · Pantalla de pago (PagoOK)
    ══════════════════════════════════════════════════════════════════ */
 .pay { max-width:520px; margin:0 auto; }
@@ -1295,12 +1349,13 @@ a.tarjeta-link { display:block; color:inherit; }
 .pay-opcion:hover { border-color:var(--marca); }
 .pay-opcion:disabled { opacity:.5; }
 .pay-met { font-size:.72rem; font-weight:800; color:#fff; border-radius:999px;
-  padding:3px 9px; flex:0 0 auto; background:var(--texto-suave); }
+  padding:4px 10px; flex:0 0 auto; background:var(--texto-suave); letter-spacing:.02em; }
 .pay-met--yape { background:#742384; }
 .pay-met--plin { background:#00bcd4; }
-.pay-titular { font-weight:600; flex:1; }
-.pay-hora { color:var(--texto-suave); font-size:.85rem; }
-.pay-mt { font-weight:700; color:#1D9E75; }
+.pay-met--transferencia, .pay-met--transf { background:#5B6472; }
+.pay-info { display:flex; flex-direction:column; flex:1; min-width:0; }
+.pay-titular { font-weight:600; }
+.pay-cuando { color:var(--texto-suave); font-size:.82rem; margin-top:1px; }
 .pay-simio { flex-basis:100%; margin-top:6px; color:#1D9E75; font-weight:700;
   font-size:.85rem; text-align:right; }
 .pay-transferir { margin-top:8px; padding-top:14px; border-top:1px solid var(--borde); }
