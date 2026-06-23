@@ -1331,6 +1331,95 @@ a.tarjeta-link { display:block; color:inherit; }
 .conx-msg a { font-weight:700; color:var(--marca); white-space:nowrap; }
 
 /* ══════════════════════════════════════════════════════════════════
+   zAlerta-19 · Landing de venta (bloques nuevos)
+   ══════════════════════════════════════════════════════════════════ */
+/* Héroe compacto */
+.lp-franja-precio { background:#0F3D22; color:#FFD23F; text-align:center;
+  font-size:.82rem; font-weight:600; padding:7px 10px; border-radius:999px;
+  margin:0 auto 14px; max-width:max-content; }
+.lp-franja-precio b { color:#fff; }
+.lp-ctas { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
+.lp-ctas .lp-cta { flex:1 1 220px; max-width:none; margin:0; }
+.lp-cta--sec { background:linear-gradient(135deg,#2E8F4E,#175331); }
+.lp-cta--chico { display:inline-flex; width:auto; max-width:none; padding:11px 18px;
+  margin-top:12px; }
+.lp-cta--chico .lp-cta-resp { font-size:1rem; }
+.lp-microcopy { text-align:center; font-size:.82rem; color:var(--texto-suave); margin:12px 0 0; }
+
+/* Demo en vivo */
+.lp-demo-campo { max-width:340px; margin:6px auto 4px; }
+.lp-demo-campo input { width:100%; padding:13px; font-size:1.05rem; letter-spacing:.05em;
+  text-align:center; background:#0B1A12; color:#F0F3F8; border:2px solid #FCC014;
+  border-radius:var(--radio); }
+.lp-demo-campo input:focus { outline:none; border-color:#26D07C; }
+.lp-demo-msg { text-align:center; min-height:1.1em; font-size:.88rem; margin-top:6px; color:rgba(247,245,239,.8); }
+.lp-demo-msg.ok { color:#26D07C; font-weight:600; }
+.ph-rs { font-size:.82rem; color:#c7cdda; margin:6px 0; font-weight:600; }
+
+/* Dolor + checklist */
+.lp-checklist { list-style:none; padding:0; margin:0 0 14px; display:grid; gap:8px; }
+.lp-checklist li { display:flex; align-items:center; gap:8px; font-size:.95rem; }
+.lp-checklist .ti { color:var(--u-importante); font-size:18px; }
+.lp-remate { font-weight:800; font-size:1.1rem; margin:14px 0; }
+.lp-foto-ancla, .lp-multi { position:relative; margin-top:16px; min-height:120px;
+  background:#E9E5DB; display:grid; place-items:center; overflow:hidden; }
+.lp-foto-ancla img, .lp-multi img { width:100%; display:block; }
+.lp-foto-ancla .lp-foto-ph, .lp-multi .lp-foto-ph { color:#9aa08f; font-size:46px; padding:30px; }
+
+/* Semáforo (landing) */
+.lp-leyenda-img { width:100%; border-radius:var(--radio); margin-bottom:12px; }
+.lp-semaforo { display:grid; gap:10px; }
+.lp-sem-item { display:flex; align-items:center; gap:10px; padding:11px 13px;
+  border-radius:var(--radio); font-size:.92rem; }
+.lp-sem-item.sem--rojo  { background:color-mix(in srgb,var(--u-urgente) 14%,transparent); }
+.lp-sem-item.sem--ambar { background:color-mix(in srgb,var(--u-importante) 14%,transparent); }
+.lp-sem-item.sem--verde { background:color-mix(in srgb,var(--u-aldia) 14%,transparent); }
+
+/* Beneficios */
+.lp-beneficios { display:grid; gap:10px; grid-template-columns:1fr; }
+@media (min-width:560px){ .lp-beneficios { grid-template-columns:1fr 1fr; } }
+.lp-benef { background:#fff; padding:13px; display:flex; flex-direction:column; gap:3px; }
+.lp-benef .ti { font-size:22px; color:#1E8F4E; }
+.lp-benef b { color:#15402A; } .lp-benef span { color:#4A5A50; font-size:.86rem; line-height:1.4; }
+
+/* Precio Fundador */
+.lp-precio-card { background:#fff; padding:22px; text-align:center; }
+.lp-precio-tit { font-weight:800; font-size:1.1rem; color:#15402A; }
+.lp-precio-monto { font-size:2.8rem; font-weight:800; color:#1D9E75; line-height:1; margin:4px 0; }
+.lp-precio-monto span { font-size:1rem; font-weight:600; color:#4A5A50; }
+.lp-incluye { list-style:none; padding:0; margin:12px 0; display:grid; gap:7px; text-align:left; }
+.lp-incluye li { position:relative; padding-left:26px; color:#15402A; }
+.lp-incluye li::before { content:"\2713"; position:absolute; left:0; color:#1D9E75; font-weight:800; }
+.lp-ancla { background:color-mix(in srgb,#FCC014 14%,transparent); border-radius:10px;
+  padding:11px; font-size:.9rem; color:#5a4708; margin:10px 0; }
+.lp-cafe { font-weight:700; color:#15402A; margin:10px 0; }
+
+/* Preámbulo + FAQ */
+.lp-preambulo { background:var(--superficie); border-left:4px solid var(--u-aldia);
+  padding:13px; border-radius:var(--radio); }
+.lp-faq { margin-top:14px; display:grid; gap:8px; }
+.lp-faq-item { background:var(--superficie); border:1px solid var(--borde);
+  border-radius:var(--radio); padding:0 13px; }
+.lp-faq-item summary { cursor:pointer; padding:13px 0; font-weight:600; list-style:none; }
+.lp-faq-item summary::-webkit-details-marker { display:none; }
+.lp-faq-item summary::after { content:"+"; float:right; color:var(--texto-suave); font-weight:800; }
+.lp-faq-item[open] summary::after { content:"–"; }
+.lp-faq-item p { margin:0 0 13px; color:var(--texto-suave); line-height:1.5; }
+
+/* Historias RTF (3 tarjetas; tocar → al frente) */
+.lp-historias { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+.lp-historia { width:150px; cursor:pointer; }
+.lp-historia .phone--video { width:150px; height:268px; }
+.lp-rtf-overlay { position:fixed; inset:0; z-index:140; display:grid; place-items:center;
+  padding:16px; opacity:0; transition:opacity .25s ease; }
+.lp-rtf-overlay.show { opacity:1; }
+.lp-rtf-fondo { position:absolute; inset:0; background:rgba(5,12,8,.7); }
+.lp-rtf-panel { position:relative; text-align:center; }
+.lp-rtf-x { position:absolute; top:-6px; right:-6px; z-index:2; background:#fff; border:none;
+  width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:18px; box-shadow:var(--sombra); }
+.lp-rtf-tit { color:#F0F3F8; font-weight:700; margin-top:12px; max-width:240px; }
+
+/* ══════════════════════════════════════════════════════════════════
    zAlerta-14 · Pantalla de pago (PagoOK)
    ══════════════════════════════════════════════════════════════════ */
 .pay { max-width:520px; margin:0 auto; }
