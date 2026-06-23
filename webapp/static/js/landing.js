@@ -144,26 +144,39 @@
   const probar = $('#demo-probar');
   if (probar) probar.addEventListener('click', abrirDemoModal);
 
-  // ── Historias RTF: tocar una tarjeta la trae AL FRENTE (overlay) ──
+  // ── Historias RTF: tocar una tarjeta la trae AL FRENTE (overlay + video) ──
   const ov = $('#lp-rtf-overlay'), ovPanel = $('#lp-rtf-panel');
   document.querySelectorAll('.lp-historia').forEach((h) => {
     h.addEventListener('click', () => {
       if (!ov || !ovPanel) return;
+      const slug = h.dataset.slug || '';
+      // <video> con source + poster; si el archivo no existe, onerror degrada a
+      // "próximamente" (sin recuadro roto).
       ovPanel.innerHTML =
-        '<button class="lp-rtf-x" aria-label="Cerrar"><i class="ti ti-x"></i></button>'
+        '<button class="lp-rtf-x" aria-label="Cerrar"><span class="material-symbols-outlined">close</span></button>'
         + '<div class="phone phone--video borde-chicha-1" style="width:230px;height:410px">'
         + '<div class="phone-notch"></div><div class="phone-pantalla phone-pantalla--video">'
-        // VIDEO REAL: cuando exista, reemplazar el placeholder por
-        // <video src="/static/vid/{slug}.mp4" controls playsinline></video>
-        + '<div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div></div></div>'
+        + '<video class="rtf-video" controls playsinline autoplay '
+        + 'poster="/static/img/' + esc(slug) + '.jpg">'
+        + '<source src="/static/video/' + esc(slug) + '.mp4" type="video/mp4">'
+        + '<source src="/static/video/' + esc(slug) + '.webm" type="video/webm"></video>'
+        + '<div class="lp-video-ph rtf-proximo" hidden><span class="material-symbols-outlined">movie</span>'
+        + '<span>Próximamente</span></div>'
+        + '</div></div>'
         + '<div class="lp-rtf-tit">' + esc(h.dataset.titulo || '') + '</div>';
       ov.hidden = false;
       requestAnimationFrame(() => ov.classList.add('show'));
+      // Si el video no carga (sin archivo aún), mostrar "Próximamente".
+      const vid = ovPanel.querySelector('.rtf-video');
+      const prox = ovPanel.querySelector('.rtf-proximo');
+      if (vid) vid.addEventListener('error', () => { vid.style.display = 'none'; if (prox) prox.hidden = false; }, true);
       ovPanel.querySelector('.lp-rtf-x').onclick = cerrarRtf;
       $('#lp-rtf-fondo').onclick = cerrarRtf;
     });
   });
   function cerrarRtf() {
-    if (!ov) return; ov.classList.remove('show'); setTimeout(() => { ov.hidden = true; }, 300);
+    if (!ov) return;
+    const v = ovPanel.querySelector('video'); if (v) { try { v.pause(); } catch (_) {} }
+    ov.classList.remove('show'); setTimeout(() => { ov.hidden = true; }, 300);
   }
 })();
