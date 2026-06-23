@@ -1,220 +1,317 @@
 {% extends "base.html" %}
 {% block titulo %}alerta.pe · Nunca más una multa por no enterarte{% endblock %}
 {% block contenido %}
-<div class="lp">
+<div class="lp lp-venta">
 
-  <!-- ════════ A.1 · HÉROE — identidad "chicha amazónico" (zAlerta-11a-heroe) ══
-       Orden: marca sutil → titular → precio grande → demo del celular →
-       mensaje resaltado → CTA jalador. La demo (.phone) vive AQUÍ (antes en A.2)
-       para que se vea en la primera pantalla. -->
+  <!-- ════════ BLOQUE 1 · HÉROE (demo above-the-fold) ════════ -->
   <header class="lp-hero">
     <div class="lp-topbar">
       <span class="logo-selva lp-logo-top">alerta<i>.pe</i></span>
       {% if logueado %}<a href="/" class="lp-volver">Ir a mi panel ›</a>{% endif %}
     </div>
 
-    <h1 class="lp-titular">Nunca más una <span class="hl">multa</span> por no enterarte</h1>
-    <p class="lp-sub">Vigilamos tu buzón SUNAT y SUNAFIL las 24 horas y te avisamos
-      al celular apenas llegue algo.</p>
+    <div class="lp-franja-precio">Precio Fundador 2026: <b>S/5 al mes</b> · 7 días
+      gratis · Avisos en celular y PC</div>
 
-    <div class="lp-precio">
-      <div class="lp-precio-monto">S/5 <span>al mes</span></div>
-      <div class="lp-precio-prueba">Evita multas de S/ 300, S/ 500 y hasta de S/ 1000</div>
+    <h1 class="lp-titular">Nunca más una <span class="hl">multa</span> por no enterarte.</h1>
+    <p class="lp-sub">Vigilamos tu Buzón SUNAT y te avisamos al instante en tu celular
+      y tu PC. Sabrás de inmediato si <b>vence pronto</b>, si <b>tiene plazo</b> o si
+      solo es <b>informativo</b>.</p>
+
+    <div class="lp-ctas">
+      <a href="/activar" class="lp-cta"><span class="lp-cta-resp">Probar gratis 7 días</span></a>
+      <a href="/activar" class="lp-cta lp-cta--sec"><span class="lp-cta-resp">Asegurar precio Fundador · S/5</span></a>
+    </div>
+    <p class="lp-microcopy">Cancela cuando quieras. Si tu contador administra la Clave
+      SOL, también te ayudamos con la activación.</p>
+  </header>
+
+  <!-- ════════ BLOQUE 3 · DEMO EN VIVO (pegada al héroe) ════════ -->
+  <section class="lp-sec lp-sec--oscura lp-watermark" id="demo">
+    <div class="lp-franja franja-aura">
+      <h2 class="lp-h2 titulo-chicha">Así te llegaría una alerta real</h2>
+    </div>
+    <p class="lp-pie" style="margin-top:0">Ingresa un RUC, mira cómo aparece la razón
+      social y observa cómo llega la alerta con su nivel de importancia. No tienes que
+      imaginarlo: <b>velo en segundos</b>.</p>
+
+    <div class="lp-demo-campo">
+      <input id="demo-ruc" inputmode="numeric" maxlength="11" autocomplete="off"
+             placeholder="Escribe un RUC (11 dígitos)">
+      <div class="lp-demo-msg" id="demo-msg" aria-live="polite"></div>
     </div>
 
-    <!-- Demo del celular (pieza estrella, en la primera pantalla) -->
-    <div class="lp-demo" id="demo">
+    <div class="lp-demo">
       <div class="phone borde-chicha-1" id="phone">
         <div class="phone-notch"></div>
         <div class="phone-pantalla">
-          <!-- Estado 1: notificación push -->
           <div class="ph-push" data-ph="push">
             <div class="ph-push-app"><span class="marca-punto"></span> alerta.pe · ahora</div>
-            <div class="ph-push-tit">Nueva notificación de SUNAT</div>
-            <div class="ph-push-cuerpo">Orden de Pago · Periodo 2026-04</div>
+            <div class="ph-push-tit">Nueva notificación en tu Buzón SUNAT</div>
+            <div class="ph-push-cuerpo" id="ph-push-cuerpo">Orden de Pago · vence pronto</div>
           </div>
-          <!-- Estado 2: tarjeta con detalle -->
           <div class="ph-card" data-ph="card">
             <div class="ph-card-head">
               <span class="ph-tipo">Orden de Pago</span>
               <span class="ph-urg">Urgente</span>
             </div>
+            <div class="ph-rs" id="ph-rs">Tu negocio</div>
             <ul class="ph-detalle">
-              <li><span>Periodo</span><b>Abril 2026</b></li>
+              <li><span>Vence</span><b id="ph-vence">pronto</b></li>
               <li><span>Tributo</span><b>IGV</b></li>
-              <li><span>Concepto</span><b>Tributo declarado no pagado</b></li>
             </ul>
-            <div class="ph-orienta">
-              <i class="ti ti-bulb"></i> Paga pronto para evitar intereses y
-              cobranza coactiva.
-            </div>
-            <div class="ph-botones">
-              <span class="ph-btn"><i class="ti ti-file-text"></i> Ver PDF</span>
-              <span class="ph-btn ph-btn--sec"><i class="ti ti-share"></i> Compartir</span>
-            </div>
+            <div class="ph-orienta"><i class="ti ti-bulb"></i> Paga pronto para evitar
+              intereses y cobranza coactiva.</div>
           </div>
         </div>
       </div>
     </div>
-
-    <p class="lp-mensaje-destacado">Te llega el aviso, el detalle, el PDF y qué
-      hacer. <b>Todo en tu celular, sin entrar a SUNAT.</b></p>
-
-    <a href="/activar" class="lp-cta">
-      <span class="lp-cta-gancho">Solo S/5 para que NO me multen</span>
-      <span class="lp-cta-resp">¡Toco y me apunto! →</span>
-    </a>
-  </header>
-
-  <!-- ════════ A.3 · AUTORIDAD (respiro: crema) ════════ -->
-  <section class="lp-sec lp-sec--crema">
-    <!-- FILA 1: foto (borde chicha) + texto -->
-    <div class="lp-autoridad">
-      <!-- FOTO REAL DE DUILIO: pon la URL en src (ej. /static/img/duilio.jpg).
-           Si aún no existe, onerror muestra el placeholder de abajo. -->
-      <div class="lp-foto borde-chicha-2">
-        <img class="lp-foto-img" src="static/img/duilio.png"
-             alt="Duilio Restuccia" onerror="this.remove()">
-        <span class="lp-foto-ph"><i class="ti ti-user"></i></span>
-      </div>
-      <div class="lp-autoridad-txt">
-        <div class="lp-autor-nombre">Duilio Restuccia</div>
-        <div class="lp-soft">Más de 20 años difundiendo normas tributarias y
-          asesorando negocios.</div>
-      </div>
+    <p class="lp-pie">Te llega el aviso, el detalle y qué hacer. <b>Guardado en tu
+      celular, lo revisas incluso sin internet.</b></p>
+    <div style="text-align:center">
+      <button class="lp-cta lp-cta--chico" id="demo-probar">Probar la demo ahora</button>
     </div>
-    <!-- FILA 2: cita a ancho completo -->
-    <p class="lp-cita">“Mi compromiso siempre ha sido que los negocios estén
-      tranquilos y al día, sin sustos. Por eso creé alerta.pe.”</p>
   </section>
 
-  <!-- ════════ A.3b · CONSEJOS / VIDEOS (impacto: oscura + marca de agua) ════════ -->
-<section class="lp-sec lp-sec--oscura lp-watermark">
-  <!-- Franja de entrada "aura chicha" con el título chicha encima -->
-  <div class="lp-franja franja-aura">
-    <h2 class="lp-h2 titulo-chicha">Consejos que te conviene saber</h2>
-  </div>
-  <div class="lp-videos">
-    <!-- VIDEOS REALES: cada uno con (título, duración, archivo .mp4, poster).
-         Sube los .mp4 y los poster a /static/vid/ y /static/img/.
-         Si un video aún no existe, deja src vacío ('') y se muestra el placeholder. -->
-    {% set videos = [
-      ('¿Qué pasa si ignoras una notificación de SUNAT?', '1:20', 'video-1.mp4', 'video-1.jpg'),
-      ('El error que le costó S/3,700 a una bodega', '0:55', 'video-2.mp4', 'video-2.jpg'),
-      ('Multa por no presentar vs. fuera de plazo: la diferencia', '1:05', 'video-3.mp4', 'video-3.jpg')] %}
-    {% for titulo, dur, mp4, poster in videos %}
-    <figure class="lp-video-item">
-      <div class="phone phone--video borde-chicha-{{ loop.index }}">
-        <div class="phone-notch"></div>
-        <div class="phone-pantalla phone-pantalla--video">
-          {% if mp4 %}
-          <video class="lp-video-el" playsinline controls preload="none"
-                 src="/static/vid/{{ mp4 }}"
-                 poster="/static/img/{{ poster }}"></video>
-          {% else %}
-          <div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div>
-          {% endif %}
-        </div>
-      </div>
-      <figcaption class="lp-video-cap">{{ titulo }}
-        <span class="lp-video-dur">{{ dur }}</span></figcaption>
-    </figure>
-    {% endfor %}
-  </div>
-</section>
-
-  <!-- ════════ A.4 · ¿QUÉ ES? (amazónica: celeste) ════════ -->
-  <section class="lp-sec lp-sec--cielo">
-    <h2 class="lp-h2">¿Qué es alerta.pe?</h2>
-    <p class="lp-parrafo">Es un servicio que revisa tu buzón electrónico de SUNAT y
-      SUNAFIL por ti, todos los días, y te avisa al celular cuando llega una
-      notificación importante. Así no tienes que entrar a revisar, ni te arriesgas a
-      una multa por no enterarte a tiempo.</p>
-  </section>
-
-  <!-- ════════ A.5 · ¿CÓMO FUNCIONA? (respiro: crema) ════════ -->
+  <!-- ════════ BLOQUE 2 · DOLOR + COSTO ════════ -->
   <section class="lp-sec lp-sec--crema">
-    <h2 class="lp-h2">¿Cómo funciona?</h2>
+    <h2 class="lp-h2">¿Cada cuánto revisas tu Buzón SUNAT?</h2>
+    <ul class="lp-checklist">
+      <li><i class="ti ti-square"></i> Todos los días</li>
+      <li><i class="ti ti-square"></i> Una vez por semana</li>
+      <li><i class="ti ti-square"></i> Solo cuando me acuerdo</li>
+      <li><i class="ti ti-square"></i> Casi nunca</li>
+    </ul>
+    <p class="lp-remate">La multa más cara es la que nunca viste venir.</p>
+    <p class="lp-parrafo">Las multas suelen ser el costo de que tú —o tu contador—
+      revisen tarde el buzón. SUNAT puede dejar una notificación y darte por notificado
+      aunque no la abras ese día. Si nadie revisa con frecuencia, pierdes plazos o
+      reaccionas tarde.</p>
+    <!-- FOTO REAL: pequeño empresario peruano en su negocio. Sube /static/img/empresario.jpg -->
+    <div class="lp-foto-ancla borde-chicha-2">
+      <img src="/static/img/empresario.jpg" alt="" onerror="this.remove()">
+      <span class="lp-foto-ph"><i class="ti ti-building-store"></i></span>
+    </div>
+  </section>
+
+  <!-- ════════ BLOQUE 4 · SEMÁFORO ════════ -->
+  <section class="lp-sec lp-sec--cielo">
+    <h2 class="lp-h2">No todas las notificaciones merecen la misma atención</h2>
+    <p class="lp-parrafo" style="margin-bottom:14px">Por eso tus alertas se clasifican
+      de forma simple y visual:</p>
+    <!-- IMAGEN LEYENDA: el fundador sube /static/img/leyenda-colores.webp; si no, se ve el semáforo HTML. -->
+    <img class="lp-leyenda-img" src="/static/img/leyenda-colores.webp"
+         alt="Leyenda de colores" onerror="this.remove()">
+    <div class="lp-semaforo">
+      <div class="lp-sem-item sem--rojo"><span class="rsm-punto sem-bg--rojo"></span>
+        <b>Vence pronto:</b> lee y envía al Contador ¡ya!</div>
+      <div class="lp-sem-item sem--ambar"><span class="rsm-punto sem-bg--ambar"></span>
+        <b>Importante:</b> tiene plazo, no lo olvides</div>
+      <div class="lp-sem-item sem--verde"><span class="rsm-punto sem-bg--verde"></span>
+        <b>Informativo:</b> sin apuro, se recomienda leer</div>
+    </div>
+    <p class="lp-remate">En segundos sabrás si debes correr, programarlo o revisarlo
+      con calma.</p>
+  </section>
+
+  <!-- ════════ BLOQUE 5 · EL EMPRESARIO PRIMERO ════════ -->
+  <section class="lp-sec lp-sec--verde lp-watermark">
+    <h2 class="lp-h2">La mayoría piensa en tu contador. Nosotros pensamos primero en ti.</h2>
+    <p class="lp-parrafo">Durante años, muchos empresarios se acostumbraron a dejarlo
+      todo en manos de otros y a desentenderse de su propio negocio. alerta.pe nace
+      para cambiar eso, con humildad y herramientas claras. Tu contador tendrá las
+      suyas; pero <b>tú también mereces saber, entender y decidir</b> sobre lo tuyo.
+      Empezamos por algo simple: que nunca más te enteres tarde de una notificación de
+      SUNAT. Tú, en tu celular, con claridad, sin depender de nadie.</p>
+  </section>
+
+  <!-- ════════ BLOQUE 6 · BENEFICIOS + MULTIDISPOSITIVO ════════ -->
+  <section class="lp-sec lp-sec--crema">
+    <h2 class="lp-h2">¿Qué ganas exactamente con alerta.pe?</h2>
+    <div class="lp-beneficios">
+      <div class="lp-benef borde-chicha-1"><i class="ti ti-bolt"></i><b>Te enteras a tiempo</b><span>aviso apenas detectamos algo nuevo en tu buzón.</span></div>
+      <div class="lp-benef borde-chicha-2"><i class="ti ti-traffic-lights"></i><b>Sabes qué tan urgente es</b><span>el semáforo te lo dice, no adivinas.</span></div>
+      <div class="lp-benef borde-chicha-3"><i class="ti ti-send"></i><b>Reaccionas más rápido con tu contador</b><span>actúas el mismo día.</span></div>
+      <div class="lp-benef borde-chicha-1"><i class="ti ti-eye-check"></i><b>No dependes de acordarte de revisar</b><span>tu buzón se vigila por ti.</span></div>
+      <div class="lp-benef borde-chicha-2"><i class="ti ti-devices"></i><b>Lo ves en tu celular y en tu PC</b><span>aunque estés fuera del negocio.</span></div>
+      <div class="lp-benef borde-chicha-3"><i class="ti ti-device-mobile-down"></i><b>Queda guardado, sin internet</b><span>el historial en tu propio equipo.</span></div>
+      <div class="lp-benef borde-chicha-1"><i class="ti ti-bell-plus"></i><b>Puedes programar recordatorios</b><span>para no perder ningún plazo.</span></div>
+    </div>
+    <!-- MULTIDISPOSITIVO: imagen celular + PC. Sube /static/img/multidispositivo.png -->
+    <div class="lp-multi borde-chicha-2">
+      <img src="/static/img/multidispositivo.png" alt="" onerror="this.remove()">
+      <span class="lp-foto-ph"><i class="ti ti-devices-2"></i></span>
+    </div>
+    <p class="lp-pie">Si estás en el negocio, lo ves en la PC. Si estás fuera, te
+      enteras en el celular.</p>
+  </section>
+
+  <!-- ════════ BLOQUE 7 · CÓMO FUNCIONA (3 pasos honestos) ════════ -->
+  <section class="lp-sec lp-sec--cielo">
+    <h2 class="lp-h2">Activa tus alertas en 3 pasos</h2>
     <div class="lp-pasos">
       <div class="lp-paso borde-chicha-1"><span class="lp-num lp-num--sol">1</span>
-        <div><b>Conectas tu RUC</b><div class="lp-soft">En menos de un minuto, desde tu celular.</div></div></div>
+        <div><b>Ingresa tu RUC y tu WhatsApp</b><div class="lp-soft">Registras tu empresa y creamos tu cuenta.</div></div></div>
       <div class="lp-paso borde-chicha-2"><span class="lp-num lp-num--fucsia">2</span>
-        <div><b>Vigilamos tu buzón</b><div class="lp-soft">Día y noche, SUNAT y SUNAFIL.</div></div></div>
+        <div><b>Conecta tu buzón</b><div class="lp-soft">Registra tus credenciales SOL. ¿No las tienes a la mano? Tu contador puede dártelas o registrarlas por ti; te lo dejamos fácil.</div></div></div>
       <div class="lp-paso borde-chicha-3"><span class="lp-num lp-num--celeste">3</span>
-        <div><b>Te avisamos al instante</b><div class="lp-soft">Con el detalle, para que sepas qué hacer.</div></div></div>
+        <div><b>Recibe tus alertas</b><div class="lp-soft">Cuando dice CONECTADO, empieza tu prueba de 7 días y te avisamos al instante.</div></div></div>
     </div>
+    <p class="lp-pie">La activación toma pocos minutos. Si tu contador administra la
+      Clave SOL, contemplamos ese caso.</p>
   </section>
 
-  <!-- ════════ A.6 · CANAL PRIVADO (impacto: verde selva) ════════ -->
-  <section class="lp-sec lp-sec--verde">
-    <h2 class="lp-h2">¿Cómo te avisamos?</h2>
-    <p class="lp-parrafo">Por un canal privado propio, directo a tu celular. No
-      usamos tu WhatsApp ni lo compartimos con nadie. Tus avisos quedan guardados en
-      tu teléfono, listos cuando los necesites.</p>
-  </section>
-
-  <!-- ════════ A.7 · ¿POR QUÉ S/5? (respiro: crema) ════════ -->
+  <!-- ════════ BLOQUE 8 · TESTIMONIOS ════════ -->
   <section class="lp-sec lp-sec--crema">
-    <h2 class="lp-h2">¿Por qué cuesta solo <span class="hl-verde">S/5</span>?</h2>
-    <p class="lp-parrafo">Porque la tecnología nos permite vigilar tu buzón de forma
-      automática, sin costos altos. Queremos que cada negocio, grande o pequeño,
-      pueda estar tranquilo por el precio de un refresco. Sin letra chica.</p>
-  </section>
-
-  <!-- ════════ A.8 · TESTIMONIOS — franja de entrada (selva) + respiro ════════
-       Los testimonios iniciales son de la SELVA (Iquitos) → franja-selva.
-       Para testimonios de otras regiones, usar .franja-andina / .franja-costena
-       (ya listas en el CSS) en su propia franja de entrada. -->
-  <section class="lp-sec lp-sec--crema">
-    <div class="lp-franja franja-selva">
-      <h2 class="lp-h2 titulo-chicha">Lo que dicen los negocios</h2>
-      <p class="lp-franja-sub">Negocios reales de la selva, ya tranquilos.</p>
-    </div>
+    <h2 class="lp-h2">Negocios reales ya lo usan para no enterarse tarde</h2>
     {% set testimonios = [
-      ('Pedro', 'Multiservicios Shevalche · Iquitos', 'Ya no me pierdo ninguna notificación.', '20615643735'),
-      ('Rosa', 'Bodega La Esquina · Iquitos', 'Me avisaron de una esquela el mismo día. Me salvó de una multa.', '10456789012')] %}
+      ('Pedro', 'Multiservicios · Iquitos', 'Me llegó una esquela y me enteré el mismo día. Se la reenvié al contador de una.'),
+      ('Aldo', 'Ferretería · Tarapoto', 'Ahora el color me dice si debo moverme rápido o si puede esperar.'),
+      ('Rosa', 'Bodega La Esquina', 'Ya no entro a revisar por si acaso; me llega el aviso al celular.')] %}
     <div class="lp-testis">
-      {% for nombre, negocio, frase, ruc in testimonios %}
+      {% for nombre, negocio, frase in testimonios %}
       <figure class="lp-testi borde-chicha-{{ loop.index0 % 3 + 1 }}">
-        <!-- FOTO REAL del testimonio: pon la URL en src. Si no existe, onerror
-             revela el placeholder. -->
         <div class="lp-testi-foto">
-          <img class="lp-testi-img" src="/static/img/testi-{{ loop.index }}.jpg"
-               alt="{{ nombre }}" onerror="this.remove()">
+          <img class="lp-testi-img" src="/static/img/testi-{{ loop.index }}.jpg" alt="{{ nombre }}" onerror="this.remove()">
           <span class="lp-testi-ph"><i class="ti ti-user"></i></span>
         </div>
         <blockquote class="lp-testi-frase">“{{ frase }}”</blockquote>
-        <figcaption>
-          <b>{{ nombre }}</b> <span class="lp-soft">· {{ negocio }}</span>
-          <button class="lp-testi-i" data-nombre="{{ nombre }}" data-ruc="{{ ruc }}"
-                  aria-label="Ver autorización"><i class="ti ti-info-circle"></i></button>
-        </figcaption>
+        <figcaption><b>{{ nombre }}</b> <span class="lp-soft">· {{ negocio }}</span></figcaption>
       </figure>
       {% endfor %}
     </div>
   </section>
 
-  <!-- ════════ A.9 · ¿CÓMO PAGO? (respiro: crema) ════════ -->
+  <!-- ════════ BLOQUE 9 · AUTORIDAD ════════ -->
   <section class="lp-sec lp-sec--crema">
-    <h2 class="lp-h2">¿Cómo pago? ¿Dan comprobante?</h2>
-    <p class="lp-parrafo">Pruebas 7 días gratis. Si te sirve, pagas con Yape o Plin
-      —rápido y desde tu celular—. Sí, te damos tu comprobante. Si no te convence, no
-      pagas nada y listo.</p>
+    <h2 class="lp-h2">Quién está detrás de alerta.pe</h2>
+    <div class="lp-autoridad">
+      <!-- FOTO REAL: /static/img/duilio.png -->
+      <div class="lp-foto borde-chicha-2">
+        <img class="lp-foto-img" src="/static/img/duilio.png" alt="Duilio Restuccia" onerror="this.remove()">
+        <span class="lp-foto-ph"><i class="ti ti-user"></i></span>
+      </div>
+      <div class="lp-autoridad-txt">
+        <div class="lp-autor-nombre">Duilio Restuccia</div>
+        <div class="lp-soft">Más de 20 años difundiendo normas tributarias y
+          desarrollando sistemas multidispositivos para negocios peruanos.</div>
+      </div>
+    </div>
+    <p class="lp-parrafo" style="margin-top:14px">La misma tecnología de alertas que ya
+      funciona en sistemas usados por el <b>Colegio de Contadores de Loreto</b> y otros
+      negocios.</p>
+    <div class="tarjeta acento" style="--acento:#16B0D8;border-left-width:4px;margin-top:14px">
+      <strong>¿Por qué pedimos acceso a tu buzón?</strong>
+      <p class="lp-parrafo" style="margin:6px 0 0">Solo para <b>leer</b> si hay
+        notificaciones nuevas. No presentamos declaraciones ni modificamos nada. Tu
+        clave viaja cifrada y la desconectas cuando quieras.</p>
+    </div>
   </section>
 
-  <!-- ════════ A.10 · CIERRE + CONTACTO (impacto: verde selva + marca de agua) ════════ -->
-  <section class="lp-sec lp-sec--verde lp-cierre lp-watermark">
-    <h2 class="lp-h2">Empieza tranquilo, hoy mismo</h2>
-    <a href="/activar" class="lp-cta">
-      <span class="lp-cta-gancho">Solo S/5 para que NO me multen</span>
-      <span class="lp-cta-resp">¡Toco y me apunto! →</span>
-    </a>
-    <p class="lp-cierre-dudas">¿Tienes dudas?
-      <a href="https://wa.me/{{ whatsapp_soporte }}" target="_blank" rel="noopener">
-        Escríbenos por WhatsApp</a>.</p>
+  <!-- ════════ BLOQUE 10 · HISTORIAS DEL TRIBUNAL FISCAL ════════ -->
+  <section class="lp-sec lp-sec--oscura">
+    <h2 class="lp-h2 titulo-chicha lp-h2--centro">Casos reales: cuando enterarse tarde sale caro</h2>
+    {% set historias = [
+      ('Su contador alega que la red es lenta', 'rtf-1'),
+      ('“Solo me pasé un día”', 'rtf-2'),
+      ('Notificado sin abrir el buzón', 'rtf-3')] %}
+    <div class="lp-historias">
+      {% for titulo, slug in historias %}
+      <!-- VIDEO REAL: sube /static/vid/{{ slug }}.mp4 (y poster /static/img/{{ slug }}.jpg) -->
+      <figure class="lp-historia" data-titulo="{{ titulo }}" data-slug="{{ slug }}">
+        <div class="phone phone--video borde-chicha-{{ loop.index }}">
+          <div class="phone-notch"></div>
+          <div class="phone-pantalla phone-pantalla--video">
+            <div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div>
+          </div>
+        </div>
+        <figcaption class="lp-video-cap">{{ titulo }}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+    <p class="lp-pie">Casos con fines ilustrativos. No reemplazan la asesoría de tu
+      contador o abogado.</p>
   </section>
 
-  <footer class="lp-foot">alerta.pe · Hecho en Perú · Iquitos</footer>
+  <!-- ════════ BLOQUE 11 · PRECIO FUNDADOR ════════ -->
+  <section class="lp-sec lp-sec--crema">
+    <h2 class="lp-h2">Asegura tu precio de Fundador 2026</h2>
+    <div class="lp-precio-card borde-chicha-1">
+      <div class="lp-precio-tit">Plan Fundador</div>
+      <div class="lp-precio-monto">S/5 <span>al mes</span></div>
+      <ul class="lp-incluye">
+        <li>Monitoreo de tu Buzón SUNAT</li>
+        <li>Alertas en celular y PC</li>
+        <li>Semáforo de importancia</li>
+        <li>Recordatorios de plazos</li>
+        <li>Resumen del aviso</li>
+        <li>Historial en tu equipo (offline)</li>
+      </ul>
+      <p class="lp-ancla">El plan regular, con más herramientas, costará <b>S/35 o
+        más</b>. Como Fundador 2026, entras por <b>S/5</b> y mantienes ese precio
+        <b>mientras conserves tu suscripción</b>.</p>
+      <p class="lp-cafe">☕ Una inversión del valor de un café al mes, para que tu
+        negocio nunca se entere tarde.</p>
+      <p class="lp-soft">Para empresarios que se quieren consolidar y apuestan por
+        herramientas que les devuelven el control de su negocio.</p>
+      <div class="lp-ctas">
+        <a href="/activar" class="lp-cta"><span class="lp-cta-resp">Probar gratis 7 días</span></a>
+        <a href="/activar" class="lp-cta lp-cta--sec"><span class="lp-cta-resp">Quiero mi precio Fundador</span></a>
+      </div>
+      <p class="lp-microcopy">Sin permanencia. Cancela cuando quieras.</p>
+    </div>
+  </section>
+
+  <!-- ════════ BLOQUE 12 · PREÁMBULO + FAQ + CTA FINAL ════════ -->
+  <section class="lp-sec lp-sec--cielo">
+    <p class="lp-parrafo lp-preambulo">SUNAT no te cobra por entrar a leer tus
+      notificaciones. Nosotros desarrollamos una plataforma para que las leas en tu
+      propio celular, con claridad, y programes tus recordatorios. Por eso, como
+      Fundador 2026, pagas solo <b>S/5 al mes</b>, congelado mientras mantengas tu
+      suscripción. Si la interrumpes, al volver pagarás el precio regular.</p>
+
+    <div class="lp-faq" id="lp-faq">
+      {% set faqs = [
+        ('¿Tengo que revisar SUNAT todos los días?', 'No. Te avisamos cuando aparezca algo nuevo.'),
+        ('¿Me avisará al celular?', 'Sí, a tu celular y también a tu PC.'),
+        ('¿Y si mi contador maneja la Clave SOL?', 'También lo contemplamos; él puede darte o registrar las credenciales.'),
+        ('¿Qué significa cada color?', 'Rojo: actúa ya. Amarillo: tiene plazo. Verde: informativo.'),
+        ('¿Puedo probar antes de pagar?', 'Sí, 7 días gratis.'),
+        ('¿Esto reemplaza a mi contador?', 'No. Te ayuda a enterarte a tiempo para actuar mejor.')] %}
+      {% for q, a in faqs %}
+      <details class="lp-faq-item">
+        <summary>{{ q }}</summary>
+        <p>{{ a }}</p>
+      </details>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="lp-sec lp-sec--verde lp-cierre">
+    <h2 class="lp-h2">No esperes a enterarte tarde</h2>
+    <div class="lp-ctas">
+      <a href="/activar" class="lp-cta"><span class="lp-cta-resp">Probar gratis 7 días</span></a>
+      <a href="/activar" class="lp-cta lp-cta--sec"><span class="lp-cta-resp">Asegurar S/5 Fundador</span></a>
+    </div>
+    <p class="lp-cierre-dudas">¿Dudas?
+      <a href="https://wa.me/{{ whatsapp_soporte }}" target="_blank" rel="noopener">Escríbenos por WhatsApp</a>.</p>
+  </section>
+
+  <footer class="lp-foot">alerta.pe es un servicio de monitoreo y alertas del Buzón
+    SUNAT. No sustituye la revisión profesional ni la asesoría contable o legal. SUNAT
+    es una institución pública y no está asociada ni promueve alerta.pe.</footer>
+</div>
+
+<!-- Push-demo (cae desde el top) y modal de la demo: los arma landing.js -->
+<div class="act-pushsim" id="act-pushsim" aria-live="polite" hidden></div>
+<div class="act-demo" id="act-demo" hidden>
+  <div class="act-demo-fondo" id="act-demo-fondo"></div>
+  <div class="act-demo-panel" role="dialog" aria-modal="true" id="act-demo-panel"></div>
+</div>
+<!-- Overlay de historias RTF (z-index al frente): lo arma landing.js -->
+<div class="lp-rtf-overlay" id="lp-rtf-overlay" hidden>
+  <div class="lp-rtf-fondo" id="lp-rtf-fondo"></div>
+  <div class="lp-rtf-panel" id="lp-rtf-panel"></div>
 </div>
 {% endblock %}
 
