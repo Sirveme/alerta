@@ -19,8 +19,8 @@
       solo es <b>informativo</b>.</p>
 
     <div class="lp-ctas">
-      <a href="/activar" class="lp-cta"><span class="lp-cta-resp">Probar gratis 7 días</span></a>
-      <a href="/activar" class="lp-cta lp-cta--sec"><span class="lp-cta-resp">Asegurar precio Fundador · S/5</span></a>
+      <a href="/activar" class="lp-cta"><span class="material-symbols-outlined">notifications_active</span><span class="lp-cta-resp">Probar gratis 7 días</span></a>
+      <a href="/activar" class="lp-cta-link">Asegurar precio Fundador · S/5 ›</a>
     </div>
     <p class="lp-microcopy">Cancela cuando quieras. Si tu contador administra la Clave
       SOL, también te ayudamos con la activación.</p>
@@ -68,8 +68,9 @@
     </div>
     <p class="lp-pie">Te llega el aviso, el detalle y qué hacer. <b>Guardado en tu
       celular, lo revisas incluso sin internet.</b></p>
-    <div style="text-align:center">
-      <button class="lp-cta lp-cta--chico" id="demo-probar">Probar la demo ahora</button>
+    <div class="lp-ctas">
+      <a href="/activar" class="lp-cta"><span class="material-symbols-outlined">rocket_launch</span><span class="lp-cta-resp">Empezar ahora</span></a>
+      <button class="lp-cta-link" id="demo-probar">Probar la demo otra vez ›</button>
     </div>
   </section>
 
@@ -137,13 +138,26 @@
       <div class="lp-benef borde-chicha-3"><i class="ti ti-device-mobile-down"></i><b>Queda guardado, sin internet</b><span>el historial en tu propio equipo.</span></div>
       <div class="lp-benef borde-chicha-1"><i class="ti ti-bell-plus"></i><b>Puedes programar recordatorios</b><span>para no perder ningún plazo.</span></div>
     </div>
-    <!-- MULTIDISPOSITIVO: imagen celular + PC. Sube /static/img/multidispositivo.png -->
-    <div class="lp-multi borde-chicha-2">
-      <img src="/static/img/multidispositivo.png" alt="" onerror="this.remove()">
-      <span class="lp-foto-ph"><i class="ti ti-devices-2"></i></span>
+    <!-- MULTIDISPOSITIVO: fotos reales de personas viendo su pantalla en cada
+         dispositivo. Sube /static/img/multi-{pc,laptop,tablet,celular}.jpg -->
+    <div class="lp-multi-grid">
+      {% set disp = [('multi-pc','PC','desktop_windows'),
+                     ('multi-laptop','Laptop','laptop_mac'),
+                     ('multi-tablet','Tablet','tablet_mac'),
+                     ('multi-celular','Celular','smartphone')] %}
+      {% for slug, etq, ico in disp %}
+      <figure class="lp-multi-card">
+        <img src="/static/img/{{ slug }}.jpg" alt="{{ etq }}" onerror="this.remove()">
+        <span class="lp-multi-ph"><span class="material-symbols-outlined">{{ ico }}</span></span>
+        <figcaption>{{ etq }}</figcaption>
+      </figure>
+      {% endfor %}
     </div>
     <p class="lp-pie">Si estás en el negocio, lo ves en la PC. Si estás fuera, te
       enteras en el celular.</p>
+    <div class="lp-ctas">
+      <a href="/activar" class="lp-cta"><span class="material-symbols-outlined">notifications_active</span><span class="lp-cta-resp">Quiero recibir mis alertas</span></a>
+    </div>
   </section>
 
   <!-- ════════ BLOQUE 7 · CÓMO FUNCIONA (3 pasos honestos) ════════ -->
@@ -206,6 +220,29 @@
         notificaciones nuevas. No presentamos declaraciones ni modificamos nada. Tu
         clave viaja cifrada y la desconectas cuando quieras.</p>
     </div>
+
+    <!-- VIDEO DEL FUNDADOR: sube /static/video/duilio-precio.mp4 y el poster
+         /static/img/video-duilio-poster.jpg. Si faltan, queda el área "próximamente". -->
+    <div class="lp-video-fundador borde-chicha-1" id="lp-video-fundador">
+      <video class="lp-vf-el" controls playsinline preload="none"
+             poster="/static/img/video-duilio-poster.jpg"></video>
+      <div class="lp-vf-ph"><span class="material-symbols-outlined">play_circle</span>
+        <span>Video próximamente</span></div>
+    </div>
+
+    <!-- FRANJA DE LOGOS (prueba social). Sube /static/img/logo-*.png -->
+    <h3 class="lp-h3" style="text-align:center">Confían en nosotros</h3>
+    <div class="lp-logos">
+      {% for slug, nombre in [('logo-ccpl','Colegio de Contadores de Loreto'),
+                              ('logo-selvaviva','Selva Viva Hotel'),
+                              ('logo-shevalche','Multiservicios Shevalche'),
+                              ('logo-laesquina','Bodega La Esquina')] %}
+      <div class="lp-logo-item">
+        <img src="/static/img/{{ slug }}.png" alt="{{ nombre }}" onerror="this.parentNode.classList.add('ph');this.remove()">
+        <span class="lp-logo-txt">{{ nombre }}</span>
+      </div>
+      {% endfor %}
+    </div>
   </section>
 
   <!-- ════════ BLOQUE 10 · HISTORIAS DEL TRIBUNAL FISCAL ════════ -->
@@ -215,14 +252,18 @@
       ('Su contador alega que la red es lenta', 'rtf-1'),
       ('“Solo me pasé un día”', 'rtf-2'),
       ('Notificado sin abrir el buzón', 'rtf-3')] %}
+    <!-- Tarjetas SUPERPUESTAS/escalonadas; al tocar, una sube al frente (overlay). -->
     <div class="lp-historias">
       {% for titulo, slug in historias %}
-      <!-- VIDEO REAL: sube /static/vid/{{ slug }}.mp4 (y poster /static/img/{{ slug }}.jpg) -->
-      <figure class="lp-historia" data-titulo="{{ titulo }}" data-slug="{{ slug }}">
+      <!-- VIDEO REAL: sube /static/video/{{ slug }}.mp4 y poster /static/img/{{ slug }}.jpg -->
+      <figure class="lp-historia hist-{{ loop.index }}" data-titulo="{{ titulo }}"
+              data-slug="{{ slug }}" style="z-index:{{ 4 - loop.index }}">
         <div class="phone phone--video borde-chicha-{{ loop.index }}">
           <div class="phone-notch"></div>
           <div class="phone-pantalla phone-pantalla--video">
-            <div class="lp-video-ph"><i class="ti ti-player-play-filled"></i></div>
+            <img class="hist-poster" src="/static/img/{{ slug }}.jpg" alt=""
+                 onerror="this.remove()">
+            <div class="lp-video-ph"><span class="material-symbols-outlined">play_circle</span></div>
           </div>
         </div>
         <figcaption class="lp-video-cap">{{ titulo }}</figcaption>
