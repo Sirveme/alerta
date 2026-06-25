@@ -51,6 +51,9 @@
       {% if not user.es_empresario %}
       <a href="/" class="nav-link nav-pc">Grupos</a>
       <a href="/contribuyentes" class="nav-link nav-pc">Clientes</a>
+      {% else %}
+      <a href="/mi-cuenta" class="nav-link">Mi Cuenta</a>
+      <a href="/resumen" class="nav-link nav-pc">Mis alertas</a>
       {% endif %}
       {% if not user.solo_lectura %}
       <button id="btn-mas" class="btn-icono" title="Acciones rápidas" aria-label="Acciones rápidas">+</button>

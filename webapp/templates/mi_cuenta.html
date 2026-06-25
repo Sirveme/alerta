@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block titulo %}Mi Cuenta · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="mc" id="mc" data-wa-soporte="{{ whatsapp_soporte }}">
+  <div class="mc-head">
+    <h1 class="titulo-pagina" style="margin:0">Mi Cuenta</h1>
+    <a href="/resumen" class="mc-link-resumen"><span class="material-symbols-outlined">inbox</span> Ver mis alertas</a>
+  </div>
+
+  <div class="mc-cols">
+    <!-- ════ Columna izquierda: ESTADO + ACCIÓN ════ -->
+    <div class="mc-col mc-col--main">
+
+      {% if not rucs %}
+      <div class="mc-estado conx--ambar">
+        <span class="mc-estado-badge conx-badge--ambar">Pendiente</span>
+        <div class="mc-estado-tit">Aún no vigilamos tu buzón</div>
+        <p class="mc-estado-msg">Conéctalo para empezar a recibir tus alertas.</p>
+      </div>
+      {% endif %}
+
+      <!-- 1 · INDICADOR DE ESTADO (protagonista, por RUC) -->
+      {% for r in rucs %}
+      {% set cx = r.conexion %}
+      <div class="mc-estado conx--{{ cx.clase }}">
+        <span class="mc-estado-badge conx-badge--{{ cx.clase }}">{{ cx.badge }}</span>
+        <div class="mc-estado-tit">{{ cx.titulo }}.</div>
+        <p class="mc-estado-msg">{{ cx.mensaje }}</p>
+        <div class="mc-estado-ruc">{{ r.razon_social }} · RUC {{ r.ruc }}</div>
+      </div>
+      {% endfor %}
+
+      <!-- 2 · ACCIÓN PRINCIPAL (una sola, contextual) -->
+      <div class="mc-accion">
+        {% if accion.tipo in ('conectar', 'actualizar') %}
+        <a href="{{ accion.href }}" class="lp-cta mc-cta mc-cta--{{ accion.clase }}" data-scroll="conectar">
+          <span class="material-symbols-outlined">{{ accion.icono }}</span>
+          <span class="lp-cta-resp">{{ accion.label }}</span></a>
+        {% elif accion.tipo == 'verificando' %}
+        <div class="mc-verificando"><span class="material-symbols-outlined">{{ accion.icono }}</span>
+          {{ accion.label }}</div>
+        {% else %}
+        <a href="{{ accion.href }}" class="lp-cta mc-cta mc-cta--{{ accion.clase }}{% if accion.suave %} lp-cta--suave-verde{% endif %}">
+          <span class="material-symbols-outlined">{{ accion.icono }}</span>
+          <span class="lp-cta-resp">{{ accion.label }}</span></a>
+        {% endif %}
+        {% if accion.nota %}<p class="mc-accion-nota">{{ accion.nota }}</p>{% endif %}
+      </div>
+    </div>
+
+    <!-- ════ Columna derecha: CONECTAR + SECUNDARIO ════ -->
+    <div class="mc-col mc-col--side">
+
+      <!-- 3 · CONECTAR / ACTUALIZAR EL BUZÓN (hogar único; reusa endpoints) -->
+      {% if ruc_principal %}
+      <section class="mc-bloque" id="conectar" data-cid="{{ ruc_principal.id }}"
+               data-ruc="{{ ruc_principal.ruc }}" data-rs="{{ ruc_principal.razon_social }}">
+        <h2 class="mc-h2"><span class="material-symbols-outlined">vpn_key</span>
+          {% if ruc_principal.tiene_cred %}Actualizar tu Clave SOL{% else %}Conecta tu buzón{% endif %}</h2>
+
+        <div class="mc-tabs">
+          <button class="mc-tab sel" data-tab="mias">Tengo mis credenciales</button>
+          <button class="mc-tab" data-tab="contador">Que las ponga mi contador</button>
+        </div>
+
+        <!-- a) Mis credenciales -->
+        <div class="mc-rama" id="mc-rama-mias">
+          <div class="act-confianza">
+            <span class="material-symbols-outlined">verified_user</span>
+            <div><strong>Tus credenciales están seguras</strong>
+              <ul><li>Solo <b>leemos</b> si tienes notificaciones nuevas.</li>
+                <li><b>No</b> presentamos ni modificamos nada.</li>
+                <li>Tu clave viaja cifrada y la desconectas cuando quieras.</li></ul></div>
+          </div>
+          <div class="campo"><label>Usuario SOL</label>
+            <input id="mc-user" autocomplete="off" value="{{ ruc_principal.usuario_sol }}"></div>
+          <div class="campo"><label>Clave SOL</label>
+            <input id="mc-clave" type="password" autocomplete="new-password"></div>
+          <p class="muted" style="font-size:.82rem">Validamos tu conexión sola, en
+            segundo plano. Cuando conecte, tu buzón queda vigilado.</p>
+          <div class="mc-conx" id="mc-conx" aria-live="polite"></div>
+        </div>
+
+        <!-- b) Que las ponga mi contador -->
+        <div class="mc-rama" id="mc-rama-contador" hidden>
+          <p class="muted">Le pedimos las credenciales a tu contador con este mensaje:</p>
+          <div class="act-mensaje" id="mc-mensaje"></div>
+          <label class="act-check"><input type="checkbox" id="mc-quitar-gratis">
+            Quitar “tú también tendrás cuenta gratis”</label>
+          <label class="act-label" for="mc-wa-cont">WhatsApp de tu contador</label>
+          <div class="act-wa-campo"><span class="act-wa-pre">+51</span>
+            <input id="mc-wa-cont" inputmode="numeric" maxlength="9" placeholder="Su número"></div>
+          <button class="btn btn--whatsapp btn--bloque" id="mc-enviar-cont" style="margin-top:12px">
+            <span class="material-symbols-outlined">chat</span> Enviar a mi contador</button>
+        </div>
+      </section>
+      {% endif %}
+
+      <!-- 4 · SECUNDARIO (a mano, sin estorbar) -->
+      <details class="mc-mas">
+        <summary><span class="material-symbols-outlined">tune</span> Más opciones</summary>
+
+        <a class="mc-opcion" href="/resumen">
+          <span class="material-symbols-outlined">notifications</span>
+          <div><b>Recordatorios</b><span>Programa "Recuérdame esto" en cada alerta.</span></div>
+          <span class="material-symbols-outlined mc-chev">chevron_right</span></a>
+
+        <a class="mc-opcion" href="/cambiar-clave">
+          <span class="material-symbols-outlined">password</span>
+          <div><b>Cambiar mi clave de acceso</b><span>La que usas para entrar a alerta.pe.</span></div>
+          <span class="material-symbols-outlined mc-chev">chevron_right</span></a>
+
+        {% if ruc_principal and ruc_principal.tiene_cred %}
+        <button class="mc-opcion mc-opcion--btn" id="mc-desconectar"
+                data-cid="{{ ruc_principal.id }}" data-rs="{{ ruc_principal.razon_social }}">
+          <span class="material-symbols-outlined">link_off</span>
+          <div><b>Desconectar mi buzón</b><span>Dejamos de revisar y borramos tu Clave SOL.</span></div>
+          <span class="material-symbols-outlined mc-chev">chevron_right</span></button>
+        {% endif %}
+
+        {% if historial %}
+        <div class="mc-historial">
+          <div class="mc-historial-tit">Historial de pagos</div>
+          {% for p in historial %}
+          <div class="mc-pago-row"><span>{{ p.fecha }}</span>
+            <span>{{ p.metodo }}</span><span>S/ {{ p.monto }}</span>
+            <span class="muted">→ {{ p.vence }}</span></div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </details>
+
+      <!-- 5 · ESPACIOS RESERVADOS A FUTURO (solo el hueco, sin contenido) -->
+      <!-- FUTURO: suite de productos de Perú Sistemas Pro (grid de tarjetas). -->
+      <section class="mc-reservado" aria-hidden="true">
+        <div class="mc-reservado-tit"><span class="material-symbols-outlined">apps</span>
+          Más herramientas para tu negocio</div>
+        <p class="muted">Próximamente: más soluciones de Perú Sistemas Pro.</p>
+      </section>
+      <!-- FUTURO: secciones de valor (Normas / Sugerencias / Estadísticas).
+           Reservado el hueco estructural; no construir contenido aún. -->
+      <section class="mc-reservado mc-reservado--valor" hidden aria-hidden="true">
+        <!-- Normas · Sugerencias · Estadísticas (a futuro) -->
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/mi-cuenta.js"></script>
+{% endblock %}

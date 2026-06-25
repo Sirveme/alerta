@@ -3,29 +3,6 @@
 {% block contenido %}
 <div class="lp lp-venta">
 
-  <!-- ════════ BLOQUE 1 · HÉROE (demo above-the-fold) ════════ -->
-  <header class="lp-hero">
-    <div class="lp-topbar">
-      <span class="logo-selva lp-logo-top">alerta<i>.pe</i></span>
-      {% if logueado %}<a href="/" class="lp-volver">Ir a mi panel ›</a>{% endif %}
-    </div>
-
-    <div class="lp-franja-precio">Precio Fundador 2026: <b>S/5 al mes</b> · 7 días
-      gratis · Avisos en celular y PC</div>
-
-    <h1 class="lp-titular">Nunca más una <span class="hl">multa</span> por no enterarte.</h1>
-    <p class="lp-sub">Vigilamos tu Buzón SUNAT y te avisamos al instante en tu celular
-      y tu PC. Sabrás de inmediato si <b>vence pronto</b>, si <b>tiene plazo</b> o si
-      solo es <b>informativo</b>.</p>
-
-    <div class="lp-ctas">
-      <a href="/activar" class="lp-cta"><span class="material-symbols-outlined">notifications_active</span><span class="lp-cta-resp">Probar gratis 7 días</span></a>
-      <a href="/activar" class="lp-cta-link">Asegurar precio Fundador · S/5 ›</a>
-    </div>
-    <p class="lp-microcopy">Cancela cuando quieras. Si tu contador administra la Clave
-      SOL, también te ayudamos con la activación.</p>
-  </header>
-
   <!-- ════════ BLOQUE 3 · DEMO EN VIVO (pegada al héroe) ════════ -->
   <section class="lp-sec lp-sec--oscura lp-watermark" id="demo">
     <div class="lp-franja franja-aura">
@@ -44,24 +21,18 @@
     <div class="lp-demo">
       <div class="phone borde-chicha-1" id="phone">
         <div class="phone-notch"></div>
-        <div class="phone-pantalla">
-          <div class="ph-push" data-ph="push">
-            <div class="ph-push-app"><span class="marca-punto"></span> alerta.pe · ahora</div>
-            <div class="ph-push-tit">Nueva notificación en tu Buzón SUNAT</div>
-            <div class="ph-push-cuerpo" id="ph-push-cuerpo">Orden de Pago · vence pronto</div>
+        <div class="phone-pantalla phone-pantalla--demo">
+          <div class="phd-app"><span class="marca-punto"></span> alerta.pe · Buzón SUNAT</div>
+          <div class="phd-rs" id="phd-rs" hidden></div>
+          <div class="phd-item phd--rojo">
+            <span class="phd-badge phd-badge--rojo">Vence pronto</span>
+            <b>Resolución de Multa</b>
+            <span class="phd-vence">Vence el <span id="phd-v1">—</span></span>
           </div>
-          <div class="ph-card" data-ph="card">
-            <div class="ph-card-head">
-              <span class="ph-tipo">Orden de Pago</span>
-              <span class="ph-urg">Urgente</span>
-            </div>
-            <div class="ph-rs" id="ph-rs">Tu negocio</div>
-            <ul class="ph-detalle">
-              <li><span>Vence</span><b id="ph-vence">pronto</b></li>
-              <li><span>Tributo</span><b>IGV</b></li>
-            </ul>
-            <div class="ph-orienta"><i class="ti ti-bulb"></i> Paga pronto para evitar
-              intereses y cobranza coactiva.</div>
+          <div class="phd-item phd--ambar">
+            <span class="phd-badge phd-badge--ambar">Importante</span>
+            <b>Orden de Pago</b>
+            <span class="phd-vence">Vence el <span id="phd-v2">—</span></span>
           </div>
         </div>
       </div>
@@ -69,10 +40,34 @@
     <p class="lp-pie">Te llega el aviso, el detalle y qué hacer. <b>Guardado en tu
       celular, lo revisas incluso sin internet.</b></p>
     <div class="lp-ctas">
-      <a href="/activar" class="lp-cta"><span class="material-symbols-outlined">rocket_launch</span><span class="lp-cta-resp">Empezar ahora</span></a>
-      <button class="lp-cta-link" id="demo-probar">Probar la demo otra vez ›</button>
+      <button class="lp-cta lp-cta--demo" id="demo-resumen"><span class="material-symbols-outlined">table_rows</span><span class="lp-cta-resp">Ver el resumen</span></button>
+      <a href="/activar" class="lp-cta-link">Empezar ahora ›</a>
     </div>
   </section>
+
+  <!-- ════════ BLOQUE 1 · HÉROE (demo above-the-fold) ════════ -->
+  <header class="lp-hero">
+    <div class="lp-topbar">
+      <span class="logo-selva lp-logo-top">alerta<i>.pe</i></span>
+      {% if logueado %}<a href="/" class="lp-volver">Ir a mi panel ›</a>{% endif %}
+    </div>
+
+    <div class="lp-franja-precio">Precio Fundador 2026: <b>S/5 al mes</b> · 7 días
+      gratis · Avisos en celular y PC</div>
+
+    <h1 class="lp-titular">Nunca más una <span class="hl">multa</span> por no enterarte.</h1>
+    <p class="lp-sub">Vigilamos tu Buzón SUNAT y te avisamos al instante en tu celular
+      y tu PC. Sabrás de inmediato si <b>vence pronto</b>, si <b>tiene plazo</b> o si
+      solo es <b>informativo</b>.</p>
+
+    <div class="lp-ctas">
+      <!-- FIX 2: en el héroe, UN CTA suave que invita a VER la demo (no a comprar);
+           los CTAs de compra (/activar) van más abajo, tras ver el valor. -->
+      <a href="#demo" class="lp-cta lp-cta--suave"><span class="material-symbols-outlined">play_circle</span><span class="lp-cta-resp">Mira cómo funciona</span></a>
+    </div>
+  </header>
+
+  
 
   <!-- ════════ BLOQUE 2 · DOLOR + COSTO ════════ -->
   <section class="lp-sec lp-sec--crema">
@@ -90,8 +85,32 @@
       reaccionas tarde.</p>
     <!-- FOTO REAL: pequeño empresario peruano en su negocio. Sube /static/img/empresario.jpg -->
     <div class="lp-foto-ancla borde-chicha-2">
-      <img src="/static/img/empresario.jpg" alt="" onerror="this.remove()">
-      <span class="lp-foto-ph"><i class="ti ti-building-store"></i></span>
+      <img src="/static/img/push-1.jpeg" alt="" onerror="this.remove()">
+      <span class="lp-foto-ph"><i class="ti ti-building-store"></i><p style="font-size: 0.75em;">En la Oficina, Taller, Tienda o Casa. También llega a tu Computadora !</p></span>
+    </div>
+
+    <!-- FIX 3 · Videos de EXPERTOS (respaldo de autoridad al dolor) -->
+    <h3 class="lp-h3 lp-h2--centro">Lo dicen los expertos</h3>
+    <p class="lp-pie" style="margin-top:0">Una notificación en tu buzón puede darte por
+      notificado <b>aunque no la abras ese día</b>. Por eso enterarte a tiempo importa.</p>
+    {% set expertos = [
+      ('Síguelo en YouTube@GrupoVeronaTV', 'experto-1'),
+      ('Síguelas en YouTube@Finanfieras', 'experto-2'),
+      ('Síguelo en YouTube@JaderAsesores', 'experto-3')] %}
+    <div class="lp-historias lp-expertos">
+      {% for titulo, slug in expertos %}
+      <!-- VIDEO REAL: sube /static/vid/{{ slug }}.mp4 y poster /static/img/{{ slug }}.jpg -->
+      <figure class="lp-historia lp-experto" data-titulo="{{ titulo }}" data-slug="{{ slug }}">
+        <div class="phone phone--video borde-chicha-{{ loop.index }}">
+          <div class="phone-notch"></div>
+          <div class="phone-pantalla phone-pantalla--video">
+            <img class="hist-poster" src="/static/img/{{ slug }}.jpg" alt="" onerror="this.remove()">
+            <div class="lp-video-ph"><span class="material-symbols-outlined">play_circle</span></div>
+          </div>
+        </div>
+        <figcaption class="lp-video-cap">{{ titulo }}</figcaption>
+      </figure>
+      {% endfor %}
     </div>
   </section>
 
@@ -147,8 +166,8 @@
                      ('multi-celular','Celular','smartphone')] %}
       {% for slug, etq, ico in disp %}
       <figure class="lp-multi-card">
-        <img src="/static/img/{{ slug }}.jpg" alt="{{ etq }}" onerror="this.remove()">
-        <span class="lp-multi-ph"><span class="material-symbols-outlined">{{ ico }}</span></span>
+        <img src="/static/img/{{ slug }}.jpeg" alt="{{ etq }}" onerror="this.remove()">
+        
         <figcaption>{{ etq }}</figcaption>
       </figure>
       {% endfor %}
@@ -221,7 +240,7 @@
         clave viaja cifrada y la desconectas cuando quieras.</p>
     </div>
 
-    <!-- VIDEO DEL FUNDADOR: sube /static/video/duilio-precio.mp4 y el poster
+    <!-- VIDEO DEL FUNDADOR: sube /static/vid/duilio-precio.mp4 y el poster
          /static/img/video-duilio-poster.jpg. Si faltan, queda el área "próximamente". -->
     <div class="lp-video-fundador borde-chicha-1" id="lp-video-fundador">
       <video class="lp-vf-el" controls playsinline preload="none"
@@ -248,16 +267,16 @@
   <!-- ════════ BLOQUE 10 · HISTORIAS DEL TRIBUNAL FISCAL ════════ -->
   <section class="lp-sec lp-sec--oscura">
     <h2 class="lp-h2 titulo-chicha lp-h2--centro">Casos reales: cuando enterarse tarde sale caro</h2>
+    <p class="lp-pie" style="margin-top:0"><b>3 testimonios en video.</b> Toca cada uno para verlo.</p>
     {% set historias = [
-      ('Su contador alega que la red es lenta', 'rtf-1'),
-      ('“Solo me pasé un día”', 'rtf-2'),
-      ('Notificado sin abrir el buzón', 'rtf-3')] %}
-    <!-- Tarjetas SUPERPUESTAS/escalonadas; al tocar, una sube al frente (overlay). -->
+      ('Su contador alega que la red es lenta', 'historia-1'),
+      ('“Solo me pasé un día”', 'historia-2'),
+      ('Notificado sin abrir el buzón', 'historia-3')] %}
+    <!-- Tarjetas SEPARADAS y tocables (no pila decorativa); al tocar, overlay al frente. -->
     <div class="lp-historias">
       {% for titulo, slug in historias %}
-      <!-- VIDEO REAL: sube /static/video/{{ slug }}.mp4 y poster /static/img/{{ slug }}.jpg -->
-      <figure class="lp-historia hist-{{ loop.index }}" data-titulo="{{ titulo }}"
-              data-slug="{{ slug }}" style="z-index:{{ 4 - loop.index }}">
+      <!-- VIDEO REAL: sube /static/vid/{{ slug }}.mp4 y poster /static/img/{{ slug }}.jpg -->
+      <figure class="lp-historia" data-titulo="{{ titulo }}" data-slug="{{ slug }}">
         <div class="phone phone--video borde-chicha-{{ loop.index }}">
           <div class="phone-notch"></div>
           <div class="phone-pantalla phone-pantalla--video">
@@ -296,8 +315,8 @@
       <p class="lp-soft">Para empresarios que se quieren consolidar y apuestan por
         herramientas que les devuelven el control de su negocio.</p>
       <div class="lp-ctas">
-        <a href="/activar" class="lp-cta"><span class="lp-cta-resp">Probar gratis 7 días</span></a>
-        <a href="/activar" class="lp-cta lp-cta--sec"><span class="lp-cta-resp">Quiero mi precio Fundador</span></a>
+        <a href="/activar" class="lp-cta"><span class="material-symbols-outlined">workspace_premium</span><span class="lp-cta-resp">Quiero mi precio Fundador</span></a>
+        <a href="/activar" class="lp-cta-link">Probar gratis 7 días ›</a>
       </div>
       <p class="lp-microcopy">Sin permanencia. Cancela cuando quieras.</p>
     </div>
@@ -331,8 +350,8 @@
   <section class="lp-sec lp-sec--verde lp-cierre">
     <h2 class="lp-h2">No esperes a enterarte tarde</h2>
     <div class="lp-ctas">
-      <a href="/activar" class="lp-cta"><span class="lp-cta-resp">Probar gratis 7 días</span></a>
-      <a href="/activar" class="lp-cta lp-cta--sec"><span class="lp-cta-resp">Asegurar S/5 Fundador</span></a>
+      <a href="/activar" class="lp-cta"><span class="material-symbols-outlined">notifications_active</span><span class="lp-cta-resp">Probar gratis 7 días</span></a>
+      <a href="/activar" class="lp-cta-link">Asegurar S/5 Fundador ›</a>
     </div>
     <p class="lp-cierre-dudas">¿Dudas?
       <a href="https://wa.me/{{ whatsapp_soporte }}" target="_blank" rel="noopener">Escríbenos por WhatsApp</a>.</p>
