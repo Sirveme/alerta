@@ -596,16 +596,46 @@ def scrapear_ruc(cfg: SunatConfig) -> dict:
             carpetas = listar_carpetas(api, visor_base)
             resultado["carpetas"] = carpetas
 
-            # Iterar las DOS bandejas que usa el visor: tipoMsj=1 y tipoMsj=2
+            def _cod_de(msg: dict):
+                return (msg.get("codigoMensaje") or msg.get("codMensaje")
+                        or msg.get("codMensa") or msg.get("codigo"))
+
+            # ── Índice carpeta→mensaje (zAlerta-28) ──
+            # Barrido LIGERO por cada carpeta real (solo listados, sin abrir
+            # detalle ni PDFs) para saber a QUÉ carpeta pertenece cada mensaje.
+            # Reusa la sesión ya abierta (NO re-login). Es la señal oficial de
+            # SUNAT para clasificar ("Órdenes de Pago", "Ejecución Coactiva"...).
+            carpeta_de: dict[tuple[int, str], dict] = {}
+            for c in carpetas:
+                if not isinstance(c, dict):
+                    continue
+                cod_carp = str(c.get("codCarpeta") or "").strip()
+                nom_carp = limpiar_html_entities(c.get("nomCarpeta") or "") or None
+                if not cod_carp or cod_carp == "00":
+                    continue
+                for tipo_msj in (1, 2):
+                    for m in listar_mensajes(api, visor_base, tipo_msj, cod_carpeta=cod_carp):
+                        if not isinstance(m, dict):
+                            continue
+                        cm = _cod_de(m)
+                        if cm:
+                            carpeta_de.setdefault(
+                                (tipo_msj, str(cm)),
+                                {"cod": cod_carp, "nom": nom_carp})
+
+            # ── Barrido AUTORITATIVO por bandeja (cod_carpeta=00 = todas) ──
+            # Igual que antes: garantiza que NO se pierde ningún mensaje. Cada uno
+            # se etiqueta con su carpeta (del índice de arriba); si no cae en
+            # ninguna carpeta conocida, queda sin carpeta (la ingesta usa OTRO).
             for tipo_msj in (1, 2):
                 mensajes = listar_mensajes(api, visor_base, tipo_msj, cod_carpeta="00")
                 for msg in mensajes:
                     if not isinstance(msg, dict):
                         continue
-                    cod_msg = (msg.get("codigoMensaje") or msg.get("codMensaje")
-                               or msg.get("codMensa") or msg.get("codigo"))
+                    cod_msg = _cod_de(msg)
                     if not cod_msg:
                         continue
+                    carp = carpeta_de.get((tipo_msj, str(cod_msg)), {})
                     detalle = obtener_detalle(api, visor_base, cod_msg, tipo_msj)
                     pdfs = []
                     if detalle:
@@ -613,6 +643,8 @@ def scrapear_ruc(cfg: SunatConfig) -> dict:
                     resultado["mensajes"].append({
                         "tipo_msj": tipo_msj,
                         "cod_mensaje": cod_msg,
+                        "cod_carpeta": carp.get("cod"),
+                        "nombre_carpeta": carp.get("nom"),
                         "asunto": limpiar_html_entities(
                             msg.get("desAsunto") or msg.get("asunto") or ""),
                         "fecha_envio": (msg.get("fecEnvio") or msg.get("fechaEnvio")

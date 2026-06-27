@@ -218,6 +218,17 @@ class EstudioContable(Base, TimestampMixin):
     suscripcion_vence_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Fecha del último pago que activó/renovó la suscripción (zAlerta-14).
     fecha_ultimo_pago: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Marca de inicio de una "sesión de pago" (zAlerta-15): cuando el usuario dice
+    # "voy a pagar ahora", para acotar la búsqueda a una ventana corta. UTC.
+    inicio_sesion_pago: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # CANDADO de precio (zAlerta-24): el precio que aseguró al capturarse viaja del
+    # lead a la cuenta y es el que se cobra siempre. Se fija UNA vez, no cambia.
+    precio_congelado: Mapped[int | None] = mapped_column(Integer)
+    precio_congelado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Insignia/código Fundador: se genera al PRIMER pago (no al capturar).
+    es_fundador: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    codigo_fundador: Mapped[str | None] = mapped_column(String(20), unique=True)
+    fundador_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # WhatsApp de contacto (con código país). Clave para el onboarding viral
     # del empresario (zAlerta-06 A.4 / C).
@@ -427,6 +438,10 @@ class Notificacion(Base, TimestampMixin):
     texto_html: Mapped[str | None] = mapped_column(Text)             # msjMensaje
     remitente: Mapped[str | None] = mapped_column(String(100))       # codUsremisor (SUNAT, etc)
     cant_adjuntos: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Carpeta de origen en SUNAT (zAlerta-28): señal oficial para clasificar.
+    # "[03] Órdenes de Pago", "[04] Resoluciones de Ejecución Coactiva", etc.
+    cod_carpeta: Mapped[str | None] = mapped_column(String(10))
+    nombre_carpeta: Mapped[str | None] = mapped_column(String(120))
 
     # Fechas SUNAT (en hora Lima). fec_publica es la que cuenta para plazos.
     fecha_envio_sunat: Mapped[str | None] = mapped_column(String(30))   # fecEnvio (dd/MM/YYYY)
@@ -711,6 +726,10 @@ class LeadActivacion(Base):
     razon_social: Mapped[str | None] = mapped_column(String(255))
     # 'lead' mientras no termine; 'activado' cuando completa el alta.
     estado: Mapped[str] = mapped_column(String(20), default="lead", nullable=False)
+    # CANDADO de precio (zAlerta-24): precio del mes en que se capturó este lead.
+    # Se fija UNA vez; un lead recurrente NO lo sobreescribe (premia al primero).
+    precio_congelado: Mapped[int | None] = mapped_column(Integer)
+    precio_congelado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
     actualizado_at: Mapped[datetime] = mapped_column(
