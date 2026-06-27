@@ -92,7 +92,7 @@ def _sesion_confirmada(page) -> bool:
 
 
 def validar_login_sync(ruc: str, usuario_sol: str, clave_sol: str) -> bool:
-    """Login-only contra SUNAT. Devuelve True SOLO si la sesión quedó iniciada.
+    """Login-only contra SUNAT. Devuelve True si el LOGIN entró (sesión iniciada).
 
     Replica EXACTAMENTE el arranque del navegador de `scraper.scrapear_ruc`
     (mismos args headless, locale, timezone, user-agent) para que el login se
@@ -100,10 +100,14 @@ def validar_login_sync(ruc: str, usuario_sol: str, clave_sol: str) -> bool:
     excepción se trata como "no concluyente" → la relanza para que el worker
     la registre como ERROR (no como NO_CONECTA).
 
-    BUG 1: no basta con que `login_sol` retorne True; confirmamos por separado
-    (`_sesion_confirmada`) que la URL final es el área autenticada y que no hay
-    mensaje de rechazo. Así ✔ significa "login real verificado", nunca un
-    estado intermedio, un timeout ni "la solicitud se procesó".
+    FIX (zAlerta-fix-noconecta): el RESULTADO DE `login_sol` ES AUTORITATIVO. Ese
+    motor ya exige llegar a la URL del menú autenticado Y descarta credencial
+    inválida (su propia heurística) antes de devolver True ("Login OK — sesión
+    autenticada"). El segundo chequeo `_sesion_confirmada` (DOM post-login) era
+    FRÁGIL: dependía de elementos/texto del menú que SUNAT cambió, y rechazaba
+    logins genuinos ("Login OK" → "NO conecta"), bloqueando el alta de RUCs
+    nuevos. Volvemos al criterio que funcionaba: si login_sol entró, conecta.
+    NO se toca el motor de login (selectores ni autenticación).
     """
     cfg = scraper.SunatConfig(
         ruc=ruc, usuario_sol=usuario_sol, clave_sol=clave_sol, headless=True)
@@ -122,10 +126,9 @@ def validar_login_sync(ruc: str, usuario_sol: str, clave_sol: str) -> bool:
         )
         page = contexto.new_page()
         try:
-            entro = bool(scraper.login_sol(page, cfg))
-            # Doble verificación independiente: ✔ solo si la sesión quedó
-            # realmente iniciada (URL autenticada y sin mensaje de rechazo).
-            return entro and _sesion_confirmada(page)
+            # login_sol devuelve True solo si llegó al menú autenticado y no
+            # detectó rechazo de credenciales: ese resultado basta para CONECTA.
+            return bool(scraper.login_sol(page, cfg))
         finally:
             # Cerrar siempre, pase lo que pase (no dejar Chromium colgado).
             try:
