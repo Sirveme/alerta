@@ -66,19 +66,29 @@
 
   function pintarEstado(txt, cls) { estadoEl.textContent = txt; estadoEl.className = 'rsm-estado ' + (cls || ''); }
 
-  // ── Semáforo de urgencia (zAlerta-17 P2) ──
-  // rojo: vence en <=7 días (o vencido) · ámbar: vence en >7 días ·
-  // verde: SIN plazo explícito (informativo). NO se infieren plazos.
-  function semColor(venceIso) {
-    if (!venceIso) return 'verde';
-    const v = new Date(venceIso);
-    if (isNaN(v)) return 'verde';
-    const dias = Math.ceil((v - new Date()) / 86400000);
-    return dias <= 7 ? 'rojo' : 'ambar';
+  // ── Semáforo: URGENCIA (de la carpeta SUNAT) + plazo (zAlerta-28) ──
+  // rojo:  urgencia alta (Coactiva / Orden de Pago / Multa) AUNQUE no tenga
+  //        fecha, o vence en <=7 días (o vencido).
+  // ámbar: tiene plazo a >7 días, o "importante" sin fecha.
+  // verde: informativo / sin urgencia y sin plazo. NO se infieren plazos.
+  const URG_ALTA = { critica: 1, urgente: 1 };
+  function semColor(f) {
+    const u = (f && f.urgencia) || 'sin_clasificar';
+    if (URG_ALTA[u]) return 'rojo';
+    const venceIso = f && f.vence_iso;
+    if (venceIso) {
+      const v = new Date(venceIso);
+      if (!isNaN(v)) {
+        const dias = Math.ceil((v - new Date()) / 86400000);
+        return dias <= 7 ? 'rojo' : 'ambar';
+      }
+    }
+    if (u === 'importante') return 'ambar';
+    return 'verde';
   }
   const SEM_TXT = {
-    rojo: 'Vence pronto: lee y envía a tu contador ¡ya!',
-    ambar: 'Importante: tiene plazo, no lo olvides.',
+    rojo: 'Urgente: revísalo y envíalo a tu contador cuanto antes.',
+    ambar: 'Importante: tiene plazo o requiere atención, no lo dejes pasar.',
     verde: 'Informativo, sin apuro — se recomienda leer.',
   };
 
@@ -95,7 +105,7 @@
     vacioEl.hidden = filas.length > 0;
     if (!filas.length) { wrap.innerHTML = ''; return; }
     const cuerpo = filas.map((f, i) => {
-      const sem = semColor(f.vence_iso);
+      const sem = semColor(f);
       const conPlazo = !!f.vence_iso;
       // CTA de recordatorio (solo si hay plazo) + sugerencia en rojo/ámbar.
       const recSel = conPlazo
@@ -113,7 +123,11 @@
         : '';
       const venceCol = conPlazo
         ? 'Vence ' + esc(f.vence)
-        : '<span class="rsm-info-lbl">Informativo</span>';
+        : (sem === 'rojo'
+            ? '<span class="rsm-info-lbl rsm-lbl--rojo">Urgente</span>'
+            : sem === 'ambar'
+              ? '<span class="rsm-info-lbl rsm-lbl--ambar">Importante</span>'
+              : '<span class="rsm-info-lbl">Informativo</span>');
       return '<tr class="rsm-row sem--' + sem + '" title="' + esc(SEM_TXT[sem]) + '">'
         + '<td><span class="rsm-punto sem-bg--' + sem + '"></span><b>' + esc(f.documento) + '</b></td>'
         + '<td>' + esc(f.periodo) + '</td>'
