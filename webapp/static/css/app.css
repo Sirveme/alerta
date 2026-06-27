@@ -1290,6 +1290,9 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-row.sem--ambar td:first-child { border-left:5px solid var(--u-importante); }
 .rsm-row.sem--verde td:first-child { border-left:5px solid var(--u-aldia); }
 .rsm-info-lbl { color:var(--texto-suave); font-style:italic; }
+/* zAlerta-28 · etiqueta de urgencia sin fecha (Coactiva/Orden de Pago sin plazo) */
+.rsm-info-lbl.rsm-lbl--rojo { color:var(--u-urgente); font-style:normal; font-weight:700; }
+.rsm-info-lbl.rsm-lbl--ambar { color:var(--u-importante); font-style:normal; font-weight:600; }
 .rsm-sugerencia { display:flex; align-items:center; gap:6px; font-size:.82rem;
   font-weight:600; color:var(--u-importante); margin-bottom:6px; }
 .rsm-sugerencia .ti { font-size:16px; }
