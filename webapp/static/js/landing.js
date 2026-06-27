@@ -183,8 +183,7 @@
         + '<div class="phone-notch"></div><div class="phone-pantalla phone-pantalla--video">'
         + '<video class="rtf-video" controls playsinline autoplay '
         + 'poster="/static/img/' + esc(slug) + '.jpg">'
-        + '<source src="/static/vid/' + esc(slug) + '.mp4" type="video/mp4">'
-        + '<source src="/static/vid/' + esc(slug) + '.webm" type="video/webm"></video>'
+        + '<source src="/static/vid/' + esc(slug) + '.mp4" type="video/mp4"></video>'
         + '<div class="lp-video-ph rtf-proximo" hidden><span class="material-symbols-outlined">movie</span>'
         + '<span>Próximamente</span></div></div></div>'
         + '<div class="lp-rtf-tit">' + esc(h.dataset.titulo || '') + '</div>';
