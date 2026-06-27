@@ -19,6 +19,8 @@
       {{ cx.mensaje }}
       {% if cx.clave in ('error', 'verificando', 'pendiente') %}
       <a href="/">Completar ›</a>{% endif %}
+      {% if cx.primera_lectura %}
+      <span class="conx-primera">Estamos trayendo tu buzón por primera vez; en unos minutos verás tus mensajes aquí.</span>{% endif %}
     </span>
   </div>
   {% endfor %}
