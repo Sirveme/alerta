@@ -41,6 +41,7 @@ from ..auth import (
 )
 from ..deps import usuario_actual, UsuarioActual
 from ..estados import estado_conexion
+from precios import precio_para_fecha
 from .clientes import consultar_ruc_api
 
 router = APIRouter(tags=["landing"])
@@ -80,6 +81,7 @@ async def _upsert_lead(session, ruc: str, whatsapp: str | None,
     """Guarda/actualiza el lead (RUC+WhatsApp) sin duplicar. Nunca rompe el
     flujo: si falla, se ignora (un lead perdido no debe tumbar el alta)."""
     try:
+        ahora = ahora_lima()
         lead = await session.scalar(
             select(LeadActivacion).where(LeadActivacion.ruc == ruc))
         if lead:
@@ -89,10 +91,16 @@ async def _upsert_lead(session, ruc: str, whatsapp: str | None,
                 lead.razon_social = razon_social
             if estado:
                 lead.estado = estado
+            # Candado: si AÚN no tiene precio congelado, fijarlo ahora; si ya lo
+            # tiene, NO sobreescribir (respeta el primer precio capturado).
+            if lead.precio_congelado is None:
+                lead.precio_congelado = precio_para_fecha(ahora)
+                lead.precio_congelado_at = ahora
         else:
             session.add(LeadActivacion(
                 ruc=ruc, whatsapp=whatsapp, razon_social=razon_social,
-                estado=estado))
+                estado=estado, precio_congelado=precio_para_fecha(ahora),
+                precio_congelado_at=ahora))
         await session.commit()
     except Exception:
         await session.rollback()
@@ -227,6 +235,15 @@ async def api_activar(request: Request):
 
         lim = limites_de(PlanComercial.EMPRESARIO.value)
         ahora = ahora_lima()
+        # Candado de precio (zAlerta-24): el precio viaja del lead a la cuenta. Si
+        # el lead lo tenía congelado (lo más antiguo/barato), se respeta; si no,
+        # se fija con el precio del mes de hoy.
+        lead = await session.scalar(
+            select(LeadActivacion).where(LeadActivacion.ruc == ruc))
+        precio_cong = (lead.precio_congelado if lead and lead.precio_congelado
+                       else precio_para_fecha(ahora))
+        precio_cong_at = (lead.precio_congelado_at
+                          if lead and lead.precio_congelado_at else ahora)
         # D (zAlerta-11c): los 7 días de prueba SOLO arrancan cuando hay conexión
         # confirmada. Si no conectó (o pidió al contador), vence_at queda NULL y
         # el worker lo fija al primer login exitoso (prueba diferida = justo).
@@ -240,6 +257,7 @@ async def api_activar(request: Request):
             estado_suscripcion=EstadoSuscripcion.PRUEBA.value,
             suscripcion_vence_at=(ahora + timedelta(days=DIAS_PRUEBA)
                                   if conecto_ya else None),
+            precio_congelado=precio_cong, precio_congelado_at=precio_cong_at,
         )
         session.add(estudio)
         await session.flush()
@@ -280,6 +298,12 @@ async def api_activar(request: Request):
                 # ultimo_login_ok_at: con sello solo si la comprobación pasó.
                 valida=True,
                 ultimo_login_ok_at=(ahora if conexion_verificada else None)))
+            # Primera lectura inmediata (zAlerta-27): encolar al alta con
+            # credencial válida reusando la cola diurna del botón "Actualizar
+            # ahora". El worker la procesa siempre (de día, forzar=True) y limpia
+            # el flag tras el intento (one-shot). NO toca el motor ni la ventana.
+            contrib.actualizar_solicitado = True
+            contrib.actualizar_solicitado_at = ahora
 
         await session.commit()
         await session.refresh(usuario)
@@ -371,6 +395,10 @@ async def bienvenida_credenciales(
                 usuario_sol=usuario_sol,
                 clave_sol_cifrada=cifrar_clave_sol(clave_sol),
                 tipo_usuario=2, quien_cargo=user.id, valida=True))
+        # Primera lectura inmediata (zAlerta-27): reconexión/corrección de clave
+        # encola una lectura fresca en la cola diurna existente (one-shot).
+        contrib.actualizar_solicitado = True
+        contrib.actualizar_solicitado_at = ahora_lima()
         # Encolar la validación (con tenant) para feedback inmediato en la UI.
         sol = SolicitudValidacionCredencial(
             estudio_id=user.estudio_id, ruc=contrib.ruc, usuario_sol=usuario_sol,

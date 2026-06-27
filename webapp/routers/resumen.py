@@ -60,6 +60,12 @@ async def resumen_page(request: Request,
             cx = estado_conexion(ct, cred)
             cx["ruc"] = ct.ruc
             cx["razon_social"] = ct.razon_social or ct.ruc
+            # zAlerta-27: primera lectura en curso — credencial válida, conexión
+            # sana y aún sin scrapeo (ultimo_scrapeo_at NULL). El worker la trae
+            # en su próxima pasada; mostramos un aviso suave mientras tanto.
+            cx["primera_lectura"] = bool(
+                ct.ultimo_scrapeo_at is None and cred and cred.valida
+                and cx.get("clave") not in ("error", "pendiente"))
             conexiones.append(cx)
     return templates.TemplateResponse(request, "resumen.html", {
         "user": user, "conexiones": conexiones})
@@ -271,6 +277,11 @@ async def cred_guardar(contribuyente_id: uuid.UUID, request: Request,
         if contrib.estado == EstadoContribuyente.ERROR_CREDENCIAL:
             contrib.estado = EstadoContribuyente.ACTIVO
         contrib.credencial_error_avisada = False
+        # Primera lectura inmediata (zAlerta-27): guardar una credencial válida
+        # (alta o reconexión) encola una lectura fresca en la cola diurna del
+        # botón "Actualizar ahora"; el worker la procesa y limpia el flag.
+        contrib.actualizar_solicitado = True
+        contrib.actualizar_solicitado_at = ahora_lima()
         await session.commit()
     return JSONResponse({"ok": True})
 
