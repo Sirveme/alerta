@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block titulo %}alerta.pe · Nunca más una multa por no enterarte{% endblock %}
 {% block contenido %}
+{# zAlerta-23 · fuente ÚNICA del precio del mes (franja + escalera) #}
+{% set esc = escalera_precios() %}
 <div class="lp lp-venta">
 
   <!-- ════════ BLOQUE 3 · DEMO EN VIVO (pegada al héroe) ════════ -->
@@ -52,7 +54,7 @@
       {% if logueado %}<a href="/" class="lp-volver">Ir a mi panel ›</a>{% endif %}
     </div>
 
-    <div class="lp-franja-precio">Precio Fundador 2026: <b>S/5 al mes</b> · 7 días
+    <div class="lp-franja-precio">Precio Fundador 2026: <b>S/{{ esc.precio_actual }} al mes</b> · 7 días
       gratis · Avisos en celular y PC</div>
 
     <h1 class="lp-titular">Nunca más una <span class="hl">multa</span> por no enterarte.</h1>
@@ -83,6 +85,28 @@
       revisen tarde el buzón. SUNAT puede dejar una notificación y darte por notificado
       aunque no la abras ese día. Si nadie revisa con frecuencia, pierdes plazos o
       reaccionas tarde.</p>
+
+    <!-- Parte 3 · Costo de una multa anclado a la UIT 2026 (verificable) -->
+    <div class="lp-uit borde-chicha-3">
+      <p class="lp-uit-intro">Muchas multas de SUNAT se calculan sobre la <b>UIT</b>, que
+        en 2026 es de <b>S/5,500</b>. Una sola infracción puede costar una UIT o más:
+        varios miles de soles.</p>
+      <div class="lp-uit-comp">
+        <div class="lp-uit-card lp-uit--bien">
+          <span class="lp-uit-lbl">Tu suscripción</span>
+          <span class="lp-uit-monto">S/35<small>/mes</small></span>
+          <span class="lp-uit-sub">= S/420 al año</span>
+        </div>
+        <div class="lp-uit-vs">vs</div>
+        <div class="lp-uit-card lp-uit--mal">
+          <span class="lp-uit-lbl">Una sola multa</span>
+          <span class="lp-uit-monto">S/5,500<small>+</small></span>
+          <span class="lp-uit-sub">más de 13 años de suscripción</span>
+        </div>
+      </div>
+      <p class="lp-uit-cierre">Por S/35 al mes, alerta.pe <b>te ayuda a no perder de vista</b>
+        tus notificaciones y plazos. Es una fracción de lo que cuesta una sola multa.</p>
+    </div>
     <!-- FOTO REAL: pequeño empresario peruano en su negocio. Sube /static/img/empresario.jpg -->
     <div class="lp-foto-ancla borde-chicha-2">
       <img src="/static/img/push-1.jpeg" alt="" onerror="this.remove()">
@@ -240,24 +264,20 @@
         clave viaja cifrada y la desconectas cuando quieras.</p>
     </div>
 
-    <!-- VIDEO DEL FUNDADOR: sube /static/vid/duilio-precio.mp4 y el poster
-         /static/img/video-duilio-poster.jpg. Si faltan, queda el área "próximamente". -->
-    <div class="lp-video-fundador borde-chicha-1" id="lp-video-fundador">
-      <video class="lp-vf-el" controls playsinline preload="none"
-             poster="/static/img/video-duilio-poster.jpg"></video>
-      <div class="lp-vf-ph"><span class="material-symbols-outlined">play_circle</span>
-        <span>Video próximamente</span></div>
-    </div>
+    <!-- (zAlerta-25 P4: el video del fundador se movió a la zona de precio;
+         autoridad queda con foto + trayectoria + CCPL + seguridad + logos.) -->
 
-    <!-- FRANJA DE LOGOS (prueba social). Sube /static/img/logo-*.png -->
+    <!-- FRANJA DE LOGOS (prueba social). Tarjetas BLANCAS: logo legible + nombre. -->
     <h3 class="lp-h3" style="text-align:center">Confían en nosotros</h3>
     <div class="lp-logos">
-      {% for slug, nombre in [('logo-ccpl','Colegio de Contadores de Loreto'),
-                              ('logo-selvaviva','Selva Viva Hotel'),
-                              ('logo-shevalche','Multiservicios Shevalche'),
-                              ('logo-laesquina','Bodega La Esquina')] %}
-      <div class="lp-logo-item">
-        <img src="/static/img/{{ slug }}.png" alt="{{ nombre }}" onerror="this.parentNode.classList.add('ph');this.remove()">
+      {% for slug, nombre in [('logo-ccpl','Colegio de Contadores Públicos de Loreto'),
+                              ('logo-selvaviva','Hotel Selva Viva'),
+                              ('logo-shevalche','Multiservicios Shevalche EIRL'),
+                              ('logo-laesquina','Bodega - Bazar La Esquina')] %}
+      <!-- Sube /static/img/{{ slug }}.png. Si no carga, queda solo el nombre. -->
+      <div class="lp-logo-item borde-chicha-{{ loop.index0 % 3 + 1 }}">
+        <img class="lp-logo-img" src="/static/img/{{ slug }}.png" alt="{{ nombre }}"
+             onerror="this.style.display='none'">
         <span class="lp-logo-txt">{{ nombre }}</span>
       </div>
       {% endfor %}
@@ -297,8 +317,74 @@
   <section class="lp-sec lp-sec--crema">
     <h2 class="lp-h2">Asegura tu precio de Fundador 2026</h2>
     <div class="lp-precio-card borde-chicha-1">
-      <div class="lp-precio-tit">Plan Fundador</div>
-      <div class="lp-precio-monto">S/5 <span>al mes</span></div>
+      <div class="lp-precio-tit">Plan Fundador · precio de hoy</div>
+      <div class="lp-precio-monto">S/{{ esc.precio_actual }} <span>al mes</span></div>
+
+      <!-- zAlerta-23 · ESCALERA DE PRECIOS (gancho de urgencia honesto) -->
+      <div class="lp-escalera-gancho">El precio sube cada mes. Asegura hoy el tuyo.</div>
+      <div class="lp-escalera" role="list">
+        {% for p in esc.pasos %}
+        <div class="lp-escalon esc--{{ p.estado }}" role="listitem">
+          {% if p.estado == 'actual' %}<span class="lp-escalon-badge">ESTE MES</span>{% endif %}
+          <span class="lp-escalon-mes">{{ p.mes }}</span>
+          <span class="lp-escalon-precio">S/{{ p.precio }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="lp-escalera-txt">Este es el precio de lanzamiento de alerta.pe. Cada mes
+        sube. <b>El precio con el que entras es el que mantienes mientras conserves tu
+        suscripción.</b> Mientras antes entres, menos pagas.</p>
+
+      <!-- ════ Parte 2 · AHORRO DINÁMICO (lee precio_para_fecha vía esc) ════ -->
+      <div class="lp-ahorro">
+        <div class="lp-ahorro-fila"><span>Hoy aseguras</span><b>S/{{ esc.precio_actual }}</b></div>
+        {% if esc.ahorro|int > 0 %}
+        <div class="lp-ahorro-fila lp-ahorro--destaca"><span>Ahorras cada mes</span>
+          <b>S/{{ esc.ahorro }}</b></div>
+        {% endif %}
+        <div class="lp-ahorro-fila"><span>En enero, otros pagarán</span><b>S/{{ esc.precio_regular }}</b></div>
+        <p class="lp-ahorro-txt">No es un descuento: es tu precio de Fundador. El precio
+          que aseguras hoy lo mantienes <b>mientras conserves tu suscripción</b>. Cada
+          mes que esperas, congelas uno más alto.</p>
+      </div>
+
+      <!-- ════ Parte 1 · Video 1 — "¿Por qué tan poco?" ════ -->
+      <figure class="lp-vprecio">
+        <figcaption class="lp-vprecio-cap">¿Por qué cobramos tan poco? Te lo cuento en 30 segundos.</figcaption>
+        <!-- VIDEO REAL: sube /static/vid/precio-porque-poco.mp4 + poster -->
+        <div class="lp-vprecio-player">
+          <video controls playsinline preload="none" poster="/static/img/precio-porque-poco.jpg">
+            <source src="/static/vid/precio-porque-poco.mp4" type="video/mp4"></video>
+          <div class="lp-vprecio-prox"><span class="material-symbols-outlined">movie</span> Video próximamente</div>
+        </div>
+      </figure>
+
+      <!-- ════ Parte 1 · Video 2 — "¿Por qué hoy?" + CAPTURA ════ -->
+      <figure class="lp-vprecio">
+        <figcaption class="lp-vprecio-cap">¿Por qué suscribirte hoy? Es mucho ahorro, te explico.</figcaption>
+        <div class="lp-vprecio-player">
+          <video controls playsinline preload="none" poster="/static/img/precio-porque-hoy.jpg">
+            <source src="/static/vid/precio-porque-hoy.mp4" type="video/mp4"></video>
+          <div class="lp-vprecio-prox"><span class="material-symbols-outlined">movie</span> Video próximamente</div>
+        </div>
+      </figure>
+
+      <!-- Mini-captura (reusa /api/activar/ruc y /api/activar/lead; NO endpoints nuevos) -->
+      <div class="lp-captura" id="lp-captura">
+        <div class="campo"><label>Tu RUC</label>
+          <input id="cap-ruc" inputmode="numeric" maxlength="11" placeholder="11 dígitos"></div>
+        <div class="lp-captura-rs" id="cap-rs" hidden></div>
+        <div class="campo"><label>Tu WhatsApp <span class="muted">(sin código país)</span></label>
+          <div class="act-wa-campo"><span class="act-wa-pre">+51</span>
+            <input id="cap-wa" inputmode="numeric" maxlength="9" placeholder="Tu número"></div></div>
+        <button class="lp-cta" id="cap-enviar"><span class="material-symbols-outlined">lock</span>
+          <span class="lp-cta-resp">Asegurar mi precio</span></button>
+        <div class="lp-captura-msg" id="cap-msg" aria-live="polite"></div>
+        <p class="lp-microcopy">Suscríbete hoy para asegurar el mayor ahorro. Solo tu RUC y
+          WhatsApp. Tus credenciales SOL las registras luego, tú o tu contador. Mientras
+          mantengas tu cuenta activa, conservas este precio.</p>
+      </div>
+
       <ul class="lp-incluye">
         <li>Monitoreo de tu Buzón SUNAT</li>
         <li>Alertas en celular y PC</li>
@@ -307,11 +393,15 @@
         <li>Resumen del aviso</li>
         <li>Historial en tu equipo (offline)</li>
       </ul>
-      <p class="lp-ancla">El plan regular, con más herramientas, costará <b>S/35 o
-        más</b>. Como Fundador 2026, entras por <b>S/5</b> y mantienes ese precio
+      <p class="lp-ancla">Desde <b>enero 2027</b>, el precio regular será
+        <b>S/{{ esc.precio_regular }}</b>. Como Fundador entras por
+        <b>S/{{ esc.precio_actual }}</b> y mantienes ese precio
         <b>mientras conserves tu suscripción</b>.</p>
       <p class="lp-cafe">☕ Una inversión del valor de un café al mes, para que tu
         negocio nunca se entere tarde.</p>
+      <!-- FUTURO: "Novedad de este mes: integramos X" — placeholder, no inventar
+           funcionalidades; la urgencia es por pionero, no por features. -->
+
       <p class="lp-soft">Para empresarios que se quieren consolidar y apuestan por
         herramientas que les devuelven el control de su negocio.</p>
       <div class="lp-ctas">
@@ -327,8 +417,8 @@
     <p class="lp-parrafo lp-preambulo">SUNAT no te cobra por entrar a leer tus
       notificaciones. Nosotros desarrollamos una plataforma para que las leas en tu
       propio celular, con claridad, y programes tus recordatorios. Por eso, como
-      Fundador 2026, pagas solo <b>S/5 al mes</b>, congelado mientras mantengas tu
-      suscripción. Si la interrumpes, al volver pagarás el precio regular.</p>
+      Fundador 2026, pagas solo <b>S/{{ esc.precio_actual }} al mes</b>, congelado mientras
+      mantengas tu suscripción. Si la interrumpes, al volver pagarás el precio regular.</p>
 
     <div class="lp-faq" id="lp-faq">
       {% set faqs = [
