@@ -120,6 +120,16 @@ def cuerpo_notificacion(texto_html) -> dict:
     return {"numero": None, "cuerpo": Markup(raw), "tecnicos": [], "es_json": False}
 
 
+# Escalera de precios Fundador 2026: la fuente ÚNICA vive en precios.py
+# (raíz), compartida por landing, candado de precio y cobro (zAlerta-23/24).
+from precios import escalera_para as _escalera_para  # noqa: E402
+
+
+def escalera_precios() -> dict:
+    """Escalera para la landing, calculada con la fecha del servidor (Lima)."""
+    return _escalera_para(datetime.now(TZ_LIMA))
+
+
 templates.env.filters["fecha_lima"] = fecha_lima
 templates.env.filters["fecha_hora_lima"] = fecha_hora_lima
 templates.env.filters["urgencia_meta"] = urgencia_meta
@@ -127,3 +137,4 @@ templates.env.filters["etiqueta_tipo_doc"] = etiqueta_tipo_doc
 templates.env.filters["cuerpo_notificacion"] = cuerpo_notificacion
 templates.env.globals["ETIQUETA_TIPO_DOCUMENTO"] = ETIQUETA_TIPO_DOCUMENTO
 templates.env.globals["WHATSAPP_SOPORTE"] = WHATSAPP_SOPORTE
+templates.env.globals["escalera_precios"] = escalera_precios
