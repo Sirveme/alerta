@@ -353,7 +353,8 @@
         <figcaption class="lp-vprecio-cap">¿Por qué cobramos tan poco? Te lo cuento en 30 segundos.</figcaption>
         <!-- VIDEO REAL: sube /static/vid/precio-porque-poco.mp4 + poster -->
         <div class="lp-vprecio-player">
-          <video controls playsinline preload="none" poster="/static/img/precio-porque-poco.jpg">
+          <video controls playsinline preload="none" poster="/static/img/precio-porque-poco.jpg"
+                 onerror="this.closest('.lp-vprecio-player').classList.add('sin-video')">
             <source src="/static/vid/precio-porque-poco.mp4" type="video/mp4"></video>
           <div class="lp-vprecio-prox"><span class="material-symbols-outlined">movie</span> Video próximamente</div>
         </div>
@@ -363,7 +364,8 @@
       <figure class="lp-vprecio">
         <figcaption class="lp-vprecio-cap">¿Por qué suscribirte hoy? Es mucho ahorro, te explico.</figcaption>
         <div class="lp-vprecio-player">
-          <video controls playsinline preload="none" poster="/static/img/precio-porque-hoy.jpg">
+          <video controls playsinline preload="none" poster="/static/img/precio-porque-hoy.jpg"
+                 onerror="this.closest('.lp-vprecio-player').classList.add('sin-video')">
             <source src="/static/vid/precio-porque-hoy.mp4" type="video/mp4"></video>
           <div class="lp-vprecio-prox"><span class="material-symbols-outlined">movie</span> Video próximamente</div>
         </div>
