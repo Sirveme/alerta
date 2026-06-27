@@ -1442,8 +1442,12 @@ a.tarjeta-link { display:block; color:inherit; }
 .lp-vprecio-player { position:relative; aspect-ratio:16/9; background:#05120A;
   border-radius:12px; overflow:hidden; }
 .lp-vprecio-player video { width:100%; height:100%; object-fit:cover; display:block; }
-.lp-vprecio-prox { position:absolute; inset:0; display:flex; align-items:center;
+/* zAlerta-30 · placeholder oculto por defecto; solo aparece si el video falla
+   (el <video> añade .sin-video al contenedor vía onerror). */
+.lp-vprecio-prox { position:absolute; inset:0; display:none; align-items:center;
   justify-content:center; gap:8px; color:#9aa08f; font-weight:600; pointer-events:none; }
+.lp-vprecio-player.sin-video .lp-vprecio-prox { display:flex; }
+.lp-vprecio-player.sin-video video { display:none; }
 .lp-vprecio-prox .material-symbols-outlined { font-size:34px; color:#FCC014; }
 
 /* zAlerta-25 · Mini-captura bajo el Video 2 */
