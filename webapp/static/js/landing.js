@@ -201,4 +201,58 @@
     const v = ovPanel.querySelector('video'); if (v) { try { v.pause(); } catch (_) {} }
     ov.classList.remove('show'); setTimeout(() => { ov.hidden = true; }, 300);
   }
+
+  // ── Videos de precio: degradar a "próximamente" si el archivo no existe ──
+  document.querySelectorAll('.lp-vprecio-player video').forEach((v) => {
+    const prox = v.parentElement.querySelector('.lp-vprecio-prox');
+    v.addEventListener('error', () => { v.style.display = 'none'; if (prox) prox.hidden = false; }, true);
+    // <video> con solo <source> inexistente no siempre dispara 'error' en el
+    // elemento; comprobamos tras intentar cargar.
+    v.addEventListener('loadeddata', () => { if (prox) prox.hidden = true; });
+  });
+
+  // ── Mini-captura bajo el Video 2 (reusa /api/activar/ruc + /api/activar/lead) ──
+  const capRuc = $('#cap-ruc'), capWa = $('#cap-wa'), capRs = $('#cap-rs'),
+        capMsg = $('#cap-msg'), capBtn = $('#cap-enviar');
+  if (capRuc && capBtn) {
+    let capRazon = '';
+    function mostrarRs(rs) {
+      capRazon = rs || '';
+      if (rs) { capRs.textContent = '✓ ' + rs; capRs.hidden = false; }
+      else { capRs.hidden = true; }
+    }
+    async function capLookup(ruc) {
+      capMsg.className = 'lp-captura-msg'; capMsg.textContent = '';
+      try {
+        const j = await (await fetch('/api/activar/ruc/' + ruc)).json();
+        if (j.ok && j.razon_social) mostrarRs(j.razon_social); else mostrarRs('');
+      } catch (_) { mostrarRs(''); }
+    }
+    // Pre-rellenar si el usuario ya validó un RUC arriba (demo/héroe).
+    if (inRuc && /^\d{11}$/.test(inRuc.value || '')) {
+      capRuc.value = inRuc.value;
+      if (razonActual) mostrarRs(razonActual); else capLookup(inRuc.value);
+    }
+    capRuc.addEventListener('input', () => {
+      capRuc.value = capRuc.value.replace(/\D/g, '').slice(0, 11);
+      if (capRuc.value.length === 11) capLookup(capRuc.value); else mostrarRs('');
+    });
+    capWa.addEventListener('input', () => { capWa.value = capWa.value.replace(/\D/g, '').slice(0, 9); });
+    capBtn.addEventListener('click', async () => {
+      const ruc = (capRuc.value || '').trim(), wa = (capWa.value || '').trim();
+      if (!/^\d{11}$/.test(ruc)) { capMsg.className = 'lp-captura-msg no'; capMsg.textContent = 'Escribe tu RUC de 11 dígitos.'; return; }
+      if (!/^\d{8,9}$/.test(wa)) { capMsg.className = 'lp-captura-msg no'; capMsg.textContent = 'Escribe tu WhatsApp (sin código país).'; return; }
+      capBtn.disabled = true;
+      try {
+        const j = await (await fetch('/api/activar/lead', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ruc: ruc, whatsapp: wa, razon_social: capRazon }) })).json();
+        if (j.ok) {
+          capMsg.className = 'lp-captura-msg ok';
+          capMsg.innerHTML = '✓ ¡Precio asegurado! Continúa para conectar tu buzón. '
+            + '<a href="/activar?ruc=' + encodeURIComponent(ruc) + '">Continuar ›</a>';
+        } else { capBtn.disabled = false; capMsg.className = 'lp-captura-msg no'; capMsg.textContent = 'No pudimos guardar; reintenta.'; }
+      } catch (_) { capBtn.disabled = false; capMsg.className = 'lp-captura-msg no'; capMsg.textContent = 'Error de red; reintenta.'; }
+    });
+  }
 })();
