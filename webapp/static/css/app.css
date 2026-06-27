@@ -1329,6 +1329,9 @@ a.tarjeta-link { display:block; color:inherit; }
 .conx-badge--rojo { background:var(--u-urgente); }
 .conx-msg { color:var(--texto); }
 .conx-msg a { font-weight:700; color:var(--marca); white-space:nowrap; }
+/* zAlerta-27 · Primera lectura en curso (aviso suave, sin alarma) */
+.conx-primera { display:block; margin-top:4px; font-size:.82rem; font-style:italic;
+  color:color-mix(in srgb,var(--texto) 62%,transparent); }
 
 /* ══════════════════════════════════════════════════════════════════
    zAlerta-19 · Landing de venta (bloques nuevos)
@@ -1393,6 +1396,79 @@ a.tarjeta-link { display:block; color:inherit; }
 .lp-ancla { background:color-mix(in srgb,#FCC014 14%,transparent); border-radius:10px;
   padding:11px; font-size:.9rem; color:#5a4708; margin:10px 0; }
 .lp-cafe { font-weight:700; color:#15402A; margin:10px 0; }
+
+/* zAlerta-23 · Escalera de precios (acentos chicha con función) */
+.lp-escalera-gancho { font-weight:800; color:#B3253C; margin:6px 0 10px; font-size:1.02rem; }
+/* padding-top: deja aire para el escalón destacado (elevado -2px + badge en
+   top:-9px); el overflow-x:auto recortaba su borde/sombra superior (zAlerta-26 FIX 2). */
+.lp-escalera { display:flex; gap:7px; margin:0 0 12px; overflow-x:auto;
+  padding-top:15px; padding-bottom:6px; -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin; }
+.lp-escalon { flex:0 0 auto; min-width:62px; display:flex; flex-direction:column;
+  align-items:center; gap:2px; padding:9px 8px 8px; border-radius:12px;
+  border:1.5px solid #d8d2c4; background:#fff; position:relative; }
+.lp-escalon-mes { font-size:.72rem; color:#4A5A50; font-weight:600; }
+.lp-escalon-precio { font-size:1.05rem; font-weight:800; color:#15402A; }
+.esc--pasado { opacity:.45; }
+.esc--pasado .lp-escalon-precio { text-decoration:line-through; }
+.esc--futuro { background:#F7F5EF; }
+.esc--actual { border-color:#1D9E75; border-width:2px;
+  background:color-mix(in srgb,#1D9E75 12%,#fff); box-shadow:0 4px 12px rgba(29,158,117,.25);
+  transform:translateY(-2px); }
+.esc--actual .lp-escalon-precio { color:#1D9E75; font-size:1.2rem; }
+.lp-escalon-badge { position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+  font-size:.56rem; font-weight:800; color:#fff; background:#1D9E75; border-radius:999px;
+  padding:2px 7px; white-space:nowrap; letter-spacing:.03em; }
+.lp-escalera-txt { font-size:.88rem; line-height:1.5; color:#15402A; margin:0 0 12px; }
+.lp-escalera-txt b { color:#15402A; }
+
+/* zAlerta-25 · Ahorro dinámico */
+.lp-ahorro { background:color-mix(in srgb,#1D9E75 9%,#fff); border:1.5px solid
+  color-mix(in srgb,#1D9E75 35%,transparent); border-radius:14px; padding:14px; margin:0 0 14px; }
+.lp-ahorro-fila { display:flex; justify-content:space-between; align-items:baseline;
+  padding:5px 0; color:#15402A; font-size:.95rem; }
+.lp-ahorro-fila b { font-weight:800; }
+.lp-ahorro--destaca { font-size:1.05rem; }
+.lp-ahorro--destaca b { color:#1D9E75; font-size:1.4rem; }
+.lp-ahorro-txt { font-size:.82rem; line-height:1.5; color:#3a5247; margin:8px 0 0;
+  border-top:1px dashed color-mix(in srgb,#1D9E75 30%,transparent); padding-top:8px; }
+
+/* zAlerta-25 · Videos de precio (inline) */
+.lp-vprecio { margin:0 0 14px; }
+.lp-vprecio-cap { font-weight:700; color:#15402A; margin-bottom:8px; font-size:.95rem; }
+.lp-vprecio-player { position:relative; aspect-ratio:16/9; background:#05120A;
+  border-radius:12px; overflow:hidden; }
+.lp-vprecio-player video { width:100%; height:100%; object-fit:cover; display:block; }
+.lp-vprecio-prox { position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; gap:8px; color:#9aa08f; font-weight:600; pointer-events:none; }
+.lp-vprecio-prox .material-symbols-outlined { font-size:34px; color:#FCC014; }
+
+/* zAlerta-25 · Mini-captura bajo el Video 2 */
+.lp-captura { background:#F7F5EF; border:1.5px solid #d8d2c4; border-radius:14px;
+  padding:14px; margin:0 0 14px; }
+.lp-captura label { color:#15402A; }
+.lp-captura-rs { color:#1D9E75; font-weight:700; font-size:.9rem; margin-bottom:8px; }
+.lp-captura .lp-cta { width:100%; }
+.lp-captura-msg { min-height:1.1em; font-size:.88rem; font-weight:600; margin-top:8px; text-align:center; }
+.lp-captura-msg.ok { color:#1D9E75; } .lp-captura-msg.no { color:var(--u-urgente); }
+.lp-captura-msg a { color:var(--marca); font-weight:700; }
+.lp-captura .lp-microcopy { color:#3a5247; text-align:left; }
+
+/* zAlerta-25 · Dolor: comparación con la UIT */
+.lp-uit { background:#fff; border-radius:14px; padding:16px; margin:16px 0; }
+.lp-uit-intro { color:#15402A; line-height:1.5; margin:0 0 12px; }
+.lp-uit-comp { display:flex; align-items:stretch; gap:10px; }
+.lp-uit-card { flex:1; border-radius:12px; padding:12px; text-align:center;
+  display:flex; flex-direction:column; gap:2px; border:1.5px solid; }
+.lp-uit--bien { background:color-mix(in srgb,#1D9E75 10%,#fff); border-color:#1D9E75; }
+.lp-uit--mal { background:color-mix(in srgb,var(--u-urgente) 9%,#fff); border-color:var(--u-urgente); }
+.lp-uit-lbl { font-size:.78rem; font-weight:700; color:#4A5A50; }
+.lp-uit-monto { font-size:1.5rem; font-weight:800; color:#15402A; }
+.lp-uit-monto small { font-size:.7rem; font-weight:600; color:#4A5A50; }
+.lp-uit--mal .lp-uit-monto { color:var(--u-urgente); }
+.lp-uit-sub { font-size:.74rem; color:#4A5A50; }
+.lp-uit-vs { align-self:center; font-weight:800; color:#9aa08f; }
+.lp-uit-cierre { font-size:.88rem; line-height:1.5; color:#15402A; margin:12px 0 0; }
 
 /* Preámbulo + FAQ */
 .lp-preambulo { background:var(--superficie); border-left:4px solid var(--u-aldia);
@@ -1459,13 +1535,13 @@ a.tarjeta-link { display:block; color:inherit; }
 .lp-vf-ph { position:absolute; inset:0; display:flex; flex-direction:column;
   align-items:center; justify-content:center; gap:6px; color:#9aa08f; pointer-events:none; }
 .lp-vf-ph .material-symbols-outlined { font-size:48px; color:#FCC014; }
+/* zAlerta-26 FIX 1 · tarjetas BLANCAS, logo legible + nombre al lado */
 .lp-logos { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
-.lp-logo-item { display:flex; align-items:center; justify-content:center; min-height:54px;
-  padding:8px; background:var(--superficie); border:1px solid var(--borde); border-radius:var(--radio); }
-.lp-logo-item img { max-width:100%; max-height:42px; }
-.lp-logo-item .lp-logo-txt { display:none; }
-.lp-logo-item.ph .lp-logo-txt { display:block; font-size:.78rem; font-weight:700;
-  color:var(--texto-suave); text-align:center; }
+@media (max-width:380px){ .lp-logos { grid-template-columns:1fr; } }
+.lp-logo-item { display:flex; align-items:center; gap:10px; min-height:60px;
+  padding:10px 12px; background:#fff; border-radius:14px; }
+.lp-logo-img { flex:0 0 auto; width:48px; height:48px; object-fit:contain; }
+.lp-logo-txt { font-size:.82rem; font-weight:700; color:#15402A; line-height:1.25; }
 
 /* FIX 6 (fix-2) · historias RTF SEPARADAS y tocables (no pila decorativa) */
 .lp-historias { display:flex; gap:16px; flex-wrap:wrap; justify-content:center;
