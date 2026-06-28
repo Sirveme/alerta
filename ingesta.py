@@ -25,8 +25,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import (
-    Contribuyente, Notificacion, Adjunto, TipoDocumento, Urgencia)
-from clasificacion import clasificar_por_carpeta
+    Contribuyente, Notificacion, Adjunto, TipoDocumento)
+from clasificacion import clasificar
 
 TZ_LIMA = ZoneInfo("America/Lima")
 
@@ -93,13 +93,15 @@ async def ingestar_resultado(
         if not cod or not tipo_msj:
             continue
 
-        # ── Clasificación por CARPETA de SUNAT (zAlerta-28) ──
+        # ── Clasificación: CARPETA > ASUNTO > OTRO (zAlerta-28/32) ──
         cod_carp = msg.get("cod_carpeta") or None
         nom_carp = msg.get("nombre_carpeta") or None
-        tipo_doc, urgencia, matched = clasificar_por_carpeta(
-            nom_carp, bool(msg.get("urgente")))
-        if nom_carp and not matched:
-            stats.setdefault("carpetas_no_mapeadas", set()).add(nom_carp)
+        asunto_msg = msg.get("asunto")
+        tipo_doc, urgencia, _fuente = clasificar(
+            nom_carp, asunto_msg, bool(msg.get("urgente")))
+        if tipo_doc == TipoDocumento.OTRO and (nom_carp or asunto_msg):
+            stats.setdefault("no_clasificados", set()).add(
+                (nom_carp or "")[:30] + " | " + (asunto_msg or "")[:50])
 
         # ── DEDUP: ¿ya existe esta notificación? ──
         existe = await session.scalar(
@@ -112,17 +114,23 @@ async def ingestar_resultado(
         if existe is not None:
             stats["mensajes_duplicados"] += 1
             notif_id = existe.id
-            # Reclasificar EN SITIO los mensajes viejos que llegaron sin carpeta
-            # o sin clasificar (la próxima lectura los actualiza). No degrada: solo
-            # toca los que están en OTRO/None, nunca pisa una clasificación previa.
-            if nom_carp and (existe.cod_carpeta is None
-                             or existe.tipo_documento_enum in (None, TipoDocumento.OTRO)):
-                existe.cod_carpeta = cod_carp
-                existe.nombre_carpeta = nom_carp
-                existe.tipo_documento_enum = tipo_doc
-                existe.urgencia = urgencia
-                existe.clasificado_at = ahora_lima()
-                stats["reclasificados"] = stats.get("reclasificados", 0) + 1
+            # Reclasificar EN SITIO los mensajes viejos SIN clasificar (OTRO/None).
+            # Usa carpeta+asunto: la capa de asunto rescata los carpeta-NULL viejos
+            # sin re-descargar PDFs (asunto/texto ya están en BD). No degrada:
+            # nunca pisa una clasificación previa válida.
+            if existe.tipo_documento_enum in (None, TipoDocumento.OTRO):
+                cambio = False
+                if cod_carp and existe.cod_carpeta is None:
+                    existe.cod_carpeta = cod_carp
+                    existe.nombre_carpeta = nom_carp
+                    cambio = True
+                if tipo_doc != TipoDocumento.OTRO or existe.urgencia != urgencia:
+                    existe.tipo_documento_enum = tipo_doc
+                    existe.urgencia = urgencia
+                    cambio = True
+                if cambio:
+                    existe.clasificado_at = ahora_lima()
+                    stats["reclasificados"] = stats.get("reclasificados", 0) + 1
         else:
             notif = Notificacion(
                 estudio_id=estudio_id,
