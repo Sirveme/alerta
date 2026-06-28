@@ -26,6 +26,63 @@
     otro: 'Revisa el documento y, si tiene plazo, atiéndelo a tiempo. Ante dudas, consulta con tu contador.',
   };
 
+  // Label contextual del botón por tipo (zAlerta-32).
+  const BTN_LABEL = {
+    cobranza_coactiva: 'Ver deuda y plazo',
+    orden_pago: 'Revisar y pagar',
+    multa: 'Ver multa',
+    resolucion_determinacion: 'Ver resolución',
+    fraccionamiento: 'Ver cuotas',
+    esquela: 'Ver esquela',
+    otro: 'Ver detalle',
+  };
+  const URG_LBL = {
+    critica: 'Crítica', urgente: 'Urgente', importante: 'Importante',
+    informativa: 'Informativa', sin_clasificar: 'Informativa',
+  };
+
+  // ── Modal custom (sin diálogos nativos): detalle + orientación + PDFs ──
+  function abrirModal(f) {
+    if (!f) return;
+    const sem = semColor(f);
+    const orienta = ORIENTA[f.tipo] || ORIENTA.otro;
+    const pdfs = (f.adjuntos || []).map((a) =>
+      '<div class="rsm-mod-pdf"><span class="material-symbols-outlined">picture_as_pdf</span>'
+      + '<span class="rsm-mod-pdf-nom">' + esc(a.nombre || 'Documento.pdf') + '</span>'
+      + '<a class="rsm-mod-btn" href="/adjuntos/' + esc(a.id) + '/ver" target="_blank" rel="noopener">Ver PDF</a>'
+      + '<a class="rsm-mod-btn rsm-mod-btn--sec" href="/adjuntos/' + esc(a.id) + '/descargar">Descargar</a>'
+      + '</div>').join('');
+    const meta = [];
+    meta.push('<span class="rsm-mod-chip sem-bg--' + sem + '">' + esc(URG_LBL[f.urgencia] || 'Informativa') + '</span>');
+    if (f.periodo && f.periodo !== '—') meta.push('<span class="rsm-mod-tag">Periodo: ' + esc(f.periodo) + '</span>');
+    if (f.vence_iso) meta.push('<span class="rsm-mod-tag">Vence: ' + esc(f.vence) + '</span>');
+    if (f.ruc) meta.push('<span class="rsm-mod-tag">RUC ' + esc(f.ruc) + '</span>');
+
+    const ov = document.createElement('div');
+    ov.className = 'rsm-mod-ov';
+    ov.innerHTML =
+      '<div class="rsm-mod" role="dialog" aria-modal="true" aria-label="Detalle de la notificación">'
+      + '<button class="rsm-mod-x" aria-label="Cerrar"><span class="material-symbols-outlined">close</span></button>'
+      + '<div class="rsm-mod-tipo">' + esc(f.documento) + '</div>'
+      + '<h3 class="rsm-mod-asunto">' + esc(f.asunto || f.detalle || 'Notificación') + '</h3>'
+      + '<div class="rsm-mod-meta">' + meta.join('') + '</div>'
+      + '<p class="rsm-mod-orienta">' + esc(orienta) + '</p>'
+      + (pdfs
+          ? '<div class="rsm-mod-pdfs"><div class="rsm-mod-lbl">Documentos adjuntos</div>' + pdfs + '</div>'
+          : '<div class="rsm-mod-sinpdf">Esta notificación no tiene PDF adjunto.</div>')
+      + '</div>';
+
+    function cerrar() {
+      ov.remove();
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') cerrar(); }
+    ov.addEventListener('click', (e) => { if (e.target === ov) cerrar(); });
+    ov.querySelector('.rsm-mod-x').addEventListener('click', cerrar);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(ov);
+  }
+
   // ── IndexedDB mínima (sin librerías) ──
   const DB = 'alertape', STORE = 'resumen', KEY = 'mi-resumen';
   function abrir() {
@@ -128,26 +185,28 @@
             : sem === 'ambar'
               ? '<span class="rsm-info-lbl rsm-lbl--ambar">Importante</span>'
               : '<span class="rsm-info-lbl">Informativo</span>');
+      const badgePdf = (f.adjuntos && f.adjuntos.length)
+        ? ' <span class="rsm-pdf-badge" title="Tiene PDF adjunto">'
+          + '<span class="material-symbols-outlined">picture_as_pdf</span></span>'
+        : '';
+      const btnLabel = BTN_LABEL[f.tipo] || BTN_LABEL.otro;
       return '<tr class="rsm-row sem--' + sem + '" title="' + esc(SEM_TXT[sem]) + '">'
-        + '<td><span class="rsm-punto sem-bg--' + sem + '"></span><b>' + esc(f.documento) + '</b></td>'
+        + '<td><span class="rsm-punto sem-bg--' + sem + '"></span><b>' + esc(f.documento) + '</b>' + badgePdf + '</td>'
         + '<td>' + esc(f.periodo) + '</td>'
         + '<td>' + esc(f.detalle) + '</td>'
         + '<td>' + venceCol + '</td>'
-        + '<td><button class="rsm-b" data-i="' + i + '">Qué hacer</button></td>'
+        + '<td><button class="rsm-b" data-i="' + i + '">' + esc(btnLabel) + '</button></td>'
         + '</tr>'
-        + '<tr class="rsm-orient-row sem--' + sem + '"><td colspan="5">'
-        + '<div class="rsm-orient" data-orient="' + i + '" hidden></div>'
-        + recSel + '</td></tr>';
+        + (recSel
+            ? '<tr class="rsm-orient-row sem--' + sem + '"><td colspan="5">' + recSel + '</td></tr>'
+            : '');
     }).join('');
     wrap.innerHTML =
       '<table class="rsm-tabla"><thead><tr>'
       + '<th>Documento</th><th>Periodo</th><th>Detalle</th><th>Vence</th><th></th>'
       + '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
     wrap.querySelectorAll('.rsm-b').forEach((b) => b.addEventListener('click', () => {
-      const cont = wrap.querySelector('.rsm-orient[data-orient="' + b.dataset.i + '"]');
-      if (!cont) return;
-      cont.textContent = ORIENTA[filas[+b.dataset.i].tipo] || ORIENTA.otro;
-      cont.hidden = !cont.hidden;
+      abrirModal(filas[+b.dataset.i]);
     }));
     // Cambio de recordatorio → guardar (no disponible offline).
     wrap.querySelectorAll('.rsm-rec-sel').forEach((s) => s.addEventListener('change', async () => {
