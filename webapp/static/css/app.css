@@ -1293,6 +1293,39 @@ a.tarjeta-link { display:block; color:inherit; }
 /* zAlerta-28 · etiqueta de urgencia sin fecha (Coactiva/Orden de Pago sin plazo) */
 .rsm-info-lbl.rsm-lbl--rojo { color:var(--u-urgente); font-style:normal; font-weight:700; }
 .rsm-info-lbl.rsm-lbl--ambar { color:var(--u-importante); font-style:normal; font-weight:600; }
+/* zAlerta-32 · badge de PDF en la fila */
+.rsm-pdf-badge { display:inline-flex; vertical-align:middle; color:var(--u-urgente); }
+.rsm-pdf-badge .material-symbols-outlined { font-size:18px; }
+/* zAlerta-32 · modal custom de detalle (asunto + orientación + PDFs) */
+.rsm-mod-ov { position:fixed; inset:0; z-index:9000; display:flex; align-items:center;
+  justify-content:center; padding:16px; background:rgba(0,0,0,.62);
+  -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px); }
+.rsm-mod { position:relative; width:100%; max-width:480px; max-height:88vh; overflow:auto;
+  background:var(--superficie); color:var(--texto); border:1px solid var(--borde);
+  border-radius:14px; padding:20px 18px 18px; box-shadow:0 18px 50px rgba(0,0,0,.5); }
+.rsm-mod-x { position:absolute; top:10px; right:10px; width:34px; height:34px; border:0;
+  border-radius:50%; background:transparent; color:var(--texto-suave); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; }
+.rsm-mod-x:hover { background:color-mix(in srgb,var(--texto) 12%,transparent); }
+.rsm-mod-tipo { font-size:.72rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--marca); margin:0 28px 4px 0; }
+.rsm-mod-asunto { margin:0 0 12px; font-size:1.02rem; line-height:1.35; color:var(--texto); }
+.rsm-mod-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+.rsm-mod-chip { font-size:.7rem; font-weight:800; color:#fff; border-radius:999px; padding:3px 10px; }
+.rsm-mod-tag { font-size:.74rem; color:var(--texto-suave); background:color-mix(in srgb,var(--texto) 8%,transparent);
+  border-radius:999px; padding:3px 9px; }
+.rsm-mod-orienta { margin:0 0 14px; font-size:.9rem; line-height:1.5; color:var(--texto); }
+.rsm-mod-lbl { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+  color:var(--texto-suave); margin-bottom:8px; }
+.rsm-mod-pdf { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0;
+  border-top:1px solid var(--borde); }
+.rsm-mod-pdf .material-symbols-outlined { color:var(--u-urgente); font-size:22px; }
+.rsm-mod-pdf-nom { flex:1 1 140px; font-size:.84rem; word-break:break-word; }
+.rsm-mod-btn { font-size:.78rem; font-weight:700; text-decoration:none; padding:6px 12px;
+  border-radius:8px; background:var(--marca); color:#fff; }
+.rsm-mod-btn--sec { background:transparent; color:var(--marca); border:1px solid var(--marca); }
+.rsm-mod-sinpdf { font-size:.82rem; color:var(--texto-suave); font-style:italic;
+  border-top:1px solid var(--borde); padding-top:12px; }
 .rsm-sugerencia { display:flex; align-items:center; gap:6px; font-size:.82rem;
   font-weight:600; color:var(--u-importante); margin-bottom:6px; }
 .rsm-sugerencia .ti { font-size:16px; }
