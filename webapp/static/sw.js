@@ -5,7 +5,10 @@
    Push: handler listo; el ENVÍO real es una fase aparte.
    ═══════════════════════════════════════════════════════════════════ */
 
-const CACHE = 'alertape-v27';
+const CACHE = 'alertape-v29';
+// Nunca cachear video ni respuestas parciales (Range/206): Cache Storage no
+// admite 206 y lanzaría en cache.put (zAlerta-31 TEMA A).
+const RE_VIDEO = /\.(mp4|webm|mov|m4v)(\?|$)/i;
 const ASSETS = [
   '/static/css/app.css',
   '/static/js/app.js',
@@ -35,12 +38,26 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;            // no cachear POST (login, voz, etc.)
   const url = new URL(req.url);
 
+  // Video o petición con Range → directo a la red, SIN cachear (evita el error
+  // 'put' sobre 206 Partial Content y no llena el caché con binarios grandes).
+  if (url.pathname.startsWith('/static/vid/') || RE_VIDEO.test(url.pathname)
+      || req.headers.has('range')) {
+    e.respondWith(fetch(req));
+    return;
+  }
+
   // Assets estáticos: cache-first
   if (url.pathname.startsWith('/static/') || url.pathname === '/manifest.json') {
     e.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-        const copia = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copia));
+        // Solo cachear respuestas COMPLETAS y OK (nunca 206/opaque/error).
+        // Cualquier fallo de caché jamás debe romper la respuesta al usuario.
+        if (res && res.status === 200 && res.type === 'basic') {
+          const copia = res.clone();
+          caches.open(CACHE)
+            .then((c) => c.put(req, copia))
+            .catch(() => {});
+        }
         return res;
       }))
     );
