@@ -16,6 +16,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 import uuid
 
@@ -83,6 +84,7 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         rows = (await session.execute(
             select(Notificacion, Contribuyente.ruc, Contribuyente.razon_social)
             .join(Contribuyente, Contribuyente.id == Notificacion.contribuyente_id)
+            .options(selectinload(Notificacion.adjuntos))
             .where(Notificacion.contribuyente_id.in_(sub))
             .order_by(Notificacion.fecha_publica_sunat.desc().nullslast(),
                       Notificacion.creado_at.desc())
@@ -100,12 +102,20 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                      if n.tipo_documento_enum is not None else "otro")
         documento = (n.tipo_documento
                      or ETIQUETA_TIPO_DOCUMENTO.get(tipo_enum, "Aviso"))
+        # Adjuntos PDF disponibles (solo los que tienen archivo servible en BD).
+        # Se mandan id+nombre; el PDF se sirve bajo demanda por /adjuntos/{id}/ver.
+        adjuntos = [{"id": str(a.id), "nombre": a.nombre_archivo}
+                    for a in (n.adjuntos or [])
+                    if a.bytea_temporal is not None or a.gcs_key]
         filas.append({
             "id": str(n.id),
             "documento": documento,
             "tipo": tipo_enum,
             "periodo": _periodo_de(n.asunto),
             "detalle": (n.asunto or "—")[:160],
+            "asunto": n.asunto or "",            # asunto completo para el modal
+            "cod_mensaje": n.cod_mensaje_sunat,  # referencia SUNAT
+            "adjuntos": adjuntos,                # [{id, nombre}] PDF servibles
             "vence": fecha_lima(n.plazo_vencimiento) if n.plazo_vencimiento else "—",
             "vence_iso": (n.plazo_vencimiento.isoformat()
                           if n.plazo_vencimiento else None),
