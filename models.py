@@ -32,7 +32,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
-    Boolean, DateTime, Enum, ForeignKey, Integer, String, Text,
+    Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text,
     UniqueConstraint, Index, func,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
@@ -122,6 +122,27 @@ ETIQUETA_TIPO_DOCUMENTO: dict[str, str] = {
     "cobranza_coactiva": "Cobranza Coactiva",
     "aviso": "Avisos",
     "otro": "Otros",
+}
+
+
+class TipoValorado(str, enum.Enum):
+    """Tipo de documento de DEUDA valorada (zAlerta-34). Solo los que comportan
+    deuda: se les baja el 2º PDF (documento real) y se valoran."""
+    ORDEN_PAGO = "orden_pago"
+    RESOLUCION_MULTA = "resolucion_multa"
+    RESOLUCION_DETERMINACION = "resolucion_determinacion"
+    COBRANZA_COACTIVA = "cobranza_coactiva"
+    FRACCIONAMIENTO = "fraccionamiento"
+
+
+# Mapa TipoDocumento (clasificación del buzón) → TipoValorado (deuda). Solo los
+# tipos con deuda están aquí; un tipo ausente NO se valora (no se baja 2º PDF).
+TIPODOC_A_VALORADO: dict = {
+    TipoDocumento.ORDEN_PAGO: TipoValorado.ORDEN_PAGO,
+    TipoDocumento.MULTA: TipoValorado.RESOLUCION_MULTA,
+    TipoDocumento.RESOLUCION_DETERMINACION: TipoValorado.RESOLUCION_DETERMINACION,
+    TipoDocumento.COBRANZA_COACTIVA: TipoValorado.COBRANZA_COACTIVA,
+    TipoDocumento.FRACCIONAMIENTO: TipoValorado.FRACCIONAMIENTO,
 }
 
 
@@ -810,3 +831,100 @@ class Pago(Base):
     vence_resultante: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Deuda valorada (zAlerta-34) — el 2º PDF (documento real) y sus datos.
+# El PDF íntegro va a GCS (gcs_key); el texto crudo queda para el parser
+# (zAlerta-35). Aquí solo cabecera mínima + pdf_texto + gcs_key.
+# ═════════════════════════════════════════════════════════════════════
+class Tributo(Base):
+    """Catálogo de códigos de tributo de SUNAT (sin TIM ni tasas)."""
+    __tablename__ = "tributos"
+
+    codigo: Mapped[str] = mapped_column(String(10), primary_key=True)
+    descripcion: Mapped[str] = mapped_column(String(160), nullable=False)
+    tipo: Mapped[str | None] = mapped_column(String(40))   # igv / renta / essalud / onp / multa…
+
+
+class DocumentoValorado(Base, TimestampMixin):
+    """Cabecera de un documento de deuda (Orden de Pago / Resolución de Multa /
+    Coactiva / Determinación / Fraccionamiento). Multi-tenant por contribuyente."""
+    __tablename__ = "documentos_valorados"
+    __table_args__ = (
+        # Un documento de deuda por notificación (dedup práctico al ingestar).
+        UniqueConstraint("notificacion_id", name="uq_valorado_notif"),
+        # Dedup lógico por nº de documento (cuando el parser lo complete).
+        UniqueConstraint("contribuyente_id", "num_documento", "tipo_valorado",
+                         name="uq_valorado_doc"),
+        Index("ix_valorado_contrib", "contribuyente_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    notificacion_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
+        index=True)
+    # Tenant directo (deriva de la notificación/contribuyente). Nullable por
+    # prudencia en Flujo 1; el filtro fuerte es contribuyente_id.
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        index=True)
+
+    tipo_valorado: Mapped[TipoValorado] = mapped_column(
+        Enum(TipoValorado, native_enum=False, length=30), nullable=False)
+    num_documento: Mapped[str | None] = mapped_column(String(60), index=True)
+
+    # Cabecera (la llena el parser de zAlerta-35; aquí quedan NULL).
+    fecha_emision: Mapped[datetime | None] = mapped_column(Date)
+    fecha_notificacion: Mapped[datetime | None] = mapped_column(Date)
+    dependencia: Mapped[str | None] = mapped_column(String(120))
+    funcionario_emisor: Mapped[str | None] = mapped_column(String(160))
+    infraccion_descripcion: Mapped[str | None] = mapped_column(Text)
+    infraccion_base_legal: Mapped[str | None] = mapped_column(String(200))
+    importe: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    interes: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    monto_total: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    num_resol_coactiva: Mapped[str | None] = mapped_column(String(60))
+    plazo_reclamo_dias: Mapped[int | None] = mapped_column(Integer)
+
+    # Fuente de verdad: PDF íntegro en GCS + texto crudo para el parser.
+    pdf_texto: Mapped[str | None] = mapped_column(Text)
+    gcs_key: Mapped[str | None] = mapped_column(String(300))
+
+    parseado_ok: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+    parseado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    detalles: Mapped[list["DetalleValorado"]] = relationship(
+        back_populates="documento", cascade="all, delete-orphan")
+
+
+class DetalleValorado(Base):
+    """Líneas (detalle) de un documento valorado. Las llena el parser (zAlerta-35)."""
+    __tablename__ = "detalles_valorados"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    documento_valorado_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documentos_valorados.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+
+    periodo: Mapped[str | None] = mapped_column(String(20))
+    cod_tributo: Mapped[str | None] = mapped_column(
+        String(10), ForeignKey("tributos.codigo"))
+    formulario: Mapped[str | None] = mapped_column(String(20))
+    num_declaracion: Mapped[str | None] = mapped_column(String(40))
+    base_referencia: Mapped[str | None] = mapped_column(String(120))
+    tasa_pct: Mapped[float | None] = mapped_column(Numeric(7, 4))
+    cod_multa: Mapped[str | None] = mapped_column(String(20))
+    monto_insoluto: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    interes_linea: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    total_linea: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    fecha_infraccion: Mapped[datetime | None] = mapped_column(Date)
+
+    documento: Mapped["DocumentoValorado"] = relationship(back_populates="detalles")
+    tributo: Mapped["Tributo | None"] = relationship()

@@ -35,4 +35,8 @@ pywebpush>=2.0.0
 # Carga por archivo de RUCs (zAlerta-10 Parte C): lectura de .xlsx
 openpyxl>=3.1.0
 
+# Almacenamiento de PDFs de deuda en GCS (zAlerta-34) + extracción de texto
+google-cloud-storage>=2.16.0
+pypdf>=4.2.0
+
 tzdata

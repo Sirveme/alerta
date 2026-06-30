@@ -42,6 +42,16 @@ from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright, Page, APIRequestContext, TimeoutError as PWTimeout
 
+# Clasificación (para decidir qué documentos son DEUDA → 2º PDF, zAlerta-34).
+# Import perezoso-seguro: si faltara (contexto sin DB), el scraper sigue
+# funcionando para el índice; solo se omite la valoración.
+try:
+    from clasificacion import clasificar as _clasificar
+    from models import TIPODOC_A_VALORADO as _TIPODOC_A_VALORADO
+except Exception:   # pragma: no cover
+    _clasificar = None
+    _TIPODOC_A_VALORADO = {}
+
 # Carga automática de .env (no declarar variables a mano en el terminal)
 try:
     from dotenv import load_dotenv
@@ -400,23 +410,43 @@ def listar_carpetas(api: APIRequestContext, visor_base: str) -> list:
 
 
 def listar_mensajes(api: APIRequestContext, visor_base: str,
-                    tipo_msj: int, cod_carpeta: str = "00") -> list:
-    """Lista mensajes de una bandeja. Path real: /visor/listNotiMenPag
+                    tipo_msj: int, cod_carpeta: str = "00",
+                    max_paginas: int = 200) -> list:
+    """Lista TODOS los mensajes de una bandeja PAGINANDO (zAlerta-34 Paso 1).
 
-    SUNAT usa tipoMsj para distinguir bandejas:
-      tipoMsj=1  → una bandeja (mensajes)
-      tipoMsj=2  → otra bandeja (notificaciones)
+    Antes solo traía `page=1` (~10% del buzón). Ahora recorre `1..total`, donde
+    `total` = nº de páginas que SUNAT devuelve en la respuesta (jqGrid, junto a
+    `records`). Sleep corto entre páginas para no martillear. El índice es barato.
+
+    SUNAT usa tipoMsj para distinguir bandejas (1=Mensajes, 2=Notificaciones);
     codCarpeta=00 = todas las carpetas de esa bandeja.
     """
-    url = (f"{visor_base}/visor/listNotiMenPag"
-           f"?tipoMsj={tipo_msj}&codCarpeta={cod_carpeta}&codEtiqueta="
-           f"&page=1&des_asunto=&codMensaje=&tipoOrden=NADA")
-    data = fetch_json(api, url, f"listNotiMenPag(tipoMsj={tipo_msj})")
-    if not data:
+    def _pagina(page: int):
+        url = (f"{visor_base}/visor/listNotiMenPag"
+               f"?tipoMsj={tipo_msj}&codCarpeta={cod_carpeta}&codEtiqueta="
+               f"&page={page}&des_asunto=&codMensaje=&tipoOrden=NADA")
+        return fetch_json(api, url, f"listNotiMenPag(t={tipo_msj},c={cod_carpeta},p={page})")
+
+    d1 = _pagina(1)
+    if not d1:
         return []
-    mensajes = data.get("rows", data) if isinstance(data, dict) else data
-    log(f"  Bandeja tipoMsj={tipo_msj}: {len(mensajes)} mensajes", "OK")
-    return mensajes
+    rows = list(d1.get("rows", d1) if isinstance(d1, dict) else d1)
+    total_pags = 1
+    if isinstance(d1, dict):
+        try:
+            total_pags = max(1, int(d1.get("total") or 1))
+        except (TypeError, ValueError):
+            total_pags = 1
+    total_pags = min(total_pags, max_paginas)
+    for pg in range(2, total_pags + 1):
+        time.sleep(random.uniform(0.4, 0.9))
+        dp = _pagina(pg)
+        if not dp:
+            continue
+        rows += list(dp.get("rows", dp) if isinstance(dp, dict) else dp)
+    log(f"  Bandeja tipoMsj={tipo_msj} carp={cod_carpeta}: "
+        f"{len(rows)} mensajes ({total_pags} pág.)", "OK")
+    return rows
 
 
 def obtener_detalle(api: APIRequestContext, visor_base: str,
@@ -495,6 +525,107 @@ def descargar_adjuntos(api: APIRequestContext, visor_base: str, detalle: dict,
                 pass
             guardados.append(f"PENDIENTE:codArchivo={cod_archivo}:{nombre}")
     return guardados
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 2º PDF de deuda (documento real) — zAlerta-34
+# ─────────────────────────────────────────────────────────────────────
+# El documento de deuda NO está en listAttach con codArchivo: aparece como una
+# entrada con indMensaje="3" y `numId` (el constancia es indMensaje="2"). Se baja
+# por POST a /visor/bajarArchivo (form-urlencoded) DENTRO de la sesión Playwright.
+_RE_NUM_DOC = re.compile(r"\d{3}-\d{3}-\d{4,}")
+_RE_MONTO = re.compile(r"S/\s*\d|importe|monto\s*total|deuda", re.I)
+
+
+def _anio_de(fecha: str | None) -> int | None:
+    """Año de una fecha SUNAT 'dd/MM/YYYY HH:MM:SS' (o None)."""
+    if not fecha:
+        return None
+    m = re.search(r"/(\d{4})", str(fecha))
+    return int(m.group(1)) if m else None
+
+
+def _num_documento_de(asunto: str) -> str | None:
+    """Extrae el nº de documento del asunto (ej. '123-001-0700325')."""
+    m = _RE_NUM_DOC.search(asunto or "")
+    if m:
+        return m.group(0)
+    m = re.search(r"[N|n][°ºoO]\s*([\dA-Z\-]{6,})", asunto or "")
+    return m.group(1) if m else None
+
+
+_RE_GOARCHIVO = re.compile(
+    r"goArchivoDescarga\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
+
+
+def _id_deuda_de_caratula(api: APIRequestContext, host: str, detalle: dict):
+    """Obtiene (idArchivo, sistema, codMensaje) del documento de DEUDA desde la
+    CARÁTULA (zAlerta-35). ÚNICA fuente: el `goArchivoDescarga(idArchivo, sistema,
+    codMensaje)` que SUNAT pone en la carátula. SIN offset (el offset NO es
+    constante: Multas −1, Órdenes de Pago −2, etc. → restar daría el archivo
+    EQUIVOCADO). Devuelve (idar, sis, cmsg) o (None, motivo, None)."""
+    car = detalle.get("url")
+    if not car:
+        return None, "sin_caratula", None
+    url = car if car.startswith("http") else host + ("" if car.startswith("/") else "/") + car
+    try:
+        html = api.get(url, timeout=40_000).text()
+    except Exception as e:
+        log(f"    carátula no cargó: {e}", "WARN")
+        return None, "caratula_error", None
+    m = _RE_GOARCHIVO.search(html or "")
+    if not m:
+        return None, "sin_goarchivo", None
+    return m.group(1), m.group(2), m.group(3)
+
+
+def descargar_documento_real(api: APIRequestContext, visor_base: str,
+                             cod_mensaje: str, detalle: dict) -> tuple:
+    """Baja el 2º PDF — el DOCUMENTO REAL de deuda (monto/periodo/tributo), NO la
+    constancia. Devuelve (bytes|None, motivo).
+
+    Mecanismo verificado (zAlerta-35), SIN offset:
+      1) Carátula = campo `url` del detalle (gendocS01Alias?accion=genhtml).
+      2) Parsear `goArchivoDescarga(idArchivo, sistema, codMensaje)` de la carátula
+         → el idArchivo EXACTO del documento de deuda (puesto por SUNAT).
+      3) POST {visor_base}/visor/bajarArchivo (form, DENTRO de la sesión Playwright)
+         accion=archivo & idMensaje & idArchivo & sistema. 3 reintentos (flakiness).
+    """
+    m = re.match(r"(https?://[^/]+)", visor_base)
+    host = m.group(1) if m else "https://ww1.sunat.gob.pe"
+    idar, sis_or_motivo, cmsg = _id_deuda_de_caratula(api, host, detalle)
+    if idar is None:
+        return None, sis_or_motivo   # motivo: sin_caratula / caratula_error / sin_goarchivo
+    form = {"accion": "archivo", "idMensaje": str(cmsg),
+            "idArchivo": str(idar), "sistema": str(sis_or_motivo)}
+    for intento in range(3):
+        try:
+            resp = api.post(f"{visor_base}/visor/bajarArchivo", form=form, timeout=60_000)
+            body = resp.body()
+            if resp.status == 200 and body[:4] == b"%PDF" and len(body) > 1000:
+                return body, "ok"
+        except Exception as e:
+            log(f"    documento real cod={cod_mensaje}: intento {intento+1} error ({e})", "WARN")
+        time.sleep(1.0)
+    log(f"    documento real cod={cod_mensaje}: sin PDF de deuda tras 3 intentos", "WARN")
+    return None, "post_sin_pdf"
+
+
+def texto_pdf(body: bytes) -> str:
+    """Extrae texto (sin OCR) con pypdf. '' si no se puede."""
+    try:
+        import io
+        import pypdf
+        rd = pypdf.PdfReader(io.BytesIO(body))
+        return "\n".join((pg.extract_text() or "") for pg in rd.pages)
+    except Exception as e:
+        log(f"    pypdf no pudo extraer texto: {e}", "WARN")
+        return ""
+
+
+def _tiene_monto(texto: str) -> bool:
+    """Self-check: ¿el PDF trae un monto/ancla de deuda? (S/ + dígito, Importe…)."""
+    return bool(_RE_MONTO.search(texto or ""))
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -623,6 +754,17 @@ def scrapear_ruc(cfg: SunatConfig) -> dict:
                                 (tipo_msj, str(cm)),
                                 {"cod": cod_carp, "nom": nom_carp})
 
+            # Estado del 2º PDF de deuda (zAlerta-34 Paso 2): solo deuda de
+            # año actual + anterior. El self-check del PRIMER documento decide
+            # si el lote sigue o se aborta (no bajar 100 PDFs equivocados).
+            anio_actual = ahora_lima().year
+            anios_descarga = {anio_actual, anio_actual - 1}
+            self_check = {"hecho": False, "ok": None, "abortado": False}
+            resultado["valorados_intentados"] = 0
+            resultado["valorados_descargados"] = 0
+            resultado["valorados_pendientes"] = []      # carátula sin goArchivoDescarga / sin PDF
+            resultado["valorados_integridad_error"] = []  # numdoc del PDF ≠ numdoc de la fila
+
             # ── Barrido AUTORITATIVO por bandeja (cod_carpeta=00 = todas) ──
             # Igual que antes: garantiza que NO se pierde ningún mensaje. Cada uno
             # se etiqueta con su carpeta (del índice de arriba); si no cae en
@@ -640,7 +782,7 @@ def scrapear_ruc(cfg: SunatConfig) -> dict:
                     pdfs = []
                     if detalle:
                         pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
-                    resultado["mensajes"].append({
+                    item = {
                         "tipo_msj": tipo_msj,
                         "cod_mensaje": cod_msg,
                         "cod_carpeta": carp.get("cod"),
@@ -658,7 +800,59 @@ def scrapear_ruc(cfg: SunatConfig) -> dict:
                         "detalle": detalle,
                         "pdfs": pdfs,
                         "capturado_at": ahora_lima().isoformat(),
-                    })
+                    }
+
+                    # ── 2º PDF de DEUDA (zAlerta-34) ──
+                    if _clasificar and detalle and not self_check["abortado"]:
+                        tipo_doc, _u, _f = _clasificar(
+                            carp.get("nom"), item["asunto"], item["urgente"])
+                        valorado_tipo = _TIPODOC_A_VALORADO.get(tipo_doc)
+                        anio = _anio_de(item["fecha_publica"] or item["fecha_envio"])
+                        if valorado_tipo and anio in anios_descarga:
+                            resultado["valorados_intentados"] += 1
+                            num_doc = _num_documento_de(item["asunto"])
+                            body, motivo = descargar_documento_real(
+                                api, visor_base, cod_msg, detalle)
+                            if not body:
+                                # Sin PDF: NO adivinar. Marcar pendiente y seguir.
+                                resultado["valorados_pendientes"].append(
+                                    {"cod_mensaje": cod_msg, "num_documento": num_doc,
+                                     "motivo": motivo})
+                            else:
+                                txt = texto_pdf(body)
+                                # SELF-CHECK obligatorio en el PRIMER documento del lote.
+                                if not self_check["hecho"]:
+                                    self_check["hecho"] = True
+                                    self_check["ok"] = _tiene_monto(txt)
+                                    resultado["self_check"] = {
+                                        "ok": self_check["ok"], "cod_mensaje": cod_msg,
+                                        "num_documento": num_doc, "texto_muestra": txt[:1500]}
+                                    if not self_check["ok"]:
+                                        self_check["abortado"] = True
+                                        log("SELF-CHECK FALLÓ: el 1er PDF de deuda no "
+                                            "trae monto. Abortando el lote de valorados.",
+                                            "ERROR")
+                                # CHECK DE INTEGRIDAD (TAREA 2): el nº de documento de
+                                # la fila debe aparecer en el texto del PDF bajado.
+                                integ_ok = (not num_doc) or (num_doc in txt)
+                                if not self_check["abortado"] and not integ_ok:
+                                    hallados = _RE_NUM_DOC.findall(txt)
+                                    log(f"INTEGRIDAD: PDF cod={cod_msg} NO contiene "
+                                        f"{num_doc}; hallados={hallados[:3]}. No se guarda.",
+                                        "ERROR")
+                                    resultado["valorados_integridad_error"].append(
+                                        {"cod_mensaje": cod_msg, "esperado": num_doc,
+                                         "hallados": hallados[:3]})
+                                elif not self_check["abortado"]:
+                                    item["valorado"] = {
+                                        "tipo_valorado": valorado_tipo.value,
+                                        "num_documento": num_doc,
+                                        "pdf_bytes": body,
+                                        "pdf_texto": txt,
+                                    }
+                                    resultado["valorados_descargados"] += 1
+
+                    resultado["mensajes"].append(item)
                     time.sleep(random.uniform(0.5, 1.5))
 
             resultado["exito"] = True

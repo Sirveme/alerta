@@ -25,8 +25,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import (
-    Contribuyente, Notificacion, Adjunto, TipoDocumento)
+    Contribuyente, Notificacion, Adjunto, TipoDocumento,
+    DocumentoValorado, TipoValorado)
 from clasificacion import clasificar
+import gcs
 
 TZ_LIMA = ZoneInfo("America/Lima")
 
@@ -72,6 +74,50 @@ def _parse_fecha_publica(valor: str | None) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+async def _guardar_valorado(session, estudio_id, contribuyente_id, notif_id,
+                            cod_mensaje, val, stats) -> None:
+    """Sube el 2º PDF de deuda a GCS e inserta la CABECERA MÍNIMA en
+    documento_valorado (zAlerta-34): contribuyente, notificación, tipo,
+    num_documento, pdf_texto crudo, gcs_key, parseado_ok=False. El parseo de
+    importe/periodo/tributo va en zAlerta-35. Dedup por notificacion_id."""
+    # Dedup: un valorado por notificación.
+    existe_id = await session.scalar(
+        select(DocumentoValorado.id).where(
+            DocumentoValorado.notificacion_id == notif_id))
+
+    num_doc = (val.get("num_documento") or "").strip() or None
+    # gcs_key: {contribuyente_id}/valorados/{num_doc}_{cod_mensaje}.pdf
+    nombre = f"{num_doc or 'doc'}_{cod_mensaje}.pdf".replace("/", "-").replace(" ", "")
+    blob_path = f"{contribuyente_id}/valorados/{nombre}"
+    gcs_key = gcs.subir_pdf(val["pdf_bytes"], blob_path)   # None si GCS no configurado
+
+    try:
+        tipo_val = TipoValorado(val["tipo_valorado"])
+    except (ValueError, KeyError):
+        tipo_val = TipoValorado.ORDEN_PAGO
+
+    if existe_id:
+        dv = await session.get(DocumentoValorado, existe_id)
+        if dv:   # backfill de lo que faltara (texto/gcs_key), sin pisar lo bueno.
+            if not dv.pdf_texto and val.get("pdf_texto"):
+                dv.pdf_texto = val["pdf_texto"]
+            if not dv.gcs_key and gcs_key:
+                dv.gcs_key = gcs_key
+        return
+
+    session.add(DocumentoValorado(
+        contribuyente_id=contribuyente_id,
+        notificacion_id=notif_id,
+        estudio_id=estudio_id,
+        tipo_valorado=tipo_val,
+        num_documento=num_doc,
+        pdf_texto=val.get("pdf_texto"),
+        gcs_key=gcs_key,
+        parseado_ok=False,
+    ))
+    stats["valorados_guardados"] = stats.get("valorados_guardados", 0) + 1
 
 
 async def ingestar_resultado(
@@ -191,6 +237,12 @@ async def ingestar_resultado(
                 descargado_at=ahora_lima() if pdf_bytes else None,
             ))
             stats["adjuntos_nuevos"] += 1
+
+        # ── 2º PDF de DEUDA → GCS + documento_valorado (zAlerta-34) ──
+        val = msg.get("valorado")
+        if val and val.get("pdf_bytes"):
+            await _guardar_valorado(
+                session, estudio_id, contribuyente_id, notif_id, cod, val, stats)
 
     # Marcar el scrapeo en el contribuyente
     contrib = await session.get(Contribuyente, contribuyente_id)
