@@ -286,6 +286,49 @@
     wrap.parentNode.insertBefore(ley.firstChild, wrap);
   }
 
+  // ── "Actualizar ahora" (zAlerta-36): dispara la lectura de día ──
+  // Reusa POST /contribuyentes/{id}/actualizar (marca el flag; el worker corre
+  // fuera del gate nocturno). Muestra el indicador estilizado y, en cuanto el
+  // buzón crece, lo refresca. Sin diálogos nativos.
+  function totalActual() {
+    return wrap.querySelectorAll('.rsm-row').length;
+  }
+  const btnAct = document.getElementById('rsm-actualizar');
+  if (btnAct) btnAct.addEventListener('click', async () => {
+    const ids = (btnAct.dataset.ids || '').split(',').filter(Boolean);
+    if (!ids.length) return;
+    btnAct.disabled = true;
+    const live = document.getElementById('rsm-ob-live');
+    let handle = null;
+    if (live && window.obMontar) {
+      live.hidden = false;
+      handle = window.obMontar(live, btnAct.dataset.anioActual, btnAct.dataset.anioAnterior);
+    }
+    const antes = totalActual();
+    try {
+      await Promise.all(ids.map((id) =>
+        fetch('/contribuyentes/' + id + '/actualizar', {
+          method: 'POST', credentials: 'include' }).catch(() => {})));
+    } catch (_) { /* optimista: el worker la procesará igual */ }
+
+    // Poll hasta que el buzón crezca (o tope ~3 min). El worker corre por ciclos.
+    let intentos = 0;
+    const tope = 30;
+    const timer = setInterval(async () => {
+      intentos += 1;
+      await cargar();
+      if (totalActual() > antes || intentos >= tope) {
+        clearInterval(timer);
+        if (handle) handle.detener();
+        if (live) { live.hidden = true; live.innerHTML = ''; }
+        btnAct.disabled = false;
+        if (totalActual() <= antes) {
+          pintarEstado('Sin novedades por ahora', 'ok');
+        }
+      }
+    }, 6000);
+  });
+
   mostrarSplash();
   cargar();
 })();
