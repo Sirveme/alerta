@@ -1781,3 +1781,44 @@ a.tarjeta-link { display:block; color:inherit; }
 .pay-pagook { margin-top:14px; padding:10px; border-radius:12px; font-size:.82rem;
   background:color-mix(in srgb,#16B0D8 12%,transparent);
   border:1px solid color-mix(in srgb,#16B0D8 40%,transparent); }
+
+/* ══════════════════════════════════════════════════════════════════
+   zAlerta-34 Paso 4 · Indicador de espera de la primera descarga
+   Colores de marca centralizados (no sueltos): claros/saturados para
+   contraste sobre el verde oscuro de alerta.pe.
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  --ob-rosa:  #ff85a8;
+  --ob-ambar: #ffc93c;
+  --ob-verde: #3ddc84;
+  --ob-cian:  #37c9d8;
+  --ob-fondo: #072a1e;   /* verde oscuro de alerta.pe (interior) */
+}
+/* Marco con borde degradado de marca animado lentamente */
+.ob-card { margin:14px 0; padding:2px; border-radius:14px;
+  background:linear-gradient(120deg, var(--ob-rosa), var(--ob-ambar),
+    var(--ob-verde), var(--ob-cian), var(--ob-rosa));
+  background-size:300% 300%; animation:ob-border 4s linear infinite; }
+.ob-inner { background:var(--ob-fondo); border-radius:12px; padding:16px 16px 14px; }
+.ob-head { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+.ob-spin { color:var(--ob-ambar); font-size:24px; animation:ob-rot 1.4s linear infinite; }
+.ob-titulo { color:#fff; font-weight:800; font-size:.98rem; }   /* blanco: siempre legible */
+.ob-barra { height:5px; border-radius:999px; overflow:hidden;
+  background:rgba(255,255,255,.12); margin-bottom:12px; }
+.ob-barra-fill { display:block; width:40%; height:100%; border-radius:999px;
+  background:linear-gradient(90deg, var(--ob-rosa), var(--ob-ambar),
+    var(--ob-verde), var(--ob-cian));
+  animation:ob-slide 1.6s ease-in-out infinite; }
+.ob-frase { font-weight:700; font-size:.95rem; min-height:1.3em;
+  transition:opacity .4s ease; }
+.ob-c-verde { color:var(--ob-verde); }
+.ob-c-cian  { color:var(--ob-cian); }
+.ob-c-ambar { color:var(--ob-ambar); }
+.ob-c-rosa  { color:var(--ob-rosa); }
+.ob-nota { margin-top:10px; font-size:.78rem; color:rgba(255,255,255,.62); }
+@keyframes ob-border { 0%{background-position:0% 50%} 100%{background-position:300% 50%} }
+@keyframes ob-rot { to { transform:rotate(360deg) } }
+@keyframes ob-slide { 0%{transform:translateX(-130%)} 100%{transform:translateX(330%)} }
+@media (prefers-reduced-motion: reduce) {
+  .ob-card, .ob-spin, .ob-barra-fill { animation:none; }
+}
