@@ -235,10 +235,18 @@
       c.classList.toggle('rsm-chip--on', c.dataset.f === _filtro));
   }
 
+  // Contenedores del diseño C (presentes en resumen.html; zAlerta-38b).
+  function elMetricas() { return document.getElementById('rsm-metricas'); }
+  function elChips() { return document.getElementById('rsm-chips'); }
+
   function render(data, offline) {
     _filas = (data && data.filas) || [];
     vacioEl.hidden = _filas.length > 0;
-    if (!_filas.length) { wrap.innerHTML = ''; return; }
+    if (!_filas.length) {
+      [elMetricas(), elChips(), document.getElementById('rsm-lista')]
+        .forEach((el) => { if (el) el.innerHTML = ''; });
+      return;
+    }
 
     const nAccion = _filas.filter((f) => semColor(f) === 'rojo').length;
     const nInfo = _filas.length - nAccion;
@@ -264,13 +272,14 @@
         + (k === 'todo' ? 'Todo' : esc(TIPO_LBL[k]) + ' (' + cuenta[k] + ')') + '</button>')
       .join('');
 
-    wrap.innerHTML =
-      '<div class="rsm-metricas">' + metr + '</div>'
-      + '<div class="rsm-chips">' + chips + '</div>'
-      + '<div class="rsm-lista" id="rsm-lista"></div>';
-
-    wrap.querySelectorAll('.rsm-chip').forEach((c) =>
-      c.addEventListener('click', () => { _filtro = c.dataset.f; pintarLista(); }));
+    // Rellenar los contenedores nombrados del HTML (contrato explícito).
+    const cm = elMetricas(), cc = elChips();
+    if (cm) cm.innerHTML = metr;
+    if (cc) {
+      cc.innerHTML = chips;
+      cc.querySelectorAll('.rsm-chip').forEach((c) =>
+        c.addEventListener('click', () => { _filtro = c.dataset.f; pintarLista(); }));
+    }
     pintarLista();
   }
 
