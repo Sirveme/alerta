@@ -87,17 +87,23 @@ def subir_pdf(file_bytes: bytes, blob_path: str,
         return None
 
 
-def signed_url(blob_path: str, minutos: int = 5) -> str | None:
-    """URL temporal de descarga para un PDF privado (default 5 min)."""
+def signed_url(blob_path: str, minutos: int = 10,
+               descargar: bool = False, nombre: str | None = None) -> str | None:
+    """URL temporal para un PDF privado (default 10 min). Si descargar=True,
+    fuerza la descarga (Content-Disposition: attachment)."""
     creds = _get_credentials()
     client = _get_client()
     if not client or not creds or not blob_path:
         return None
     try:
         blob = client.bucket(BUCKET_NAME).blob(blob_path)
+        extra = {}
+        if descargar:
+            fn = (nombre or "documento") + (".pdf" if not (nombre or "").endswith(".pdf") else "")
+            extra["response_disposition"] = f'attachment; filename="{fn}"'
         return blob.generate_signed_url(
             expiration=datetime.timedelta(minutes=minutos),
-            method="GET", credentials=creds)
+            method="GET", credentials=creds, **extra)
     except Exception as e:
         print(f"[GCS] error firmando URL {blob_path}: {e}", flush=True)
         return None
