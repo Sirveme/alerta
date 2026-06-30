@@ -59,6 +59,7 @@ async def resumen_page(request: Request,
                 select(CredencialSol).where(
                     CredencialSol.contribuyente_id == ct.id))
             cx = estado_conexion(ct, cred)
+            cx["id"] = str(ct.id)          # para "Actualizar ahora" (zAlerta-36)
             cx["ruc"] = ct.ruc
             cx["razon_social"] = ct.razon_social or ct.ruc
             # zAlerta-27: primera lectura en curso — credencial válida, conexión
