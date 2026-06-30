@@ -10,11 +10,24 @@
   <p class="subtitulo">Lo que llegó a tu buzón. Queda <b>guardado en tu celular</b>:
     lo revisas cuando quieras, incluso sin internet.</p>
 
+  {% if conexiones and not onboarding %}
+  <!-- "Actualizar ahora" (zAlerta-36): dispara la lectura de día (cola manual,
+       fuera del gate nocturno) reusando POST /contribuyentes/{id}/actualizar. -->
+  <button id="rsm-actualizar" class="rsm-actualizar"
+          data-ids="{{ conexiones | map(attribute='id') | join(',') }}"
+          data-anio-actual="{{ anio_actual }}" data-anio-anterior="{{ anio_anterior }}">
+    <span class="material-symbols-outlined">refresh</span> Actualizar ahora
+  </button>
+  {% endif %}
+
   {% if onboarding %}
   <!-- Indicador de espera estilizado durante la primera descarga (zAlerta-34 Paso 4) -->
   <div id="ob-indicador" class="ob-card"
        data-anio-actual="{{ anio_actual }}" data-anio-anterior="{{ anio_anterior }}"></div>
   {% endif %}
+
+  <!-- Contenedor del indicador en vivo al pulsar "Actualizar ahora". -->
+  <div id="rsm-ob-live" class="ob-card" hidden></div>
 
   <!-- Estado de conexión HONESTO por RUC (zAlerta-18) -->
   {% for cx in conexiones %}
