@@ -68,13 +68,18 @@ async def estado_scrapeo(
 @router.post("/contribuyentes/{contribuyente_id}/actualizar")
 async def actualizar_ahora(
     contribuyente_id: uuid.UUID,
-    user: UsuarioActual = Depends(requiere_escritura)):
-    # Marcar el flag de actualización (multi-tenant: filtra por estudio).
+    user: UsuarioActual = Depends(usuario_actual)):
+    # zAlerta-37 BUG B: "Actualizar ahora" es un refresco del PROPIO buzón, no una
+    # mutación de tenant. El EMPRESARIO (solo-lectura) debe poder dispararlo sobre
+    # su RUC — antes `requiere_escritura` le devolvía 403 y el flag nunca se marcaba.
+    # Seguridad: el scope multi-tenant (estudio propio o cuenta_empresario) impide
+    # tocar RUCs ajenos. La mecánica del flag NO cambia.
     async with get_session() as session:
         contrib = await session.scalar(
             select(Contribuyente).where(
                 Contribuyente.id == contribuyente_id,
-                Contribuyente.estudio_id == user.estudio_id))
+                (Contribuyente.estudio_id == user.estudio_id)
+                | (Contribuyente.cuenta_empresario_id == user.estudio_id)))
         if not contrib:
             return JSONResponse(
                 {"exito": False, "mensaje": "Contribuyente no encontrado."},
