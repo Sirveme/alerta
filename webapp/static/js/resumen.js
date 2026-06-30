@@ -295,23 +295,41 @@
   }
   const btnAct = document.getElementById('rsm-actualizar');
   if (btnAct) btnAct.addEventListener('click', async () => {
-    const ids = (btnAct.dataset.ids || '').split(',').filter(Boolean);
-    if (!ids.length) return;
-    btnAct.disabled = true;
     const live = document.getElementById('rsm-ob-live');
     let handle = null;
+    // Feedback INMEDIATO (zAlerta-37 BUG B): monta el indicador antes de nada,
+    // así el usuario ve respuesta apenas pulsa (nunca queda "plano").
+    btnAct.disabled = true;
     if (live && window.obMontar) {
       live.hidden = false;
       handle = window.obMontar(live, btnAct.dataset.anioActual, btnAct.dataset.anioAnterior);
     }
-    const antes = totalActual();
-    try {
-      await Promise.all(ids.map((id) =>
-        fetch('/contribuyentes/' + id + '/actualizar', {
-          method: 'POST', credentials: 'include' }).catch(() => {})));
-    } catch (_) { /* optimista: el worker la procesará igual */ }
+    function terminar(msg, cls) {
+      if (handle) handle.detener();
+      if (live) { live.hidden = true; live.innerHTML = ''; }
+      btnAct.disabled = false;
+      if (msg) pintarEstado(msg, cls || 'ok');
+    }
+
+    const ids = (btnAct.dataset.ids || '').split(',').filter(Boolean);
+    if (!ids.length) { terminar('No pudimos identificar tu RUC. Recarga la página.', 'off'); return; }
+
+    // POST a la cola manual y VERIFICAR la respuesta (no tragar 4xx en silencio).
+    let algunoOk = false;
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const r = await fetch('/contribuyentes/' + id + '/actualizar',
+          { method: 'POST', credentials: 'include' });
+        if (r.ok) algunoOk = true;
+      } catch (_) { /* red caída: lo intentamos igual abajo */ }
+    }));
+    if (!algunoOk) {
+      terminar('No se pudo solicitar la actualización. Inténtalo de nuevo.', 'off');
+      return;
+    }
 
     // Poll hasta que el buzón crezca (o tope ~3 min). El worker corre por ciclos.
+    const antes = totalActual();
     let intentos = 0;
     const tope = 30;
     const timer = setInterval(async () => {
@@ -319,12 +337,7 @@
       await cargar();
       if (totalActual() > antes || intentos >= tope) {
         clearInterval(timer);
-        if (handle) handle.detener();
-        if (live) { live.hidden = true; live.innerHTML = ''; }
-        btnAct.disabled = false;
-        if (totalActual() <= antes) {
-          pintarEstado('Sin novedades por ahora', 'ok');
-        }
+        terminar(totalActual() > antes ? 'Buzón actualizado' : 'Listo, sin novedades por ahora');
       }
     }, 6000);
   });
