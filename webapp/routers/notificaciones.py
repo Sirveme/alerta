@@ -19,8 +19,9 @@ from sqlalchemy.orm import selectinload
 from db import get_session
 from models import (
     Contribuyente, Notificacion, Adjunto, Reaccion, TipoReaccion,
-    TipoDocumento, ETIQUETA_TIPO_DOCUMENTO, ahora_lima,
+    TipoDocumento, ETIQUETA_TIPO_DOCUMENTO, ahora_lima, DocumentoValorado,
 )
+import gcs
 from ..core import templates
 from ..deps import (
     UsuarioActual, usuario_actual, requiere_escritura, contribuyente_accesible,
@@ -180,6 +181,41 @@ async def ver_adjunto_pdf(adjunto_id: uuid.UUID,
 async def descargar_adjunto_pdf(adjunto_id: uuid.UUID,
                                 user: UsuarioActual = Depends(usuario_actual)):
     return await _servir_adjunto(adjunto_id, user, descargar=True)
+
+
+# ── PDF de DEUDA (documento real) desde GCS (zAlerta-38) ──
+# Distinto de la CONSTANCIA (/adjuntos/{id}). Multi-tenant estricto: el empresario
+# solo accede a SUS valorados. Sirve por signed URL temporal (no proxia bytes).
+async def _servir_valorado(valorado_id: uuid.UUID, user: UsuarioActual,
+                           descargar: bool):
+    async with get_session() as session:
+        dv = await session.scalar(
+            select(DocumentoValorado)
+            .join(Contribuyente, Contribuyente.id == DocumentoValorado.contribuyente_id)
+            .where(
+                DocumentoValorado.id == valorado_id,
+                (DocumentoValorado.estudio_id == user.estudio_id)
+                | (Contribuyente.estudio_id == user.estudio_id)
+                | (Contribuyente.cuenta_empresario_id == user.estudio_id)))
+    if not dv or not dv.gcs_key:
+        return Response("Documento de deuda no encontrado.", status_code=404)
+    url = gcs.signed_url(dv.gcs_key, minutos=10, descargar=descargar,
+                         nombre=(dv.num_documento or "deuda"))
+    if not url:
+        return Response("El documento no está disponible por ahora.", status_code=503)
+    return RedirectResponse(url, status_code=307)
+
+
+@router.get("/valorados/{valorado_id}/ver")
+async def ver_valorado_pdf(valorado_id: uuid.UUID,
+                           user: UsuarioActual = Depends(usuario_actual)):
+    return await _servir_valorado(valorado_id, user, descargar=False)
+
+
+@router.get("/valorados/{valorado_id}/descargar")
+async def descargar_valorado_pdf(valorado_id: uuid.UUID,
+                                 user: UsuarioActual = Depends(usuario_actual)):
+    return await _servir_valorado(valorado_id, user, descargar=True)
 
 
 @router.get("/notificaciones/{notif_id}/adjunto/{adjunto_id}")

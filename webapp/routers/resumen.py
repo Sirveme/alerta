@@ -13,6 +13,8 @@ RUC vinculado(s) por cuenta_empresario_id.
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
@@ -26,6 +28,7 @@ from models import (
     ETIQUETA_TIPO_DOCUMENTO, ahora_lima, Usuario,
     Recordatorio, ModoRecordatorio,
     SolicitudValidacionCredencial, EstadoValidacion,
+    DocumentoValorado,
 )
 from cifrado import cifrar_clave_sol
 from ..core import templates, fecha_lima
@@ -39,6 +42,52 @@ def _periodo_de(asunto: str | None) -> str:
     """Heurística suave: si el asunto trae un periodo evidente, mostrarlo; si no,
     '—' (no inventar). Mantener simple y prudente."""
     return "—"
+
+
+def _num(s: str) -> float | None:
+    """'1,164' / '1,234.00' → float. Usa la coma como separador de miles."""
+    try:
+        return float((s or "").replace(",", "").strip())
+    except ValueError:
+        return None
+
+
+# Anclas de monto en el PDF de deuda (zAlerta-38; provisional hasta el parser
+# estructurado de zAlerta-39). Calibradas con docs reales del RUC de prueba:
+#   OP/Multa: "...Monto Total S/ <importe> S/ <interés> S/ <total>"  → el 3º.
+_RE_MONTO_TOTAL3 = re.compile(
+    r"Monto\s*Total\s*S/\s*[\d.,]+\s*S/\s*[\d.,]+\s*S/\s*([\d.,]+)", re.I)
+_RE_MONTO_ANCLA = re.compile(
+    r"(?:total\s+deuda(?:\s+exigible)?|deuda\s+exigible|monto\s+total)"
+    r"[^S]{0,40}S/\s*([\d.,]+)", re.I)
+_RE_MONTO_TODOS = re.compile(r"S/\s*([\d.,]+)")
+
+
+def _monto_de_texto(texto: str | None) -> float | None:
+    """Extrae el MONTO TOTAL de deuda del pdf_texto crudo (provisional).
+
+    Prioridad: (1) bloque 'Monto Total S/ a S/ b S/ c' → c (OP/Multa);
+    (2) ancla 'total deuda exigible / monto total' → primer S/;
+    (3) fallback: el mayor importe S/ del documento (Coactiva/Fraccionamiento)."""
+    if not texto:
+        return None
+    m = _RE_MONTO_TOTAL3.search(texto)
+    if m:
+        return _num(m.group(1))
+    m = _RE_MONTO_ANCLA.search(texto)
+    if m:
+        return _num(m.group(1))
+    montos = [v for v in (_num(x) for x in _RE_MONTO_TODOS.findall(texto))
+              if v is not None]
+    return max(montos) if montos else None
+
+
+def _monto_fmt(monto: float | None) -> str | None:
+    """Formato es-PE: 1164.0 → 'S/ 1,164'. None si no hay monto."""
+    if monto is None:
+        return None
+    entero = abs(monto - round(monto)) < 0.005
+    return "S/ " + (f"{monto:,.0f}" if entero else f"{monto:,.2f}")
 
 
 @router.get("/resumen", response_class=HTMLResponse)
@@ -102,6 +151,16 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                     select(Recordatorio.notificacion_id, Recordatorio.modo)
                     .where(Recordatorio.usuario_id == user.id,
                            Recordatorio.activo.is_(True)))).all()}
+        # Deuda valorada por notificación (zAlerta-38): mapa notif_id → DocumentoValorado.
+        # El monto se extrae del pdf_texto (provisional; el parser de zAlerta-39
+        # llenará columnas). pdf_texto NO se envía al front (pesado).
+        notif_ids = [n.id for n, _, _ in rows]
+        vals = {}
+        if notif_ids:
+            for dv in (await session.scalars(
+                    select(DocumentoValorado).where(
+                        DocumentoValorado.notificacion_id.in_(notif_ids)))).all():
+                vals[dv.notificacion_id] = dv
 
     filas = []
     for n, ruc, razon in rows:
@@ -114,6 +173,21 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         adjuntos = [{"id": str(a.id), "nombre": a.nombre_archivo}
                     for a in (n.adjuntos or [])
                     if a.bytea_temporal is not None or a.gcs_key]
+        # Deuda (si esta notificación tiene un documento valorado).
+        dv = vals.get(n.id)
+        deuda = {"tiene_deuda": False}
+        if dv is not None:
+            monto = _monto_de_texto(dv.pdf_texto)
+            deuda = {
+                "tiene_deuda": True,
+                "valorado_id": str(dv.id),
+                "tipo_valorado": (dv.tipo_valorado.value
+                                  if hasattr(dv.tipo_valorado, "value") else dv.tipo_valorado),
+                "num_documento": dv.num_documento,
+                "monto": _monto_fmt(monto),
+                "monto_num": monto,
+                "gcs_disponible": bool(dv.gcs_key),
+            }
         filas.append({
             "id": str(n.id),
             "documento": documento,
@@ -123,6 +197,7 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "asunto": n.asunto or "",            # asunto completo para el modal
             "cod_mensaje": n.cod_mensaje_sunat,  # referencia SUNAT
             "adjuntos": adjuntos,                # [{id, nombre}] PDF servibles
+            "fecha": fecha_lima(n.fecha_publica_sunat) if n.fecha_publica_sunat else "—",
             "vence": fecha_lima(n.plazo_vencimiento) if n.plazo_vencimiento else "—",
             "vence_iso": (n.plazo_vencimiento.isoformat()
                           if n.plazo_vencimiento else None),
@@ -131,6 +206,7 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "ruc": ruc,
             "razon_social": razon or ruc,
             "leida": bool(n.leida),
+            **deuda,
         })
 
     return JSONResponse({
