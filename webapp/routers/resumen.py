@@ -68,8 +68,14 @@ async def resumen_page(request: Request,
                 ct.ultimo_scrapeo_at is None and cred and cred.valida
                 and cx.get("clave") not in ("error", "pendiente"))
             conexiones.append(cx)
+    # zAlerta-34 Paso 4: indicador de espera estilizado mientras la primera
+    # lectura está en curso (cualquier RUC con primera_lectura activa).
+    ahora = ahora_lima()
+    onboarding = any(c.get("primera_lectura") for c in conexiones)
     return templates.TemplateResponse(request, "resumen.html", {
-        "user": user, "conexiones": conexiones})
+        "user": user, "conexiones": conexiones,
+        "onboarding": onboarding,
+        "anio_actual": ahora.year, "anio_anterior": ahora.year - 1})
 
 
 @router.get("/api/resumen")
