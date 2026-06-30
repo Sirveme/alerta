@@ -44,7 +44,13 @@
   </div>
   {% endfor %}
 
-  <div id="rsm-tabla-wrap"></div>
+  <!-- Esqueleto del Diseño C (zAlerta-38b): el JS rellena estos contenedores.
+       Los IDs DEBEN coincidir con resumen.js (rsm-metricas/rsm-chips/rsm-lista). -->
+  <div id="rsm-tabla-wrap">
+    <div class="rsm-metricas" id="rsm-metricas"></div>
+    <div class="rsm-chips" id="rsm-chips"></div>
+    <div class="rsm-lista" id="rsm-lista"></div>
+  </div>
 
   <div class="rsm-vacio tarjeta" id="rsm-vacio" hidden>
     <i class="ti ti-shield-check rsm-vacio-icono"></i>
