@@ -1296,6 +1296,13 @@ a.tarjeta-link { display:block; color:inherit; }
 /* zAlerta-32 · badge de PDF en la fila */
 .rsm-pdf-badge { display:inline-flex; vertical-align:middle; color:var(--u-urgente); }
 .rsm-pdf-badge .material-symbols-outlined { font-size:18px; }
+/* zAlerta-36 · botón "Actualizar ahora" del buzón */
+.rsm-actualizar { display:inline-flex; align-items:center; gap:6px; margin:4px 0 12px;
+  padding:9px 16px; border:0; border-radius:999px; cursor:pointer; font-weight:700;
+  font-size:.9rem; color:#fff; background:var(--marca); transition:opacity .15s; }
+.rsm-actualizar:hover { opacity:.9; }
+.rsm-actualizar:disabled { opacity:.55; cursor:default; }
+.rsm-actualizar .material-symbols-outlined { font-size:19px; }
 /* zAlerta-32 · modal custom de detalle (asunto + orientación + PDFs) */
 .rsm-mod-ov { position:fixed; inset:0; z-index:9000; display:flex; align-items:center;
   justify-content:center; padding:16px; background:rgba(0,0,0,.62);
