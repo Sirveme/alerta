@@ -14,17 +14,15 @@
     aA = aA || (new Date().getFullYear() + '');
     aP = aP || (new Date().getFullYear() - 1 + '');
 
-    // Frase + clase de color (las clases mapean a variables de marca en el CSS).
+    // Frase + clase de color (mapean a variables de marca en el CSS). zAlerta-38
+    // TAREA 4: SOLO frases neutras SIEMPRE verdaderas (rotan por tiempo). Nada de
+    // "Terminamos/Listo" en bucle — sería contradictorio mientras aún procesa.
     const FRASES = [
-      ['Tu buzón tiene tus notificaciones de SUNAT', 'verde'],
-      ['Hoy traemos ' + aP + ' y ' + aA + ' completos', 'cian'],
-      ['Podrás pedir años anteriores cuando quieras', 'ambar'],
-      ['Terminamos ' + aP, 'verde'],
-      ['Terminamos ' + aA, 'verde'],
-      ['Organizando y clasificando tus notificaciones', 'cian'],
-      ['Guardando tus documentos en tu dispositivo', 'ambar'],
-      ['Casi listo', 'rosa'],
-      ['Lo URGENTE estará primero', 'rosa'],
+      ['Revisando tu buzón SUNAT', 'verde'],
+      ['Organizando tus notificaciones', 'cian'],
+      ['Buscando lo importante para ti', 'ambar'],
+      ['Lo urgente estará primero', 'rosa'],
+      ['Esto puede tardar un poco', 'cian'],
     ];
 
     cont.innerHTML =

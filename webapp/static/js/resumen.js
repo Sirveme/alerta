@@ -46,17 +46,37 @@
     if (!f) return;
     const sem = semColor(f);
     const orienta = ORIENTA[f.tipo] || ORIENTA.otro;
-    const pdfs = (f.adjuntos || []).map((a) =>
+    const meta = [];
+    meta.push('<span class="rsm-mod-chip sem-bg--' + sem + '">' + esc(URG_LBL[f.urgencia] || 'Informativa') + '</span>');
+    if (f.monto) meta.push('<span class="rsm-mod-chip rsm-mod-chip--deuda">' + esc(f.monto) + '</span>');
+    if (f.periodo && f.periodo !== '—') meta.push('<span class="rsm-mod-tag">Periodo: ' + esc(f.periodo) + '</span>');
+    if (f.fecha && f.fecha !== '—') meta.push('<span class="rsm-mod-tag">Documento: ' + esc(f.fecha) + '</span>');
+    if (f.vence_iso) meta.push('<span class="rsm-mod-tag">Vence: ' + esc(f.vence) + '</span>');
+    if (f.ruc) meta.push('<span class="rsm-mod-tag">RUC ' + esc(f.ruc) + '</span>');
+
+    // PDF de DEUDA (primario, desde GCS). La constancia, secundaria.
+    let pdfHtml = '';
+    if (f.tiene_deuda && f.gcs_disponible && f.valorado_id) {
+      pdfHtml += '<div class="rsm-mod-pdfs"><div class="rsm-mod-lbl">Documento de deuda</div>'
+        + '<div class="rsm-mod-pdf"><span class="material-symbols-outlined">request_quote</span>'
+        + '<span class="rsm-mod-pdf-nom">' + esc(f.num_documento || 'Documento de deuda')
+        + (f.monto ? ' · ' + esc(f.monto) : '') + '</span>'
+        + '<a class="rsm-mod-btn" href="/valorados/' + esc(f.valorado_id) + '/ver" target="_blank" rel="noopener">Ver PDF</a>'
+        + '<a class="rsm-mod-btn rsm-mod-btn--sec" href="/valorados/' + esc(f.valorado_id) + '/descargar">Descargar</a>'
+        + '</div></div>';
+    }
+    const cons = (f.adjuntos || []).map((a) =>
       '<div class="rsm-mod-pdf"><span class="material-symbols-outlined">picture_as_pdf</span>'
-      + '<span class="rsm-mod-pdf-nom">' + esc(a.nombre || 'Documento.pdf') + '</span>'
+      + '<span class="rsm-mod-pdf-nom">' + esc(a.nombre || 'Constancia.pdf') + '</span>'
       + '<a class="rsm-mod-btn" href="/adjuntos/' + esc(a.id) + '/ver" target="_blank" rel="noopener">Ver PDF</a>'
       + '<a class="rsm-mod-btn rsm-mod-btn--sec" href="/adjuntos/' + esc(a.id) + '/descargar">Descargar</a>'
       + '</div>').join('');
-    const meta = [];
-    meta.push('<span class="rsm-mod-chip sem-bg--' + sem + '">' + esc(URG_LBL[f.urgencia] || 'Informativa') + '</span>');
-    if (f.periodo && f.periodo !== '—') meta.push('<span class="rsm-mod-tag">Periodo: ' + esc(f.periodo) + '</span>');
-    if (f.vence_iso) meta.push('<span class="rsm-mod-tag">Vence: ' + esc(f.vence) + '</span>');
-    if (f.ruc) meta.push('<span class="rsm-mod-tag">RUC ' + esc(f.ruc) + '</span>');
+    if (cons) {
+      pdfHtml += '<div class="rsm-mod-pdfs"><div class="rsm-mod-lbl">'
+        + (f.tiene_deuda ? 'Constancia de notificación' : 'Documentos adjuntos')
+        + '</div>' + cons + '</div>';
+    }
+    if (!pdfHtml) pdfHtml = '<div class="rsm-mod-sinpdf">Esta notificación no tiene PDF.</div>';
 
     const ov = document.createElement('div');
     ov.className = 'rsm-mod-ov';
@@ -67,9 +87,7 @@
       + '<h3 class="rsm-mod-asunto">' + esc(f.asunto || f.detalle || 'Notificación') + '</h3>'
       + '<div class="rsm-mod-meta">' + meta.join('') + '</div>'
       + '<p class="rsm-mod-orienta">' + esc(orienta) + '</p>'
-      + (pdfs
-          ? '<div class="rsm-mod-pdfs"><div class="rsm-mod-lbl">Documentos adjuntos</div>' + pdfs + '</div>'
-          : '<div class="rsm-mod-sinpdf">Esta notificación no tiene PDF adjunto.</div>')
+      + pdfHtml
       + '</div>';
 
     function cerrar() {
@@ -157,72 +175,103 @@
     ['hasta_vencer', 'Todos los días hasta el vencimiento'],
   ];
 
+  // ── Diseño C (zAlerta-38): métricas + chips + lista de tarjetas ──
+  const DEUDA_TIPOS = ['cobranza_coactiva', 'orden_pago', 'multa',
+    'fraccionamiento', 'resolucion_determinacion'];
+  const TIPO_LBL = {
+    cobranza_coactiva: 'Cobranza Coactiva', orden_pago: 'Orden de Pago',
+    multa: 'Multa', fraccionamiento: 'Fraccionamiento',
+    resolucion_determinacion: 'Resolución', informativas: 'Informativas',
+  };
+  const CHIPS_ORDEN = ['todo', 'cobranza_coactiva', 'orden_pago', 'multa',
+    'fraccionamiento', 'resolucion_determinacion', 'informativas'];
+  function grupoDe(f) { return DEUDA_TIPOS.indexOf(f.tipo) >= 0 ? f.tipo : 'informativas'; }
+  function tipoLegible(f) { return f.documento || TIPO_LBL[grupoDe(f)] || 'Notificación'; }
+  function montoSoles(n) { return 'S/ ' + Math.round(n).toLocaleString('es-PE'); }
+
+  let _filtro = 'todo';
+  let _filas = [];
+
+  function tarjeta(f, i) {
+    const sem = semColor(f);
+    const conPlazo = !!f.vence_iso;
+    const venceTxt = conPlazo
+      ? '<span class="rsm-c-vence">Vence ' + esc(f.vence) + '</span>'
+      : (sem === 'rojo' ? '<span class="rsm-c-tag rsm-lbl--rojo">Urgente</span>'
+        : sem === 'ambar' ? '<span class="rsm-c-tag rsm-lbl--ambar">Importante</span>'
+          : '<span class="rsm-c-tag">Informativo</span>');
+    const badge = (f.tiene_deuda && f.gcs_disponible)
+      ? '<span class="rsm-pdf-badge" title="Documento de deuda en PDF"><span class="material-symbols-outlined">request_quote</span></span>'
+      : ((f.adjuntos && f.adjuntos.length)
+        ? '<span class="rsm-pdf-badge" title="Tiene PDF"><span class="material-symbols-outlined">picture_as_pdf</span></span>' : '');
+    const monto = f.monto ? '<span class="rsm-c-monto">' + esc(f.monto) + '</span>' : '';
+    const btnLabel = BTN_LABEL[f.tipo] || BTN_LABEL.otro;
+    return '<div class="rsm-card sem--' + sem + '" data-i="' + i + '" title="' + esc(SEM_TXT[sem]) + '">'
+      + '<div class="rsm-c-top"><b class="rsm-c-tipo">' + esc(tipoLegible(f)) + '</b>' + badge + '</div>'
+      + '<div class="rsm-c-asunto">' + esc(f.detalle) + '</div>'
+      + '<div class="rsm-c-meta">'
+      + '<span class="rsm-c-fecha"><i class="ti ti-calendar"></i> ' + esc(f.fecha || '—') + '</span>'
+      + monto + venceTxt + '</div>'
+      + '<div class="rsm-c-acc"><button class="rsm-b" data-i="' + i + '">' + esc(btnLabel) + '</button></div>'
+      + '</div>';
+  }
+
+  function pintarLista() {
+    const vis = _filtro === 'todo' ? _filas
+      : _filas.filter((f) => grupoDe(f) === _filtro);
+    const cont = document.getElementById('rsm-lista');
+    if (!cont) return;
+    cont.innerHTML = vis.length
+      ? vis.map((f) => tarjeta(f, _filas.indexOf(f))).join('')
+      : '<p class="muted" style="padding:14px 4px">Nada en esta categoría.</p>';
+    cont.querySelectorAll('.rsm-card, .rsm-b').forEach((el) =>
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const host = el.closest('.rsm-card') || el;
+        abrirModal(_filas[+host.dataset.i]);
+      }));
+    // chip activo
+    document.querySelectorAll('.rsm-chip').forEach((c) =>
+      c.classList.toggle('rsm-chip--on', c.dataset.f === _filtro));
+  }
+
   function render(data, offline) {
-    const filas = (data && data.filas) || [];
-    vacioEl.hidden = filas.length > 0;
-    if (!filas.length) { wrap.innerHTML = ''; return; }
-    const cuerpo = filas.map((f, i) => {
-      const sem = semColor(f);
-      const conPlazo = !!f.vence_iso;
-      // CTA de recordatorio (solo si hay plazo) + sugerencia en rojo/ámbar.
-      const recSel = conPlazo
-        ? '<div class="rsm-recordar">'
-          + ((sem === 'rojo' || sem === 'ambar')
-              ? '<div class="rsm-sugerencia"><i class="ti ti-bell-plus"></i> '
-                + 'Te sugerimos programar recordatorios</div>' : '')
-          + '<span class="rsm-recordar-lbl"><i class="ti ti-bell"></i> Recuérdame</span>'
-          + '<select class="rsm-rec-sel" data-id="' + esc(f.id) + '">'
-          + REC_OPTS.map(([v, t]) => '<option value="' + v + '"'
-              + (((f.recordatorio || '') === v) ? ' selected' : '') + '>'
-              + esc(t) + '</option>').join('')
-          + '</select>'
-          + '<span class="rsm-rec-ok" hidden>✓ Te recordaremos</span></div>'
-        : '';
-      const venceCol = conPlazo
-        ? 'Vence ' + esc(f.vence)
-        : (sem === 'rojo'
-            ? '<span class="rsm-info-lbl rsm-lbl--rojo">Urgente</span>'
-            : sem === 'ambar'
-              ? '<span class="rsm-info-lbl rsm-lbl--ambar">Importante</span>'
-              : '<span class="rsm-info-lbl">Informativo</span>');
-      const badgePdf = (f.adjuntos && f.adjuntos.length)
-        ? ' <span class="rsm-pdf-badge" title="Tiene PDF adjunto">'
-          + '<span class="material-symbols-outlined">picture_as_pdf</span></span>'
-        : '';
-      const btnLabel = BTN_LABEL[f.tipo] || BTN_LABEL.otro;
-      return '<tr class="rsm-row sem--' + sem + '" title="' + esc(SEM_TXT[sem]) + '">'
-        + '<td><span class="rsm-punto sem-bg--' + sem + '"></span><b>' + esc(f.documento) + '</b>' + badgePdf + '</td>'
-        + '<td>' + esc(f.periodo) + '</td>'
-        + '<td>' + esc(f.detalle) + '</td>'
-        + '<td>' + venceCol + '</td>'
-        + '<td><button class="rsm-b" data-i="' + i + '">' + esc(btnLabel) + '</button></td>'
-        + '</tr>'
-        + (recSel
-            ? '<tr class="rsm-orient-row sem--' + sem + '"><td colspan="5">' + recSel + '</td></tr>'
-            : '');
-    }).join('');
+    _filas = (data && data.filas) || [];
+    vacioEl.hidden = _filas.length > 0;
+    if (!_filas.length) { wrap.innerHTML = ''; return; }
+
+    const nAccion = _filas.filter((f) => semColor(f) === 'rojo').length;
+    const nInfo = _filas.length - nAccion;
+    const deudaTotal = _filas.reduce((s, f) =>
+      s + (f.tiene_deuda && typeof f.monto_num === 'number' ? f.monto_num : 0), 0);
+
+    // Métricas
+    let metr = '<div class="rsm-card rsm-metr rsm-metr--rojo"><span class="rsm-metr-n">' + nAccion
+      + '</span><span class="rsm-metr-l">Necesitan acción</span></div>'
+      + '<div class="rsm-card rsm-metr rsm-metr--gris"><span class="rsm-metr-n">' + nInfo
+      + '</span><span class="rsm-metr-l">Informativas</span></div>';
+    if (deudaTotal > 0) {
+      metr += '<div class="rsm-card rsm-metr rsm-metr--deuda"><span class="rsm-metr-n">'
+        + montoSoles(deudaTotal) + '</span><span class="rsm-metr-l">Deuda total</span></div>';
+    }
+
+    // Chips (solo los presentes; "Todo" siempre)
+    const cuenta = {};
+    _filas.forEach((f) => { const g = grupoDe(f); cuenta[g] = (cuenta[g] || 0) + 1; });
+    const chips = CHIPS_ORDEN
+      .filter((k) => k === 'todo' || cuenta[k])
+      .map((k) => '<button class="rsm-chip" data-f="' + k + '">'
+        + (k === 'todo' ? 'Todo' : esc(TIPO_LBL[k]) + ' (' + cuenta[k] + ')') + '</button>')
+      .join('');
+
     wrap.innerHTML =
-      '<table class="rsm-tabla"><thead><tr>'
-      + '<th>Documento</th><th>Periodo</th><th>Detalle</th><th>Vence</th><th></th>'
-      + '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
-    wrap.querySelectorAll('.rsm-b').forEach((b) => b.addEventListener('click', () => {
-      abrirModal(filas[+b.dataset.i]);
-    }));
-    // Cambio de recordatorio → guardar (no disponible offline).
-    wrap.querySelectorAll('.rsm-rec-sel').forEach((s) => s.addEventListener('change', async () => {
-      const ok = s.parentElement.querySelector('.rsm-rec-ok');
-      try {
-        const r = await fetch('/api/recordatorio', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ notificacion_id: s.dataset.id, modo: s.value || null }) });
-        const j = await r.json();
-        if (j.ok && ok) {
-          ok.textContent = s.value ? '✓ Te recordaremos' : 'Recordatorio desactivado';
-          ok.hidden = false; setTimeout(() => { ok.hidden = true; }, 2500);
-        }
-      } catch (_) { /* sin red: el cambio no persiste */ }
-    }));
+      '<div class="rsm-metricas">' + metr + '</div>'
+      + '<div class="rsm-chips">' + chips + '</div>'
+      + '<div class="rsm-lista" id="rsm-lista"></div>';
+
+    wrap.querySelectorAll('.rsm-chip').forEach((c) =>
+      c.addEventListener('click', () => { _filtro = c.dataset.f; pintarLista(); }));
+    pintarLista();
   }
 
   async function cargar() {
