@@ -10,6 +10,12 @@
   <p class="subtitulo">Lo que llegó a tu buzón. Queda <b>guardado en tu celular</b>:
     lo revisas cuando quieras, incluso sin internet.</p>
 
+  {% if onboarding %}
+  <!-- Indicador de espera estilizado durante la primera descarga (zAlerta-34 Paso 4) -->
+  <div id="ob-indicador" class="ob-card"
+       data-anio-actual="{{ anio_actual }}" data-anio-anterior="{{ anio_anterior }}"></div>
+  {% endif %}
+
   <!-- Estado de conexión HONESTO por RUC (zAlerta-18) -->
   {% for cx in conexiones %}
   <div class="conx-banner conx--{{ cx.clase }}">
@@ -38,5 +44,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/onboarding.js"></script>
 <script src="/static/js/resumen.js"></script>
 {% endblock %}
