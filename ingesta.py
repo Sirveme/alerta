@@ -239,10 +239,19 @@ async def ingestar_resultado(
             stats["adjuntos_nuevos"] += 1
 
         # ── 2º PDF de DEUDA → GCS + documento_valorado (zAlerta-34) ──
+        # zAlerta-37 BUG A: AISLADO en savepoint. Un fallo del valorado (GCS,
+        # constraint, lo que sea) revierte SOLO esa fila, NUNCA el lote de
+        # notificaciones ya ingestadas. La sesión queda sana para el commit final.
         val = msg.get("valorado")
         if val and val.get("pdf_bytes"):
-            await _guardar_valorado(
-                session, estudio_id, contribuyente_id, notif_id, cod, val, stats)
+            try:
+                async with session.begin_nested():
+                    await _guardar_valorado(
+                        session, estudio_id, contribuyente_id, notif_id, cod, val, stats)
+            except Exception as e:
+                stats["valorados_error"] = stats.get("valorados_error", 0) + 1
+                print(f"[ingesta] valorado cod={cod} falló (sigo): "
+                      f"{type(e).__name__}: {e}", flush=True)
 
     # Marcar el scrapeo en el contribuyente
     contrib = await session.get(Contribuyente, contribuyente_id)
