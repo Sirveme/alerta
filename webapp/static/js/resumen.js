@@ -329,7 +329,7 @@
     const timer = setInterval(async () => {
       intentos += 1;
       const data = await cargar();
-      const listo = (data && data.lectura_pendiente === false)
+      const listo = (data && data.hay_lectura_activa === false)
         || totalActual() > 0 || intentos >= TOPE;
       if (listo) {
         clearInterval(timer);
@@ -413,16 +413,22 @@
       return;
     }
 
-    // Poll hasta que el buzón crezca (o tope ~3 min). El worker corre por ciclos.
+    // Poll: para cuando la actualización que pedí TERMINÓ (hay_lectura_activa
+    // pasa a false; el worker baja actualizar_solicitado al completar), o crece
+    // el buzón, o vence el tope de seguridad (~4 min). zAlerta-43.
     const antes = totalActual();
     let intentos = 0;
-    const tope = 30;
+    const tope = 40;
     const timer = setInterval(async () => {
       intentos += 1;
-      await cargar();
-      if (totalActual() > antes || intentos >= tope) {
+      const data = await cargar();
+      const crecio = totalActual() > antes;
+      const termino = data && data.hay_lectura_activa === false;
+      if (crecio || termino || intentos >= tope) {
         clearInterval(timer);
-        terminar(totalActual() > antes ? 'Buzón actualizado' : 'Listo, sin novedades por ahora');
+        terminar(crecio ? 'Buzón actualizado'
+          : (termino ? 'Buzón actualizado — sin novedades'
+            : 'Listo, sin novedades por ahora'));
       }
     }, 6000);
   });
