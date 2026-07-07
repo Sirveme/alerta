@@ -161,13 +161,16 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                     select(DocumentoValorado).where(
                         DocumentoValorado.notificacion_id.in_(notif_ids)))).all():
                 vals[dv.notificacion_id] = dv
-        # Señal explícita de "primera lectura aún en curso" (zAlerta-42 BUG 1):
-        # hay un RUC accesible sin scrapeo todavía. El front usa esto para SABER
-        # cuándo termina el spinner de onboarding, en vez de inferir por "creció".
-        pend = await session.scalar(
+        # Señal UNIFICADA de lectura activa (zAlerta-42/43): cubre la primera
+        # lectura (ultimo_scrapeo_at NULL) Y las re-lecturas del botón "Actualizar
+        # ahora" (actualizar_solicitado=True, que el worker baja al terminar). El
+        # spinner —de onboarding o de botón— para cuando esto pasa a false.
+        activa = await session.scalar(
             select(Contribuyente.id).where(
-                cond, Contribuyente.ultimo_scrapeo_at.is_(None)).limit(1))
-        lectura_pendiente = pend is not None
+                cond,
+                (Contribuyente.ultimo_scrapeo_at.is_(None))
+                | (Contribuyente.actualizar_solicitado.is_(True))).limit(1))
+        hay_lectura_activa = activa is not None
 
     filas = []
     for n, ruc, razon in rows:
@@ -220,7 +223,8 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         "ok": True,
         "generado_at": ahora_lima().isoformat(),
         "total": len(filas),
-        "lectura_pendiente": lectura_pendiente,
+        "hay_lectura_activa": hay_lectura_activa,
+        "lectura_pendiente": hay_lectura_activa,   # alias compat (JS viejo en caché)
         "filas": filas,
     })
 
