@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block titulo %}{{ 'Editar' if art else 'Nuevo' }} artículo · Blog{% endblock %}
+{% block contenido %}
+<div class="rsm">
+  <a href="/admin/blog" class="rsm-volver"><i class="ti ti-arrow-left"></i> Volver al blog</a>
+  <div class="fila spread">
+    <h1 class="titulo-pagina" style="margin:0">{{ 'Editar' if art else 'Nuevo' }} artículo</h1>
+    {% if art %}<a class="btn btn--sec" href="/admin/blog/{{ art.id }}/preview" target="_blank">Previsualizar</a>{% endif %}
+  </div>
+
+  <form class="admin-blog-form" method="post" action="/admin/blog/guardar" enctype="multipart/form-data">
+    <input type="hidden" name="art_id" value="{{ art.id if art else '' }}">
+
+    <label class="campo"><span>Título (el de empresario, no el número de RTF)</span>
+      <input name="titulo" required value="{{ art.titulo if art else '' }}" placeholder="Te multaron por declarar tarde, pero…"></label>
+
+    <label class="campo"><span>Slug (URL). Se genera del título; edítalo si quieres.</span>
+      <input name="slug" value="{{ art.slug if art else '' }}" placeholder="se-genera-solo"></label>
+
+    <div class="admin-blog-2col">
+      <label class="campo"><span>Área</span>
+        <select name="etiqueta_area">
+          {% set a = art.etiqueta_area if art else '' %}
+          <option value="Tributos Internos" {{ 'selected' if a == 'Tributos Internos' else '' }}>Tributos Internos</option>
+          <option value="Tributos Aduaneros" {{ 'selected' if a == 'Tributos Aduaneros' else '' }}>Tributos Aduaneros</option>
+        </select></label>
+      <label class="campo"><span>Tema</span>
+        <input name="tema" value="{{ art.tema if art else '' }}" placeholder="plazos, notificaciones, IGV…"></label>
+    </div>
+    <div class="admin-blog-2col">
+      <label class="campo"><span>Región (opcional)</span>
+        <input name="region" value="{{ art.region if art else '' }}" placeholder="Loreto / Amazonía / Nacional"></label>
+      <label class="campo"><span>Número de RTF (referencia)</span>
+        <input name="numero_rtf" value="{{ art.numero_rtf if art else '' }}" placeholder="RTF Nº …"></label>
+    </div>
+
+    <label class="campo"><span>El caso, en simple</span>
+      <textarea name="resumen_caso" rows="4" placeholder="Qué pasó, contado como a un amigo.">{{ art.resumen_caso if art else '' }}</textarea></label>
+    <label class="campo"><span>Qué decidió el Tribunal</span>
+      <textarea name="decision_tribunal" rows="4">{{ art.decision_tribunal if art else '' }}</textarea></label>
+    <label class="campo"><span>Por qué importa (ángulo regional)</span>
+      <textarea name="por_que_importa" rows="4">{{ art.por_que_importa if art else '' }}</textarea></label>
+    <label class="campo"><span>Preguntas abiertas (2-3, para pensar)</span>
+      <textarea name="preguntas_abiertas" rows="3">{{ art.preguntas_abiertas if art else '' }}</textarea></label>
+    <label class="campo"><span>Cierre (conecta con alerta.pe)</span>
+      <textarea name="cierre" rows="3">{{ art.cierre if art else '' }}</textarea></label>
+
+    <div class="admin-blog-2col">
+      <label class="campo"><span>PDF de la RTF {% if art and art.pdf_gcs_key %}<small>(ya cargado; sube otro para reemplazar)</small>{% endif %}</span>
+        <input type="file" name="pdf" accept="application/pdf"></label>
+      <label class="campo"><span>Imagen para compartir (OG) {% if art and art.og_image_gcs_key %}<small>(ya cargada)</small>{% endif %}</span>
+        <input type="file" name="og_image" accept="image/*"></label>
+    </div>
+
+    <h3 class="admin-blog-seo-tit">SEO (opcional; hay fallback al título/resumen)</h3>
+    <label class="campo"><span>Meta título</span>
+      <input name="meta_title" value="{{ art.meta_title if art else '' }}"></label>
+    <label class="campo"><span>Meta descripción</span>
+      <textarea name="meta_description" rows="2">{{ art.meta_description if art else '' }}</textarea></label>
+    <label class="campo"><span>Keywords (separadas por coma)</span>
+      <input name="keywords" value="{{ art.keywords if art else '' }}"></label>
+
+    <div class="modal-acciones" style="justify-content:flex-start;margin-top:14px">
+      <button class="btn" type="submit"><i class="ti ti-device-floppy"></i> Guardar</button>
+      <a class="btn btn--sec" href="/admin/blog">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

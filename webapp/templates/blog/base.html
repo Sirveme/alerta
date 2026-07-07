@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es" data-color="dark" data-borde="recto" data-franja="si">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0E1117">
+  <title>{% block titulo %}Blog · alerta.pe{% endblock %}</title>
+  <meta name="description" content="{% block descripcion %}Resoluciones del Tribunal Fiscal explicadas en simple para empresarios. Plazos, notificaciones, multas y más.{% endblock %}">
+  {% block keywords %}{% endblock %}
+  <link rel="canonical" href="{% block canonical %}{{ canonical or (base_url ~ '/blog') }}{% endblock %}">
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+
+  <!-- Open Graph / Twitter (cómo se ve al compartir) -->
+  <meta property="og:site_name" content="alerta.pe">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}Blog · alerta.pe{% endblock %}">
+  <meta property="og:description" content="{% block og_desc %}Resoluciones del Tribunal Fiscal explicadas en simple para empresarios.{% endblock %}">
+  <meta property="og:url" content="{{ self.canonical() }}">
+  <meta property="og:image" content="{% block og_img %}{{ og_default or (base_url ~ '/static/img/icono.svg') }}{% endblock %}">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+        media="all" onerror="this.media='none'">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css"
+        media="all" onerror="this.media='none'">
+  <link rel="stylesheet" href="/static/css/app.css">
+  {% block head_extra %}{% endblock %}
+</head>
+<body class="blog-body">
+  <header class="blog-top">
+    <a href="/blog" class="blog-marca"><span class="marca-punto"></span> alerta.pe <span class="blog-marca-sub">Blog</span></a>
+    <nav class="blog-nav">
+      <a href="/blog" class="blog-nav-link">Artículos</a>
+      <a href="/activar" class="blog-nav-cta">Probar alerta.pe</a>
+    </nav>
+  </header>
+
+  <main class="blog-main">
+    {% block contenido %}{% endblock %}
+  </main>
+
+  <footer class="blog-footer">
+    <div class="blog-footer-in">
+      <a href="/blog" class="blog-marca"><span class="marca-punto"></span> alerta.pe</a>
+      <p class="blog-footer-txt">Vigilamos tu Buzón SUNAT y te avisamos a tiempo.
+        Este blog resume resoluciones públicas con fines informativos.</p>
+      <div class="blog-footer-links">
+        <a href="/blog">Blog</a>
+        <a href="/activar">Empezar</a>
+        <a href="/login">Ingresar</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

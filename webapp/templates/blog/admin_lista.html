@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Blog · Administración{% endblock %}
+{% block contenido %}
+<div class="rsm">
+  <div class="fila spread">
+    <h1 class="titulo-pagina" style="margin:0">Blog · Artículos</h1>
+    <a href="/admin/blog/nuevo" class="btn"><i class="ti ti-plus"></i> Nuevo artículo</a>
+  </div>
+  <p class="subtitulo">Publica resoluciones resumidas para empresarios. El blog es público en <a href="/blog">/blog</a>.</p>
+
+  {% if articulos %}
+  <div class="admin-blog-lista">
+    {% for a in articulos %}
+    <div class="admin-blog-fila">
+      <div class="admin-blog-info">
+        <span class="admin-blog-estado admin-blog-estado--{{ a.estado.value }}">{{ a.estado.value }}</span>
+        <b>{{ a.titulo }}</b>
+        <div class="muted">/{{ a.slug }} · {{ a.actualizado_at | fecha_lima }} · {{ a.vistas }} vistas</div>
+      </div>
+      <div class="admin-blog-acc">
+        <a class="btn btn--sec" href="/admin/blog/{{ a.id }}/editar">Editar</a>
+        <a class="btn btn--sec" href="/admin/blog/{{ a.id }}/preview" target="_blank">Ver</a>
+        {% if a.estado.value == 'publicado' %}
+        <form method="post" action="/admin/blog/{{ a.id }}/despublicar" style="display:inline">
+          <button class="btn btn--sec" type="submit">Despublicar</button></form>
+        {% else %}
+        <form method="post" action="/admin/blog/{{ a.id }}/publicar" style="display:inline">
+          <button class="btn" type="submit">Publicar</button></form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Aún no hay artículos. Crea el primero.</p>
+  {% endif %}
+</div>
+{% endblock %}

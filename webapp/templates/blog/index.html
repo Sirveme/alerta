@@ -1,0 +1,51 @@
+{% extends "blog/base.html" %}
+{% block titulo %}Blog de resoluciones tributarias · alerta.pe{% endblock %}
+{% block descripcion %}Resoluciones del Tribunal Fiscal resumidas en simple: plazos, notificaciones, multas y más, con el PDF oficial. Para empresarios del Perú.{% endblock %}
+{% block og_title %}Blog de resoluciones tributarias · alerta.pe{% endblock %}
+
+{% block contenido %}
+<section class="blog-hero">
+  <h1 class="blog-h1">Resoluciones tributarias, en simple</h1>
+  <p class="blog-lede">Resúmenes claros de resoluciones del Tribunal Fiscal, con su documento
+    oficial. Para que entiendas qué pasó y por qué te importa — sin tecnicismos.</p>
+</section>
+
+{% if areas or temas %}
+<div class="blog-chips">
+  <a href="/blog" class="blog-chip {% if not area_sel and not tema_sel %}blog-chip--on{% endif %}">Todo</a>
+  {% for a in areas %}
+  <a href="/blog?area={{ a }}" class="blog-chip {% if area_sel == a %}blog-chip--on{% endif %}">{{ a }}</a>
+  {% endfor %}
+  {% for t in temas %}
+  <a href="/blog?tema={{ t }}" class="blog-chip {% if tema_sel == t %}blog-chip--on{% endif %}">{{ t }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if articulos %}
+<div class="blog-grid">
+  {% for art in articulos %}
+  <a class="blog-card" href="/blog/{{ art.slug }}">
+    <div class="blog-card-tags">
+      {% if art.etiqueta_area %}<span class="blog-tag">{{ art.etiqueta_area }}</span>{% endif %}
+      {% if art.tema %}<span class="blog-tag blog-tag--tema">{{ art.tema }}</span>{% endif %}
+      {% if art.region %}<span class="blog-tag blog-tag--reg">{{ art.region }}</span>{% endif %}
+    </div>
+    <h2 class="blog-card-tit">{{ art.titulo }}</h2>
+    <p class="blog-card-ext">{{ extracto(art.resumen_caso) }}</p>
+    <div class="blog-card-pie">
+      <span class="blog-card-fecha">{{ art.fecha_publicacion | fecha_lima }}</span>
+      <span class="blog-card-mas">Leer ›</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="blog-paginacion">
+  {% if page > 1 %}<a class="btn btn--sec" href="/blog?page={{ page - 1 }}{% if area_sel %}&area={{ area_sel }}{% endif %}{% if tema_sel %}&tema={{ tema_sel }}{% endif %}">‹ Anteriores</a>{% endif %}
+  {% if hay_mas %}<a class="btn" href="/blog?page={{ page + 1 }}{% if area_sel %}&area={{ area_sel }}{% endif %}{% if tema_sel %}&tema={{ tema_sel }}{% endif %}">Siguientes ›</a>{% endif %}
+</div>
+{% else %}
+<p class="blog-vacio">Aún no hay artículos publicados. Vuelve pronto.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends "blog/base.html" %}
+{% block titulo %}{{ art.meta_title or art.titulo }}{% endblock %}
+{% block descripcion %}{{ art.meta_description or (art.resumen_caso or '')[:280] }}{% endblock %}
+{% block keywords %}{% if art.keywords %}<meta name="keywords" content="{{ art.keywords }}">{% endif %}{% endblock %}
+{% block canonical %}{{ canonical }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_title %}{{ art.meta_title or art.titulo }}{% endblock %}
+{% block og_desc %}{{ art.meta_description or (art.resumen_caso or '')[:200] }}{% endblock %}
+{% block og_img %}{{ og_image }}{% endblock %}
+
+{% block head_extra %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": {{ art.titulo | tojson }},
+  "description": {{ (art.meta_description or art.resumen_caso or "") | tojson }},
+  "datePublished": "{{ art.fecha_publicacion.isoformat() if art.fecha_publicacion else '' }}",
+  "dateModified": "{{ art.actualizado_at.isoformat() if art.actualizado_at else '' }}",
+  "author": { "@type": "Organization", "name": "alerta.pe" },
+  "publisher": {
+    "@type": "Organization", "name": "alerta.pe",
+    "logo": { "@type": "ImageObject", "url": "{{ base_url }}/static/img/icono.svg" }
+  },
+  "image": {{ og_image | tojson }},
+  "mainEntityOfPage": { "@type": "WebPage", "@id": {{ canonical | tojson }} }
+}
+</script>
+{% endblock %}
+
+{% block contenido %}
+{% if preview %}
+<div class="blog-preview-bar">Vista previa · estado: <b>{{ art.estado.value }}</b>
+  · <a href="/admin/blog/{{ art.id }}/editar">Volver a editar</a></div>
+{% endif %}
+
+<article class="blog-art">
+  <a href="/blog" class="blog-volver"><i class="ti ti-arrow-left"></i> Blog</a>
+
+  <div class="blog-card-tags">
+    {% if art.etiqueta_area %}<span class="blog-tag">{{ art.etiqueta_area }}</span>{% endif %}
+    {% if art.tema %}<span class="blog-tag blog-tag--tema">{{ art.tema }}</span>{% endif %}
+    {% if art.region %}<span class="blog-tag blog-tag--reg">{{ art.region }}</span>{% endif %}
+  </div>
+
+  <h1 class="blog-art-tit">{{ art.titulo }}</h1>
+  <div class="blog-art-meta">
+    {% if art.fecha_publicacion %}<span>{{ art.fecha_publicacion | fecha_lima }}</span>{% endif %}
+    {% if art.numero_rtf %}<span>· {{ art.numero_rtf }}</span>{% endif %}
+  </div>
+
+  {% if art.resumen_caso %}
+  <section class="blog-bloque">
+    <h2 class="blog-bloque-tit">El caso, en simple</h2>
+    <div class="blog-bloque-txt">{{ art.resumen_caso }}</div>
+  </section>{% endif %}
+
+  {% if art.decision_tribunal %}
+  <section class="blog-bloque">
+    <h2 class="blog-bloque-tit">Qué decidió el Tribunal</h2>
+    <div class="blog-bloque-txt">{{ art.decision_tribunal }}</div>
+  </section>{% endif %}
+
+  {% if art.por_que_importa %}
+  <section class="blog-bloque">
+    <h2 class="blog-bloque-tit">Por qué te importa</h2>
+    <div class="blog-bloque-txt">{{ art.por_que_importa }}</div>
+  </section>{% endif %}
+
+  {% if art.preguntas_abiertas %}
+  <section class="blog-bloque blog-bloque--preg">
+    <h2 class="blog-bloque-tit">Para pensarlo</h2>
+    <div class="blog-bloque-txt">{{ art.preguntas_abiertas }}</div>
+  </section>{% endif %}
+
+  {% if tiene_pdf %}
+  <a class="blog-pdf" href="/blog/{{ art.slug }}/pdf" target="_blank" rel="noopener">
+    <i class="ti ti-file-type-pdf"></i>
+    <span><b>Documento completo</b><br><small>La resolución oficial (para contadores y abogados)</small></span>
+  </a>
+  {% endif %}
+
+  {% if art.cierre %}
+  <section class="blog-cierre">
+    <div class="blog-bloque-txt">{{ art.cierre }}</div>
+    <a href="/activar" class="btn blog-cta">Vigila tu Buzón SUNAT con alerta.pe</a>
+  </section>{% endif %}
+
+  <p class="blog-disclaimer">Este artículo resume una resolución pública con fines informativos.
+    No es asesoría tributaria; para tu caso concreto, consulta con tu contador o abogado.</p>
+</article>
+{% endblock %}
