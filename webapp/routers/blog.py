@@ -71,7 +71,7 @@ async def blog_index(request: Request, area: str | None = None,
         "page": page, "hay_mas": hay_mas,
         "base_url": BASE_URL,
         "canonical": f"{BASE_URL}/blog",
-        "og_default": f"{BASE_URL}/static/img/icono.svg",
+        "og_default": f"{BASE_URL}/static/img/og-blog.png",
     })
 
 
@@ -90,7 +90,7 @@ async def blog_articulo(request: Request, slug: str):
         art.vistas = (art.vistas or 0) + 1
         await session.commit()
         og_image = (f"{BASE_URL}/blog/{slug}/og" if art.og_image_gcs_key
-                    else f"{BASE_URL}/static/img/icono.svg")
+                    else f"{BASE_URL}/static/img/og-blog.png")
         datos = {
             "art": art,
             "canonical": f"{BASE_URL}/blog/{art.slug}",
@@ -124,9 +124,9 @@ async def blog_og(slug: str):
         art = await session.scalar(
             select(ArticuloBlog).where(ArticuloBlog.slug == slug))
     if not art or not art.og_image_gcs_key:
-        return RedirectResponse("/static/img/icono.svg", status_code=307)
+        return RedirectResponse("/static/img/og-blog.png", status_code=307)
     url = gcs.signed_url(art.og_image_gcs_key, minutos=60)
-    return RedirectResponse(url or "/static/img/icono.svg", status_code=307)
+    return RedirectResponse(url or "/static/img/og-blog.png", status_code=307)
 
 
 @router.get("/sitemap.xml", include_in_schema=False)

@@ -159,7 +159,7 @@ async def admin_preview(request: Request, art_id: uuid.UUID,
         return RedirectResponse("/admin/blog", status_code=303)
     return templates.TemplateResponse(request, "blog/articulo.html", {
         "art": art, "canonical": f"{base_url}/blog/{art.slug}",
-        "og_image": f"{base_url}/static/img/icono.svg", "base_url": base_url,
+        "og_image": f"{base_url}/static/img/og-blog.png", "base_url": base_url,
         "tiene_pdf": bool(art.pdf_gcs_key), "preview": True})
 
 
