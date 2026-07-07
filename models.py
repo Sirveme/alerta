@@ -928,3 +928,51 @@ class DetalleValorado(Base):
 
     documento: Mapped["DocumentoValorado"] = relationship(back_populates="detalles")
     tributo: Mapped["Tributo | None"] = relationship()
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Blog de RTFs (zAlerta-40) — contenido público para SEO. Solo web.
+# ═════════════════════════════════════════════════════════════════════
+class EstadoArticulo(str, enum.Enum):
+    BORRADOR = "borrador"
+    PUBLICADO = "publicado"
+
+
+class ArticuloBlog(Base, TimestampMixin):
+    """Artículo del blog: una RTF resumida en lenguaje de empresario + su PDF."""
+    __tablename__ = "articulos_blog"
+    __table_args__ = (
+        Index("ix_articulo_estado", "estado"),
+        Index("ix_articulo_fecha_pub", "fecha_publicacion"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    slug: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
+    titulo: Mapped[str] = mapped_column(String(300), nullable=False)
+
+    etiqueta_area: Mapped[str | None] = mapped_column(String(40))   # Internos / Aduaneros
+    tema: Mapped[str | None] = mapped_column(String(120))
+    region: Mapped[str | None] = mapped_column(String(80))
+    numero_rtf: Mapped[str | None] = mapped_column(String(80))
+
+    # Bloques de contenido (plantilla).
+    resumen_caso: Mapped[str | None] = mapped_column(Text)
+    decision_tribunal: Mapped[str | None] = mapped_column(Text)
+    por_que_importa: Mapped[str | None] = mapped_column(Text)
+    preguntas_abiertas: Mapped[str | None] = mapped_column(Text)
+    cierre: Mapped[str | None] = mapped_column(Text)
+
+    pdf_gcs_key: Mapped[str | None] = mapped_column(String(300))
+
+    # SEO
+    meta_title: Mapped[str | None] = mapped_column(String(200))
+    meta_description: Mapped[str | None] = mapped_column(String(320))
+    og_image_gcs_key: Mapped[str | None] = mapped_column(String(300))
+    keywords: Mapped[str | None] = mapped_column(Text)
+
+    estado: Mapped[EstadoArticulo] = mapped_column(
+        Enum(EstadoArticulo, native_enum=False, length=20),
+        default=EstadoArticulo.BORRADOR, nullable=False)
+    fecha_publicacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    vistas: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
