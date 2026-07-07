@@ -107,3 +107,12 @@ def requiere_escritura(user: UsuarioActual = Depends(usuario_actual)) -> Usuario
         from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Tu rol es de solo lectura.")
     return user
+
+
+def requiere_admin(user: UsuarioActual = Depends(usuario_actual)) -> UsuarioActual:
+    """Solo ADMIN (dueño del estudio). El empresario/asistente NO accede
+    (zAlerta-40: panel del blog)."""
+    if not user.es_admin:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Acceso solo para administradores.")
+    return user

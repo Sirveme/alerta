@@ -27,7 +27,7 @@ from .deps import RedirigirALogin
 from . import auth
 from .routers import (
     dashboard, notificaciones, voz, actualizar, push, clientes, registro,
-    superadmin, landing, resumen, pagos, cuenta,
+    superadmin, landing, resumen, pagos, cuenta, blog, blog_admin,
 )
 
 app = FastAPI(title="alerta.pe", docs_url=None, redoc_url=None)
@@ -48,6 +48,8 @@ app.include_router(landing.router)
 app.include_router(resumen.router)
 app.include_router(pagos.router)
 app.include_router(cuenta.router)
+app.include_router(blog.router)          # blog público + SEO (zAlerta-40)
+app.include_router(blog_admin.router)    # panel admin del blog (solo admin)
 
 
 # Sin sesión → al login (para vistas HTML); JSON para llamadas API.
