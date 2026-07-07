@@ -294,8 +294,6 @@
       render(online, false);
       pintarEstado('Al día', 'ok');
       guardar(online);                          // background: queda offline
-      // GRACIAS dentro de la app (métrica de lectura).
-      fetch('/api/alerta/vista', { method: 'POST', credentials: 'include' }).catch(() => {});
     } else {
       const cache = await leerCache();
       if (cache) {
@@ -312,10 +310,39 @@
     return online;
   }
 
-  // ── Onboarding: cerrar el spinner cuando la lectura TERMINA (zAlerta-42 BUG 1) ──
-  // El indicador de primera lectura (#ob-indicador) rotaba frases para siempre.
-  // Ahora sondeamos /api/resumen: cuando `lectura_pendiente` pasa a false (o llega
-  // el buzón, o vence el tope de seguridad), lo quitamos y mostramos el buzón.
+  // ── Métrica de lectura (GRACIAS): fuera del poll, se dispara UNA vez ──
+  function marcarVista() {
+    fetch('/api/alerta/vista', { method: 'POST', credentials: 'include' }).catch(() => {});
+  }
+
+  // ── Poller ÚNICO de "lectura activa" (zAlerta-42/43/44) ──────────────
+  // Sondea /api/resumen y PARA cuando `hay_lectura_activa === false` (el worker
+  // bajó el flag = terminó), o crece el buzón, o vence el tope de seguridad.
+  // Registro único: solo un intervalo a la vez → nunca dos pollers en paralelo.
+  let _pollTimer = null;
+  function pararPoll() {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  }
+  function iniciarPoll(onListo, tope) {
+    pararPoll();                                   // cancela cualquier poller previo
+    const antes = totalActual();
+    let intentos = 0;
+    tope = tope || 40;                             // 40 × 6s ≈ 4 min (respaldo)
+    _pollTimer = setInterval(async () => {
+      intentos += 1;
+      const data = await cargar(false);            // sin /vista en cada poll
+      const crecio = totalActual() > antes;
+      const termino = !!(data && data.hay_lectura_activa === false);
+      const vencio = intentos >= tope;
+      if (termino || crecio || vencio) {
+        pararPoll();                               // limpia el intervalo (no huérfano)
+        marcarVista();                             // el usuario ya ve el buzón
+        onListo({ crecio: crecio, termino: termino, vencio: vencio });
+      }
+    }, 6000);
+  }
+
+  // Cierra el indicador de onboarding (primera lectura) al terminar.
   function cerrarOnboarding(msg) {
     const ind = document.getElementById('ob-indicador');
     if (window.__obHandle) { try { window.__obHandle.detener(); } catch (_) {} }
@@ -324,18 +351,8 @@
   }
   function vigilarOnboarding() {
     if (!document.getElementById('ob-indicador')) return;   // no hay primera lectura
-    let intentos = 0;
-    const TOPE = 40;                                         // 40 × 6s ≈ 4 min (seguridad)
-    const timer = setInterval(async () => {
-      intentos += 1;
-      const data = await cargar();
-      const listo = (data && data.hay_lectura_activa === false)
-        || totalActual() > 0 || intentos >= TOPE;
-      if (listo) {
-        clearInterval(timer);
-        cerrarOnboarding(totalActual() > 0 ? 'Buzón actualizado' : 'Todo listo');
-      }
-    }, 6000);
+    iniciarPoll((r) => cerrarOnboarding(
+      (r.crecio || totalActual() > 0) ? 'Buzón actualizado' : 'Todo listo'));
   }
 
   // ── Mini-leyenda del semáforo (siempre visible, discreta) ──
@@ -413,26 +430,19 @@
       return;
     }
 
-    // Poll: para cuando la actualización que pedí TERMINÓ (hay_lectura_activa
-    // pasa a false; el worker baja actualizar_solicitado al completar), o crece
-    // el buzón, o vence el tope de seguridad (~4 min). zAlerta-43.
-    const antes = totalActual();
-    let intentos = 0;
-    const tope = 40;
-    const timer = setInterval(async () => {
-      intentos += 1;
-      const data = await cargar();
-      const crecio = totalActual() > antes;
-      const termino = data && data.hay_lectura_activa === false;
-      if (crecio || termino || intentos >= tope) {
-        clearInterval(timer);
-        terminar(crecio ? 'Buzón actualizado'
-          : (termino ? 'Buzón actualizado — sin novedades'
-            : 'Listo, sin novedades por ahora'));
-      }
-    }, 6000);
+    // Poller ÚNICO: para cuando la actualización que pedí TERMINÓ
+    // (hay_lectura_activa === false), o crece el buzón, o vence el tope. zAlerta-44.
+    iniciarPoll((r) => terminar(
+      r.crecio ? 'Buzón actualizado'
+        : (r.termino ? 'Buzón actualizado — sin novedades'
+          : 'Listo, sin novedades por ahora')));
   });
 
   mostrarSplash();
-  cargar().then(() => vigilarOnboarding());
+  cargar().then((data) => {
+    // Si NO hay primera lectura en curso, el buzón ya está a la vista: marca la
+    // lectura (GRACIAS) una vez. Si hay onboarding, el poller la marcará al cerrar.
+    if (data && data.ok && !document.getElementById('ob-indicador')) marcarVista();
+    vigilarOnboarding();
+  });
 })();
