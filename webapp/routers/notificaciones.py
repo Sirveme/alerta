@@ -9,6 +9,7 @@ zAlerta-01 B.4 / B.5 (reacciones). Multi-tenant en cada query.
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, Request
@@ -28,6 +29,7 @@ from ..deps import (
 )
 
 router = APIRouter(tags=["notificaciones"])
+logger = logging.getLogger("alertape.notificaciones")
 
 
 def _puede_ver_notif(user: UsuarioActual, notif) -> bool:
@@ -186,6 +188,26 @@ async def descargar_adjunto_pdf(adjunto_id: uuid.UUID,
 # ── PDF de DEUDA (documento real) desde GCS (zAlerta-38) ──
 # Distinto de la CONSTANCIA (/adjuntos/{id}). Multi-tenant estricto: el empresario
 # solo accede a SUS valorados. Sirve por signed URL temporal (no proxia bytes).
+def _pagina_no_disponible() -> Response:
+    """Página amigable (nueva pestaña) cuando el PDF de deuda no se pudo servir.
+    Ofrece volver al buzón (donde está la constancia como respaldo)."""
+    html = (
+        "<!doctype html><html lang='es'><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<body style=\"font-family:system-ui,sans-serif;background:#0E1117;color:#E6E9EF;"
+        "display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px\">"
+        "<div style='max-width:420px;text-align:center'>"
+        "<div style='font-size:44px'>📄</div>"
+        "<h1 style='font-size:1.2rem;margin:10px 0'>El documento de deuda no está disponible ahora</h1>"
+        "<p style='color:#9aa4b2;line-height:1.5'>Estamos preparándolo. Mientras tanto, en tu "
+        "buzón puedes abrir la <b>Constancia de notificación</b> del mismo documento, o vuelve a "
+        "intentarlo en unos minutos.</p>"
+        "<p><a href='/resumen' style='display:inline-block;margin-top:8px;padding:10px 18px;"
+        "background:#5B8DEF;color:#fff;text-decoration:none;border-radius:999px;font-weight:700'>"
+        "Volver al buzón</a></p></div></body></html>")
+    return Response(html, status_code=503, media_type="text/html; charset=utf-8")
+
+
 async def _servir_valorado(valorado_id: uuid.UUID, user: UsuarioActual,
                            descargar: bool):
     async with get_session() as session:
@@ -202,7 +224,16 @@ async def _servir_valorado(valorado_id: uuid.UUID, user: UsuarioActual,
     url = gcs.signed_url(dv.gcs_key, minutos=10, descargar=descargar,
                          nombre=(dv.num_documento or "deuda"))
     if not url:
-        return Response("El documento no está disponible por ahora.", status_code=503)
+        # No tragar en silencio: distinguir "GCS sin credencial en ESTE servicio"
+        # (falta GCS_CREDENTIALS_JSON en alertape-web) de un fallo de firma/objeto.
+        if not gcs.gcs_disponible():
+            logger.error("valorado %s: GCS NO configurado en este servicio "
+                         "(falta GCS_CREDENTIALS_JSON en alertape-web).", valorado_id)
+        else:
+            logger.error("valorado %s: no se pudo firmar el signed URL para "
+                         "gcs_key=%s (revisar objeto/permisos del SA).",
+                         valorado_id, dv.gcs_key)
+        return _pagina_no_disponible()
     return RedirectResponse(url, status_code=307)
 
 
