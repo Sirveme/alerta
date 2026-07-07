@@ -5,7 +5,7 @@
    Push: handler listo; el ENVÍO real es una fase aparte.
    ═══════════════════════════════════════════════════════════════════ */
 
-const CACHE = 'alertape-v36';
+const CACHE = 'alertape-v37';
 // Nunca cachear video ni respuestas parciales (Range/206): Cache Storage no
 // admite 206 y lanzaría en cache.put (zAlerta-31 TEMA A).
 const RE_VIDEO = /\.(mp4|webm|mov|m4v)(\?|$)/i;
