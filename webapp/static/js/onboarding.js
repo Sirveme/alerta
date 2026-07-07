@@ -54,6 +54,8 @@
   window.obMontar = obMontar;
 
   // Auto-arranque: si la página ya trae el indicador (primera lectura en curso).
+  // Guardamos el handle en window para que resumen.js pueda DETENERLO cuando la
+  // lectura termine (zAlerta-42 BUG 1: antes rotaba frases para siempre).
   const cont = document.getElementById('ob-indicador');
-  if (cont) obMontar(cont, cont.dataset.anioActual, cont.dataset.anioAnterior);
+  if (cont) window.__obHandle = obMontar(cont, cont.dataset.anioActual, cont.dataset.anioAnterior);
 })();

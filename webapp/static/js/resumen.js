@@ -309,6 +309,33 @@
           + 'Conéctate una vez para guardarlos en tu celular.';
       }
     }
+    return online;
+  }
+
+  // ── Onboarding: cerrar el spinner cuando la lectura TERMINA (zAlerta-42 BUG 1) ──
+  // El indicador de primera lectura (#ob-indicador) rotaba frases para siempre.
+  // Ahora sondeamos /api/resumen: cuando `lectura_pendiente` pasa a false (o llega
+  // el buzón, o vence el tope de seguridad), lo quitamos y mostramos el buzón.
+  function cerrarOnboarding(msg) {
+    const ind = document.getElementById('ob-indicador');
+    if (window.__obHandle) { try { window.__obHandle.detener(); } catch (_) {} }
+    if (ind) ind.remove();
+    pintarEstado(msg || 'Buzón actualizado', 'ok');
+  }
+  function vigilarOnboarding() {
+    if (!document.getElementById('ob-indicador')) return;   // no hay primera lectura
+    let intentos = 0;
+    const TOPE = 40;                                         // 40 × 6s ≈ 4 min (seguridad)
+    const timer = setInterval(async () => {
+      intentos += 1;
+      const data = await cargar();
+      const listo = (data && data.lectura_pendiente === false)
+        || totalActual() > 0 || intentos >= TOPE;
+      if (listo) {
+        clearInterval(timer);
+        cerrarOnboarding(totalActual() > 0 ? 'Buzón actualizado' : 'Todo listo');
+      }
+    }, 6000);
   }
 
   // ── Mini-leyenda del semáforo (siempre visible, discreta) ──
@@ -349,7 +376,7 @@
   // fuera del gate nocturno). Muestra el indicador estilizado y, en cuanto el
   // buzón crece, lo refresca. Sin diálogos nativos.
   function totalActual() {
-    return wrap.querySelectorAll('.rsm-row').length;
+    return _filas.length;   // Diseño C usa tarjetas (.rsm-card), no filas de tabla.
   }
   const btnAct = document.getElementById('rsm-actualizar');
   if (btnAct) btnAct.addEventListener('click', async () => {
@@ -401,5 +428,5 @@
   });
 
   mostrarSplash();
-  cargar();
+  cargar().then(() => vigilarOnboarding());
 })();
