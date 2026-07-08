@@ -401,3 +401,28 @@ async def api_alerta_vista(user: UsuarioActual = Depends(usuario_actual)):
             u.ultima_alerta_vista_at = ahora_lima()
             await session.commit()
     return JSONResponse({"ok": True})
+
+
+@router.post("/api/notificacion/{notif_id}/leida")
+async def api_notificacion_leida(notif_id: uuid.UUID,
+                                 user: UsuarioActual = Depends(usuario_actual)):
+    """Marca UNA notificación como leída (zAlerta-47). Se llama al ABRIR su modal
+    en el buzón (no al cargar la lista), para que lo NUEVO siga resaltado hasta que
+    el usuario realmente lo mire. Estado server-side → compartido entre equipos.
+    Multi-tenant: solo notificaciones de los RUCs accesibles por el usuario."""
+    async with get_session() as session:
+        if user.es_empresario:
+            cond = Contribuyente.cuenta_empresario_id == user.estudio_id
+        else:
+            cond = Contribuyente.estudio_id == user.estudio_id
+        notif = await session.scalar(
+            select(Notificacion)
+            .join(Contribuyente, Contribuyente.id == Notificacion.contribuyente_id)
+            .where(Notificacion.id == notif_id, cond))
+        if not notif:
+            return JSONResponse({"ok": False}, status_code=404)
+        if not notif.leida:
+            notif.leida = True
+            notif.leida_at = ahora_lima()
+            await session.commit()
+    return JSONResponse({"ok": True})

@@ -212,9 +212,10 @@ async def dashboard(request: Request,
     if user is None:
         return templates.TemplateResponse(request, "landing.html", {
             "logueado": False, "whatsapp_soporte": WHATSAPP_SOPORTE})
-    # El empresario tiene su centro de gestión en "Mi Cuenta" (zAlerta-22).
+    # El empresario aterriza en su BUZÓN (zAlerta-47): es lo que quiere ver,
+    # y adonde lleva el push. "Mi Cuenta" queda accesible desde el nav.
     if user.es_empresario:
-        return RedirectResponse("/mi-cuenta", status_code=303)
+        return RedirectResponse("/resumen", status_code=303)
     async with get_session() as session:
         resumen = await _resumen_y_marcar_visita(session, user)
         grupos = await _resumen_grupos(session, user.estudio_id)
