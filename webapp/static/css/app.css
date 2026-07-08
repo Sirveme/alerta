@@ -1363,6 +1363,13 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-card.sem--rojo { border-left-color:var(--u-urgente); }
 .rsm-card.sem--ambar { border-left-color:var(--u-importante); }
 .rsm-card.sem--verde { border-left-color:var(--u-aldia); }
+/* zAlerta-47 · NO leída: tinte suave de marca + badge "Nuevo" (conserva el
+   borde de urgencia; respeta el tema oscuro, sin chillar). */
+.rsm-card--nueva { background:color-mix(in srgb,var(--marca) 9%,var(--superficie));
+  border-color:color-mix(in srgb,var(--marca) 32%,var(--borde)); }
+.rsm-nuevo { font-size:.6rem; font-weight:800; text-transform:uppercase;
+  letter-spacing:.05em; color:#fff; background:var(--marca); border-radius:999px;
+  padding:2px 8px; margin-right:6px; vertical-align:middle; }
 .rsm-c-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .rsm-c-tipo { font-size:.95rem; color:var(--texto); }
 .rsm-c-asunto { font-size:.85rem; color:var(--texto-suave); margin:4px 0 8px;
