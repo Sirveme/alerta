@@ -409,17 +409,36 @@ def listar_carpetas(api: APIRequestContext, visor_base: str) -> list:
     return data
 
 
+def _cod_de_row(m: dict):
+    """cod_mensaje de una fila del índice (varios nombres candidatos)."""
+    return (m.get("codigoMensaje") or m.get("codMensaje")
+            or m.get("codMensa") or m.get("codigo"))
+
+
+def _pagina_toda_conocida(rows: list, conocidos: set) -> bool:
+    """True si TODOS los cod_mensaje de la página ya están en BD (conocidos).
+    Página vacía → True. Requiere página ENTERA conocida: un mensaje viejo
+    intercalado NO detiene el barrido (zAlerta-46, correctitud > velocidad)."""
+    cods = [str(_cod_de_row(r)) for r in rows
+            if isinstance(r, dict) and _cod_de_row(r)]
+    if not cods:
+        return True
+    return all(c in conocidos for c in cods)
+
+
 def listar_mensajes(api: APIRequestContext, visor_base: str,
                     tipo_msj: int, cod_carpeta: str = "00",
-                    max_paginas: int = 200) -> list:
-    """Lista TODOS los mensajes de una bandeja PAGINANDO (zAlerta-34 Paso 1).
+                    max_paginas: int = 200, conocidos: set | None = None) -> list:
+    """Lista mensajes de una bandeja PAGINANDO (zAlerta-34 Paso 1).
 
-    Antes solo traía `page=1` (~10% del buzón). Ahora recorre `1..total`, donde
-    `total` = nº de páginas que SUNAT devuelve en la respuesta (jqGrid, junto a
-    `records`). Sleep corto entre páginas para no martillear. El índice es barato.
+    Recorre `1..total` (SUNAT devuelve `total`=nº de páginas). Sleep corto entre
+    páginas para no martillear.
 
-    SUNAT usa tipoMsj para distinguir bandejas (1=Mensajes, 2=Notificaciones);
-    codCarpeta=00 = todas las carpetas de esa bandeja.
+    INCREMENTAL (zAlerta-46): si se pasa `conocidos` (set de cod_mensaje ya en
+    BD para este contribuyente), PARA de paginar en cuanto una PÁGINA COMPLETA no
+    trae ningún mensaje nuevo (todos conocidos). NO para al primer conocido: exige
+    la página entera conocida (un mensaje reactivado/reordenado no engaña). Sin
+    `conocidos` → barrido COMPLETO (como antes).
     """
     def _pagina(page: int):
         url = (f"{visor_base}/visor/listNotiMenPag"
@@ -438,14 +457,28 @@ def listar_mensajes(api: APIRequestContext, visor_base: str,
         except (TypeError, ValueError):
             total_pags = 1
     total_pags = min(total_pags, max_paginas)
+    incremental = conocidos is not None
+
+    # Página 1 ya toda conocida (buzón sin novedades) → no seguir.
+    if incremental and _pagina_toda_conocida(rows, conocidos):
+        log(f"  Bandeja t={tipo_msj} c={cod_carpeta}: pág.1 toda conocida "
+            f"→ sin novedades ({len(rows)} filas, incremental).", "OK")
+        return rows
+
     for pg in range(2, total_pags + 1):
         time.sleep(random.uniform(0.4, 0.9))
         dp = _pagina(pg)
         if not dp:
             continue
-        rows += list(dp.get("rows", dp) if isinstance(dp, dict) else dp)
+        pagina = list(dp.get("rows", dp) if isinstance(dp, dict) else dp)
+        rows += pagina
+        if incremental and _pagina_toda_conocida(pagina, conocidos):
+            log(f"  Bandeja t={tipo_msj} c={cod_carpeta}: pág.{pg} toda conocida "
+                f"→ paro incremental ({len(rows)} filas leídas).", "OK")
+            break
+
     log(f"  Bandeja tipoMsj={tipo_msj} carp={cod_carpeta}: "
-        f"{len(rows)} mensajes ({total_pags} pág.)", "OK")
+        f"{len(rows)} mensajes{' (incremental)' if incremental else f' ({total_pags} pág.)'}", "OK")
     return rows
 
 
@@ -631,7 +664,10 @@ def _tiene_monto(texto: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────
 # Orquestación
 # ─────────────────────────────────────────────────────────────────────
-def scrapear_ruc(cfg: SunatConfig) -> dict:
+def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None) -> dict:
+    # conocidos (zAlerta-46): set de cod_mensaje ya en BD. Si se pasa → lectura
+    # INCREMENTAL (para cuando una página completa ya es conocida y salta los
+    # mensajes ya vistos). Si es None → barrido COMPLETO.
     resultado = {
         "ruc": cfg.ruc,
         "scrapeado_at": ahora_lima().isoformat(),
@@ -745,7 +781,8 @@ def scrapear_ruc(cfg: SunatConfig) -> dict:
                 if not cod_carp or cod_carp == "00":
                     continue
                 for tipo_msj in (1, 2):
-                    for m in listar_mensajes(api, visor_base, tipo_msj, cod_carpeta=cod_carp):
+                    for m in listar_mensajes(api, visor_base, tipo_msj,
+                                             cod_carpeta=cod_carp, conocidos=conocidos):
                         if not isinstance(m, dict):
                             continue
                         cm = _cod_de(m)
@@ -770,90 +807,120 @@ def scrapear_ruc(cfg: SunatConfig) -> dict:
             # se etiqueta con su carpeta (del índice de arriba); si no cae en
             # ninguna carpeta conocida, queda sin carpeta (la ingesta usa OTRO).
             for tipo_msj in (1, 2):
-                mensajes = listar_mensajes(api, visor_base, tipo_msj, cod_carpeta="00")
+                mensajes = listar_mensajes(api, visor_base, tipo_msj,
+                                           cod_carpeta="00", conocidos=conocidos)
                 for msg in mensajes:
                     if not isinstance(msg, dict):
                         continue
                     cod_msg = _cod_de(msg)
                     if not cod_msg:
                         continue
+                    # Incremental: los ya conocidos no se reprocesan (ni detalle ni
+                    # descarga); solo se procesan los NUEVOS. La dedup es red final.
+                    if conocidos is not None and str(cod_msg) in conocidos:
+                        continue
                     carp = carpeta_de.get((tipo_msj, str(cod_msg)), {})
-                    detalle = obtener_detalle(api, visor_base, cod_msg, tipo_msj)
+                    asunto = limpiar_html_entities(
+                        msg.get("desAsunto") or msg.get("asunto") or "")
+                    urgente = bool(msg.get("indUrg"))
+                    fecha_pub = msg.get("fecPublica")
+                    fecha_env = (msg.get("fecEnvio") or msg.get("fechaEnvio")
+                                 or msg.get("fecPublica"))
+                    n_adj = msg.get("cantidadArchAdj", 0)
+
+                    # ── FASE 1 (zAlerta-45): DOS VELOCIDADES ──
+                    # Clasificamos con el índice (carpeta+asunto), SIN abrir detalle.
+                    # Solo la DEUDA (año actual/anterior) baja detalle+PDF ahora; los
+                    # INFORMATIVOS se registran con su metadata y su PDF queda pendiente
+                    # (se trae en background/bajo demanda). Esto lleva un buzón grande
+                    # de 12+ min a ~1-2 min.
+                    valorado_tipo = None
+                    if _clasificar:
+                        tipo_doc, _u, _f = _clasificar(carp.get("nom"), asunto, urgente)
+                        vt = _TIPODOC_A_VALORADO.get(tipo_doc)
+                        if vt and _anio_de(fecha_pub or fecha_env) in anios_descarga:
+                            valorado_tipo = vt
+                    es_deuda = valorado_tipo is not None and not self_check["abortado"]
+
+                    detalle = None
                     pdfs = []
-                    if detalle:
-                        pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
+                    if es_deuda:
+                        # Deuda: abrir detalle + constancia (permanente). Con pausa.
+                        detalle = obtener_detalle(api, visor_base, cod_msg, tipo_msj)
+                        if detalle:
+                            pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
+
                     item = {
                         "tipo_msj": tipo_msj,
                         "cod_mensaje": cod_msg,
                         "cod_carpeta": carp.get("cod"),
                         "nombre_carpeta": carp.get("nom"),
-                        "asunto": limpiar_html_entities(
-                            msg.get("desAsunto") or msg.get("asunto") or ""),
-                        "fecha_envio": (msg.get("fecEnvio") or msg.get("fechaEnvio")
-                                        or msg.get("fecPublica")),
-                        "fecha_publica": msg.get("fecPublica"),
-                        "urgente": bool(msg.get("indUrg")),
+                        "asunto": asunto,
+                        "fecha_envio": fecha_env,
+                        "fecha_publica": fecha_pub,
+                        "urgente": urgente,
                         "destacado": bool(msg.get("indDesta")),
-                        "cant_adjuntos": msg.get("cantidadArchAdj", 0),
+                        "cant_adjuntos": n_adj,
                         "texto_html": (detalle or {}).get("msjMensaje"),
                         "raw": msg,
                         "detalle": detalle,
                         "pdfs": pdfs,
+                        # Informativo con adjunto aún NO descargado (FASE 2/3 bajo demanda):
+                        # se puede traer luego con cod_mensaje + tipo_msj.
+                        "pdf_pendiente": (not es_deuda) and bool(n_adj),
                         "capturado_at": ahora_lima().isoformat(),
                     }
 
-                    # ── 2º PDF de DEUDA (zAlerta-34) ──
-                    if _clasificar and detalle and not self_check["abortado"]:
-                        tipo_doc, _u, _f = _clasificar(
-                            carp.get("nom"), item["asunto"], item["urgente"])
-                        valorado_tipo = _TIPODOC_A_VALORADO.get(tipo_doc)
-                        anio = _anio_de(item["fecha_publica"] or item["fecha_envio"])
-                        if valorado_tipo and anio in anios_descarga:
-                            resultado["valorados_intentados"] += 1
-                            num_doc = _num_documento_de(item["asunto"])
-                            body, motivo = descargar_documento_real(
-                                api, visor_base, cod_msg, detalle)
-                            if not body:
-                                # Sin PDF: NO adivinar. Marcar pendiente y seguir.
-                                resultado["valorados_pendientes"].append(
-                                    {"cod_mensaje": cod_msg, "num_documento": num_doc,
-                                     "motivo": motivo})
-                            else:
-                                txt = texto_pdf(body)
-                                # SELF-CHECK obligatorio en el PRIMER documento del lote.
-                                if not self_check["hecho"]:
-                                    self_check["hecho"] = True
-                                    self_check["ok"] = _tiene_monto(txt)
-                                    resultado["self_check"] = {
-                                        "ok": self_check["ok"], "cod_mensaje": cod_msg,
-                                        "num_documento": num_doc, "texto_muestra": txt[:1500]}
-                                    if not self_check["ok"]:
-                                        self_check["abortado"] = True
-                                        log("SELF-CHECK FALLÓ: el 1er PDF de deuda no "
-                                            "trae monto. Abortando el lote de valorados.",
-                                            "ERROR")
-                                # CHECK DE INTEGRIDAD (TAREA 2): el nº de documento de
-                                # la fila debe aparecer en el texto del PDF bajado.
-                                integ_ok = (not num_doc) or (num_doc in txt)
-                                if not self_check["abortado"] and not integ_ok:
-                                    hallados = _RE_NUM_DOC.findall(txt)
-                                    log(f"INTEGRIDAD: PDF cod={cod_msg} NO contiene "
-                                        f"{num_doc}; hallados={hallados[:3]}. No se guarda.",
+                    # ── 2º PDF de DEUDA (zAlerta-34/35) — solo para deuda ──
+                    if es_deuda and detalle:
+                        resultado["valorados_intentados"] += 1
+                        num_doc = _num_documento_de(asunto)
+                        body, motivo = descargar_documento_real(
+                            api, visor_base, cod_msg, detalle)
+                        if not body:
+                            # Sin PDF: NO adivinar. Marcar pendiente y seguir.
+                            resultado["valorados_pendientes"].append(
+                                {"cod_mensaje": cod_msg, "num_documento": num_doc,
+                                 "motivo": motivo})
+                        else:
+                            txt = texto_pdf(body)
+                            # SELF-CHECK obligatorio en el PRIMER documento del lote.
+                            if not self_check["hecho"]:
+                                self_check["hecho"] = True
+                                self_check["ok"] = _tiene_monto(txt)
+                                resultado["self_check"] = {
+                                    "ok": self_check["ok"], "cod_mensaje": cod_msg,
+                                    "num_documento": num_doc, "texto_muestra": txt[:1500]}
+                                if not self_check["ok"]:
+                                    self_check["abortado"] = True
+                                    log("SELF-CHECK FALLÓ: el 1er PDF de deuda no "
+                                        "trae monto. Abortando el lote de valorados.",
                                         "ERROR")
-                                    resultado["valorados_integridad_error"].append(
-                                        {"cod_mensaje": cod_msg, "esperado": num_doc,
-                                         "hallados": hallados[:3]})
-                                elif not self_check["abortado"]:
-                                    item["valorado"] = {
-                                        "tipo_valorado": valorado_tipo.value,
-                                        "num_documento": num_doc,
-                                        "pdf_bytes": body,
-                                        "pdf_texto": txt,
-                                    }
-                                    resultado["valorados_descargados"] += 1
+                            # CHECK DE INTEGRIDAD: el nº de documento de la fila debe
+                            # aparecer en el texto del PDF bajado.
+                            integ_ok = (not num_doc) or (num_doc in txt)
+                            if not self_check["abortado"] and not integ_ok:
+                                hallados = _RE_NUM_DOC.findall(txt)
+                                log(f"INTEGRIDAD: PDF cod={cod_msg} NO contiene "
+                                    f"{num_doc}; hallados={hallados[:3]}. No se guarda.",
+                                    "ERROR")
+                                resultado["valorados_integridad_error"].append(
+                                    {"cod_mensaje": cod_msg, "esperado": num_doc,
+                                     "hallados": hallados[:3]})
+                            elif not self_check["abortado"]:
+                                item["valorado"] = {
+                                    "tipo_valorado": valorado_tipo.value,
+                                    "num_documento": num_doc,
+                                    "pdf_bytes": body,
+                                    "pdf_texto": txt,
+                                }
+                                resultado["valorados_descargados"] += 1
 
                     resultado["mensajes"].append(item)
-                    time.sleep(random.uniform(0.5, 1.5))
+                    # Pausa SOLO tras descargas de deuda (no martillear). Los
+                    # informativos no bajan binario → sin pausa → buzón rápido.
+                    if es_deuda:
+                        time.sleep(random.uniform(0.5, 1.5))
 
             resultado["exito"] = True
             log(f"Scraping completo: {len(resultado['mensajes'])} mensajes capturados.", "OK")

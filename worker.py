@@ -157,16 +157,21 @@ async def _usuarios_de(session, contrib) -> list:
     return ids
 
 
-async def _procesar_y_notificar(session, contrib, forzar: bool) -> None:
+async def _procesar_y_notificar(session, contrib, forzar: bool,
+                                full: bool = False) -> None:
     """Scrapea/ingesta y, si aparecieron notificaciones NUEVAS, envía push.
 
     Detectamos las nuevas contando antes/después (sin tocar run_scraper, que es
     motor). El push NUNCA rompe el ciclo: cualquier fallo se loguea y se sigue.
+
+    full (zAlerta-46): True fuerza barrido COMPLETO (nocturno de seguridad);
+    False deja que run_scraper elija incremental si ya hubo un full previo.
     """
     n_antes = await session.scalar(
         select(func.count(Notificacion.id)).where(
             Notificacion.contribuyente_id == contrib.id)) or 0
-    await procesar_contribuyente(session, contrib, FRESCURA_HORAS, forzar=forzar)
+    await procesar_contribuyente(session, contrib, FRESCURA_HORAS,
+                                 forzar=forzar, full=full)
     # Prueba diferida del empresario: si el login real recién se confirmó, arranca.
     await _arrancar_prueba_si_corresponde(session, contrib)
     # ¿La credencial dejó de servir? marcar ERROR_CREDENCIAL + avisar (1 vez).
@@ -198,7 +203,8 @@ async def _procesar_solicitudes_manuales(session) -> int:
     log(f"PRIORIDAD: {len(solicitados)} actualización(es) solicitada(s).")
     for contrib in solicitados:
         try:
-            await _procesar_y_notificar(session, contrib, forzar=True)
+            # Manual "Actualizar ahora" → INCREMENTAL (rápido). zAlerta-46.
+            await _procesar_y_notificar(session, contrib, forzar=True, full=False)
         except Exception as e:
             log(f"  {contrib.ruc}: error inesperado (manual): {e}", "ERROR")
         finally:
@@ -309,7 +315,12 @@ async def _procesar_recordatorios(session) -> int:
 
 
 async def _procesar_fondo(session) -> int:
-    """Scrapea por frescura vencida (ciclo de fondo, no fuerza)."""
+    """Scrapea por frescura vencida (ciclo de fondo, no fuerza).
+
+    Corre SOLO en la ventana nocturna (gate en ciclo()), así que es el barrido
+    COMPLETO de seguridad (zAlerta-46, full=True): aunque el incremental diurno
+    burlara algo, el nocturno full lo recupera y actualiza ultimo_barrido_full_at.
+    """
     activos = list(await session.scalars(
         select(Contribuyente)
         .options(selectinload(Contribuyente.credencial))
@@ -317,7 +328,7 @@ async def _procesar_fondo(session) -> int:
 
     for contrib in activos:
         try:
-            await _procesar_y_notificar(session, contrib, forzar=False)
+            await _procesar_y_notificar(session, contrib, forzar=False, full=True)
         except Exception as e:
             log(f"  {contrib.ruc}: error inesperado (fondo): {e}", "ERROR")
     return len(activos)

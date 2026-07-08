@@ -363,6 +363,10 @@ class Contribuyente(Base, TimestampMixin):
     # Control de scraping
     ultimo_scrapeo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ultimo_scrapeo_ok: Mapped[bool | None] = mapped_column(Boolean)
+    # Último barrido COMPLETO exitoso (zAlerta-46). El incremental solo se activa
+    # si esto existe (hubo un full previo = base contra la que comparar). El primer
+    # scan y el barrido nocturno lo setean.
+    ultimo_barrido_full_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Aviso (push) "tu credencial dejó de servir" enviado UNA vez al entrar en
     # ERROR_CREDENCIAL (zAlerta-13 P2). Se limpia al reconectar.
     credencial_error_avisada: Mapped[bool] = mapped_column(

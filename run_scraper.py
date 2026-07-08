@@ -27,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from db import get_session
-from models import Contribuyente, CredencialSol, EstadoContribuyente
+from models import Contribuyente, CredencialSol, EstadoContribuyente, Notificacion
 from cifrado import descifrar_clave_sol
 from ingesta import ingestar_resultado
 
@@ -56,17 +56,20 @@ async def _contribuyentes_a_scrapear(session, ruc_filtro: str | None):
     return list(await session.scalars(q))
 
 
-def _scrapear_sync(ruc: str, usuario_sol: str, clave_sol: str) -> dict:
-    """Llama al scraper Playwright (sync) con las credenciales descifradas."""
+def _scrapear_sync(ruc: str, usuario_sol: str, clave_sol: str,
+                   conocidos: set | None = None) -> dict:
+    """Llama al scraper Playwright (sync) con las credenciales descifradas.
+    conocidos (zAlerta-46): set de cod_mensaje ya en BD → lectura incremental."""
     cfg = scraper.SunatConfig(
         ruc=ruc, usuario_sol=usuario_sol, clave_sol=clave_sol,
         headless=True,
     )
-    return scraper.scrapear_ruc(cfg)
+    return scraper.scrapear_ruc(cfg, conocidos=conocidos)
 
 
 async def procesar_contribuyente(session, contrib: Contribuyente,
-                                 frescura_horas: int, forzar: bool) -> None:
+                                 frescura_horas: int, forzar: bool,
+                                 full: bool = False) -> None:
     # ── Control de frescura: ¿hace falta tocar SUNAT? ──
     if not forzar and contrib.ultimo_scrapeo_ok and contrib.ultimo_scrapeo_at:
         antiguedad = datetime.now(TZ_LIMA) - contrib.ultimo_scrapeo_at
@@ -87,11 +90,23 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
         return
 
-    log(f"  {contrib.ruc}: scrapeando...")
+    # ── Decidir FULL vs INCREMENTAL (zAlerta-46) ──
+    # Full si: se pidió (barrido nocturno de seguridad) o NUNCA hubo un full
+    # exitoso (primer scan = base). Si no, incremental: solo lo nuevo.
+    hacer_full = full or (contrib.ultimo_barrido_full_at is None)
+    conocidos = None
+    if not hacer_full:
+        cods = await session.scalars(
+            select(Notificacion.cod_mensaje_sunat).where(
+                Notificacion.contribuyente_id == contrib.id))
+        conocidos = {str(c) for c in cods}
+    modo = "FULL" if hacer_full else f"incremental ({len(conocidos)} conocidos)"
+    log(f"  {contrib.ruc}: scrapeando [{modo}]...")
+
     # El scraper es sync (Playwright sync_api); lo corremos en un thread
     # para no bloquear el loop async.
     resultado = await asyncio.to_thread(
-        _scrapear_sync, contrib.ruc, cred.usuario_sol, clave)
+        _scrapear_sync, contrib.ruc, cred.usuario_sol, clave, conocidos)
 
     if not resultado.get("exito"):
         log(f"  {contrib.ruc}: scraping falló.", "ERROR")
@@ -102,7 +117,11 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
 
     stats = await ingestar_resultado(
         session, contrib.estudio_id, contrib.id, resultado)
-    log(f"  {contrib.ruc}: OK — {stats['mensajes_nuevos']} nuevos, "
+    # Un FULL exitoso sella la base contra la que compara el incremental.
+    if hacer_full:
+        contrib.ultimo_barrido_full_at = datetime.now(TZ_LIMA)
+        await session.commit()
+    log(f"  {contrib.ruc}: OK [{modo}] — {stats['mensajes_nuevos']} nuevos, "
         f"{stats['mensajes_duplicados']} duplicados, "
         f"{stats['adjuntos_nuevos']} adjuntos nuevos.", "OK")
 
