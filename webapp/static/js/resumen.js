@@ -44,6 +44,14 @@
   // ── Modal custom (sin diálogos nativos): detalle + orientación + PDFs ──
   function abrirModal(f) {
     if (!f) return;
+    // Marcar como LEÍDA al abrir el modal (zAlerta-47): server-side (compartido
+    // entre equipos) y quita el resalte "Nuevo" de esa tarjeta. No al cargar.
+    if (!f.leida && f.id) {
+      f.leida = true;
+      fetch('/api/notificacion/' + f.id + '/leida',
+        { method: 'POST', credentials: 'include' }).catch(() => {});
+      pintarLista();
+    }
     const sem = semColor(f);
     const orienta = ORIENTA[f.tipo] || ORIENTA.otro;
     const meta = [];
@@ -206,8 +214,12 @@
         ? '<span class="rsm-pdf-badge" title="Tiene PDF"><span class="material-symbols-outlined">picture_as_pdf</span></span>' : '');
     const monto = f.monto ? '<span class="rsm-c-monto">' + esc(f.monto) + '</span>' : '';
     const btnLabel = BTN_LABEL[f.tipo] || BTN_LABEL.otro;
-    return '<div class="rsm-card sem--' + sem + '" data-i="' + i + '" title="' + esc(SEM_TXT[sem]) + '">'
-      + '<div class="rsm-c-top"><b class="rsm-c-tipo">' + esc(tipoLegible(f)) + '</b>' + badge + '</div>'
+    // NUEVO (zAlerta-47): sin leer (server-side, compartido entre equipos).
+    const nueva = !f.leida;
+    const badgeNuevo = nueva ? '<span class="rsm-nuevo">Nuevo</span>' : '';
+    return '<div class="rsm-card sem--' + sem + (nueva ? ' rsm-card--nueva' : '')
+      + '" data-i="' + i + '" title="' + esc(SEM_TXT[sem]) + '">'
+      + '<div class="rsm-c-top"><b class="rsm-c-tipo">' + esc(tipoLegible(f)) + '</b>' + badgeNuevo + badge + '</div>'
       + '<div class="rsm-c-asunto">' + esc(f.detalle) + '</div>'
       + '<div class="rsm-c-meta">'
       + '<span class="rsm-c-fecha"><i class="ti ti-calendar"></i> ' + esc(f.fecha || '—') + '</span>'
