@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -43,10 +44,18 @@ from models import (
     SolicitudValidacionCredencial, EstadoValidacion, ahora_lima,
     EstudioContable, CredencialSol, EstadoSuscripcion, TipoCuenta,
     Recordatorio, ModoRecordatorio, Usuario, ETIQUETA_TIPO_DOCUMENTO,
+    TipoDocumento,
 )
 
 # Horarios (hora Lima) en que se permiten los push de recordatorio (no spamear).
 HORAS_RECORDATORIO = {8, 12, 17}
+# Horarios fijos del PUSH AGRUPADO (zAlerta-48 FASE C). 06:00 avisa lo de la
+# madrugada; el resto, lo nuevo desde el push anterior. Nada entre 19h y 06h.
+HORAS_PUSH = {6, 9, 11, 14, 17}
+# Tipos de deuda a destacar en el push agrupado.
+_DEUDA_TIPOS = {TipoDocumento.ORDEN_PAGO, TipoDocumento.MULTA,
+                TipoDocumento.COBRANZA_COACTIVA, TipoDocumento.FRACCIONAMIENTO,
+                TipoDocumento.RESOLUCION_DETERMINACION}
 
 # Días de prueba (zAlerta-11c D): arrancan al CONFIRMAR la conexión, no antes.
 DIAS_PRUEBA_EMPRESARIO = 7
@@ -180,13 +189,12 @@ async def _procesar_y_notificar(session, contrib, forzar: bool,
         select(func.count(Notificacion.id)).where(
             Notificacion.contribuyente_id == contrib.id)) or 0
     nuevas = n_despues - n_antes
+    # zAlerta-48 FASE C: NO se envía push aquí. Las notificaciones nuevas quedan
+    # con notificado_push=False y el push se AGRUPA en horarios fijos
+    # (_enviar_push_agrupado). Así no se despierta al usuario a media madrugada ni
+    # se le manda un push por cada revisión.
     if nuevas > 0:
-        try:
-            res = await push_service.notificar_nuevas(session, contrib, nuevas)
-            log(f"  {contrib.ruc}: {nuevas} nueva(s) → push a {res['usuarios']} "
-                f"usuario(s) ({res['enviadas']} enviada(s)).", "OK")
-        except Exception as e:
-            log(f"  {contrib.ruc}: push falló (sigo): {e}", "WARN")
+        log(f"  {contrib.ruc}: {nuevas} nueva(s) — push diferido a horario fijo.", "OK")
 
 
 async def _procesar_solicitudes_manuales(session) -> int:
@@ -314,12 +322,14 @@ async def _procesar_recordatorios(session) -> int:
     return enviados
 
 
-async def _procesar_fondo(session) -> int:
+async def _procesar_fondo(session, full: bool = False) -> int:
     """Scrapea por frescura vencida (ciclo de fondo, no fuerza).
 
-    Corre SOLO en la ventana nocturna (gate en ciclo()), así que es el barrido
-    COMPLETO de seguridad (zAlerta-46, full=True): aunque el incremental diurno
-    burlara algo, el nocturno full lo recupera y actualiza ultimo_barrido_full_at.
+    zAlerta-48 FASE B: corre SIEMPRE (día y noche); la FRESCURA (FRESCURA_HORAS)
+    limita a ~1 revisión/RUC cada pocas horas, sin martillear. De DÍA va
+    INCREMENTAL (full=False, ~20s/RUC); de NOCHE va FULL (full=True), que es la
+    red de seguridad de zAlerta-46 (recupera cualquier hueco + sella
+    ultimo_barrido_full_at). El push NO se envía aquí (se agrupa por horario).
     """
     activos = list(await session.scalars(
         select(Contribuyente)
@@ -328,10 +338,69 @@ async def _procesar_fondo(session) -> int:
 
     for contrib in activos:
         try:
-            await _procesar_y_notificar(session, contrib, forzar=False, full=True)
+            await _procesar_y_notificar(session, contrib, forzar=False, full=full)
         except Exception as e:
             log(f"  {contrib.ruc}: error inesperado (fondo): {e}", "ERROR")
     return len(activos)
+
+
+async def _enviar_push_agrupado(session) -> int:
+    """PUSH AGRUPADO por horarios fijos (zAlerta-48 FASE C).
+
+    Solo en HORAS_PUSH. Reúne las notificaciones NUEVAS aún no avisadas
+    (notificado_push=False), las agrupa por usuario y envía UN push por usuario
+    ("Tienes N avisos nuevos…", destacando deuda). Luego marca esas notificaciones
+    como avisadas → un solo push por notificación, sin repetir aunque el usuario no
+    lo abra. No depende de "¿vio el push?"."""
+    ahora = ahora_lima()
+    if ahora.hour not in HORAS_PUSH:
+        return 0
+    notifs = list(await session.scalars(
+        select(Notificacion).where(Notificacion.notificado_push.is_(False))))
+    if not notifs:
+        return 0
+
+    por_contrib = defaultdict(list)
+    for n in notifs:
+        por_contrib[n.contribuyente_id].append(n)
+    contribs = {c.id: c for c in await session.scalars(
+        select(Contribuyente).where(Contribuyente.id.in_(list(por_contrib.keys()))))}
+
+    # Acumular por usuario (un usuario puede vigilar varios RUCs).
+    por_usuario = defaultdict(lambda: {"total": 0, "deuda": 0})
+    for cid, lst in por_contrib.items():
+        contrib = contribs.get(cid)
+        if not contrib:
+            continue
+        deuda = sum(1 for n in lst if n.tipo_documento_enum in _DEUDA_TIPOS)
+        for uid in await _usuarios_de(session, contrib):
+            por_usuario[uid]["total"] += len(lst)
+            por_usuario[uid]["deuda"] += deuda
+
+    enviados = 0
+    for uid, d in por_usuario.items():
+        total, deuda = d["total"], d["deuda"]
+        if deuda > 0:
+            body = (f"Tienes {total} aviso(s) nuevo(s), {deuda} con deuda por "
+                    f"atender. Toca RESUMEN para revisarlos.")
+        else:
+            body = f"Tienes {total} aviso(s) nuevo(s) en tu Buzón SUNAT."
+        try:
+            await push_service.notificar_usuario(
+                session, uid, "Novedades en tu Buzón SUNAT", body,
+                url="/resumen?from=push", acciones=True)
+            enviados += 1
+        except Exception as e:
+            log(f"  push agrupado usuario {uid}: falló (sigo): {e}", "WARN")
+
+    # Marcar TODAS como avisadas (un push por notificación, próximo horario).
+    for n in notifs:
+        n.notificado_push = True
+        n.notificado_push_at = ahora
+    await session.commit()
+    log(f"PUSH AGRUPADO ({ahora.hour}h): {len(notifs)} notif nuevas → "
+        f"{enviados} usuario(s).", "OK")
+    return enviados
 
 
 async def ciclo() -> None:
@@ -342,13 +411,14 @@ async def ciclo() -> None:
         await _procesar_validaciones_credencial(session)
         await _procesar_recordatorios(session)
         await _procesar_solicitudes_manuales(session)
-        # Lectura masiva de buzones: SOLO en la ventana nocturna (zAlerta-12 P1.a).
-        if _en_ventana_nocturna():
-            n = await _procesar_fondo(session)
-            log(f"Ciclo completo ({n} activo(s) revisado(s)).", "OK")
-        else:
-            log(f"Fuera de ventana nocturna ({VENTANA_INICIO}h–{VENTANA_FIN}h "
-                "Lima): fondo en pausa; validaciones/manuales activas.", "INFO")
+        # Revisión de fondo SIEMPRE (zAlerta-48 FASE B): de noche FULL (seguridad),
+        # de día INCREMENTAL (~20s/RUC). La frescura limita la frecuencia (~cada
+        # FRESCURA_HORAS h), sin martillear. El push va aparte, por horario.
+        full = _en_ventana_nocturna()
+        n = await _procesar_fondo(session, full=full)
+        log(f"Ciclo completo ({n} activo(s); modo {'FULL nocturno' if full else 'incremental diurno'}).", "OK")
+        # Push AGRUPADO en horarios fijos (zAlerta-48 FASE C).
+        await _enviar_push_agrupado(session)
 
 
 async def main() -> None:

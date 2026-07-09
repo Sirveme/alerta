@@ -768,12 +768,16 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None) -> dict:
                         or msg.get("codMensa") or msg.get("codigo"))
 
             # ── Índice carpeta→mensaje (zAlerta-28) ──
-            # Barrido LIGERO por cada carpeta real (solo listados, sin abrir
-            # detalle ni PDFs) para saber a QUÉ carpeta pertenece cada mensaje.
-            # Reusa la sesión ya abierta (NO re-login). Es la señal oficial de
-            # SUNAT para clasificar ("Órdenes de Pago", "Ejecución Coactiva"...).
+            # Barrido LIGERO por cada carpeta real (solo listados) para saber a
+            # QUÉ carpeta pertenece cada mensaje (señal oficial de clasificación).
+            #
+            # zAlerta-48 FASE A: filtrar por codCarpeta específica es LENTO en SUNAT
+            # (~17s/llamada vs ~3s con codCarpeta=00 → ~70s del total incremental).
+            # En INCREMENTAL lo SALTAMOS: los pocos mensajes nuevos se clasifican
+            # por ASUNTO (capa robusta de zAlerta-32); el FULL nocturno (con
+            # per-carpeta) es la red de seguridad que re-etiqueta por carpeta.
             carpeta_de: dict[tuple[int, str], dict] = {}
-            for c in carpetas:
+            for c in ([] if conocidos is not None else carpetas):
                 if not isinstance(c, dict):
                     continue
                 cod_carp = str(c.get("codCarpeta") or "").strip()
