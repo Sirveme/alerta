@@ -1370,6 +1370,9 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-nuevo { font-size:.6rem; font-weight:800; text-transform:uppercase;
   letter-spacing:.05em; color:#fff; background:var(--marca); border-radius:999px;
   padding:2px 8px; margin-right:6px; vertical-align:middle; }
+/* zAlerta-48 · "Última actualización: HH:MM" */
+.rsm-actualizado { font-size:.8rem; color:var(--texto-suave); margin:-2px 0 10px;
+  display:inline-flex; align-items:center; gap:5px; }
 .rsm-c-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .rsm-c-tipo { font-size:.95rem; color:var(--texto); }
 .rsm-c-asunto { font-size:.85rem; color:var(--texto-suave); margin:4px 0 8px;
