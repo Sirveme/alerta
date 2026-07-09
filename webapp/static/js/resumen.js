@@ -149,6 +149,27 @@
 
   function pintarEstado(txt, cls) { estadoEl.textContent = txt; estadoEl.className = 'rsm-estado ' + (cls || ''); }
 
+  // ── "Última actualización" + rango "sin novedades" (zAlerta-48 FASE D) ──
+  let _ultimaAct = null;                    // ISO de la última revisión de SUNAT
+  function fmtHM(iso) {
+    const d = iso ? new Date(iso) : new Date();
+    if (isNaN(d)) return '';
+    return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+  }
+  function actualizarEncabezado(data) {
+    _ultimaAct = (data && data.ultima_actualizacion) || _ultimaAct;
+    const el = document.getElementById('rsm-actualizado');
+    if (!el) return;
+    if (_ultimaAct) {
+      const d = new Date(_ultimaAct);
+      const dia = d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
+      el.textContent = 'Última actualización: ' + fmtHM(_ultimaAct) + ', ' + dia;
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+    }
+  }
+
   // ── Semáforo: URGENCIA (de la carpeta SUNAT) + plazo (zAlerta-28) ──
   // rojo:  urgencia alta (Coactiva / Orden de Pago / Multa) AUNQUE no tenga
   //        fecha, o vence en <=7 días (o vencido).
@@ -305,11 +326,14 @@
     if (online && online.ok) {
       render(online, false);
       pintarEstado('Al día', 'ok');
+      actualizarEncabezado(online);
+      mostrarSplashPush(online.no_leidas);      // splash solo si hay novedades
       guardar(online);                          // background: queda offline
     } else {
       const cache = await leerCache();
       if (cache) {
         render(cache, true);
+        actualizarEncabezado(cache);
         pintarEstado('Sin conexión · datos guardados', 'off');
       } else {
         pintarEstado('Sin conexión', 'off');
@@ -376,28 +400,29 @@
       + '</div>';
   }
 
-  // ── Splash al entrar DESDE el push (zAlerta-17 P3), una vez por sesión ──
+  // ── Leyenda persistente + splash del push (zAlerta-17 P3 / zAlerta-48 FASE D) ──
   function mostrarSplash() {
-    const desdePush = new URLSearchParams(location.search).get('from') === 'push';
-    const cont = document.getElementById('rsm');
-    if (!cont) return;
-    // La mini-leyenda va siempre; el splash solo si vino del push.
-    if (desdePush && !sessionStorage.getItem('rsm_splash')) {
-      sessionStorage.setItem('rsm_splash', '1');
-      const s = document.createElement('div');
-      s.className = 'rsm-splash';
-      s.innerHTML = '<button class="rsm-splash-x" aria-label="Cerrar">&times;</button>'
-        + '<div class="rsm-splash-tit"><i class="ti ti-device-mobile-check"></i> '
-        + 'Esto es lo que dejamos en tu celular</div>'
-        + '<p class="rsm-splash-txt">Revisa con calma; queda guardado aquí, '
-        + 'incluso sin internet.</p>' + leyendaHTML();
-      cont.insertBefore(s, cont.firstChild);
-      s.querySelector('.rsm-splash-x').onclick = () => s.remove();
-    }
-    // Leyenda persistente sobre la tabla.
+    // Leyenda persistente sobre la lista (siempre).
     const ley = document.createElement('div');
     ley.innerHTML = leyendaHTML();
     wrap.parentNode.insertBefore(ley.firstChild, wrap);
+  }
+  // El splash amarillo "Esto es lo que dejamos en tu celular" solo cuando vino
+  // del push Y HAY algo nuevo (zAlerta-48 FASE D: no aparece con cero novedades).
+  function mostrarSplashPush(noLeidas) {
+    const desdePush = new URLSearchParams(location.search).get('from') === 'push';
+    const cont = document.getElementById('rsm');
+    if (!cont || !desdePush || !noLeidas || sessionStorage.getItem('rsm_splash')) return;
+    sessionStorage.setItem('rsm_splash', '1');
+    const s = document.createElement('div');
+    s.className = 'rsm-splash';
+    s.innerHTML = '<button class="rsm-splash-x" aria-label="Cerrar">&times;</button>'
+      + '<div class="rsm-splash-tit"><i class="ti ti-device-mobile-check"></i> '
+      + 'Tienes ' + noLeidas + ' novedad(es) en tu buzón</div>'
+      + '<p class="rsm-splash-txt">Revisa con calma; queda guardado aquí, '
+      + 'incluso sin internet.</p>' + leyendaHTML();
+    cont.insertBefore(s, cont.firstChild);
+    s.querySelector('.rsm-splash-x').onclick = () => s.remove();
   }
 
   // ── "Actualizar ahora" (zAlerta-36): dispara la lectura de día ──
@@ -442,12 +467,17 @@
       return;
     }
 
+    // Rango para el mensaje "sin novedades" (zAlerta-48 FASE D): desde la última
+    // revisión conocida hasta ahora. Se captura ANTES de refrescar.
+    const desdeIso = _ultimaAct;
     // Poller ÚNICO: para cuando la actualización que pedí TERMINÓ
     // (hay_lectura_activa === false), o crece el buzón, o vence el tope. zAlerta-44.
-    iniciarPoll((r) => terminar(
-      r.crecio ? 'Buzón actualizado'
-        : (r.termino ? 'Buzón actualizado — sin novedades'
-          : 'Listo, sin novedades por ahora')));
+    iniciarPoll((r) => {
+      if (r.crecio) { terminar('Buzón actualizado'); return; }
+      // Sin novedades: rango de horas claro y tranquilizador.
+      const desdeTxt = desdeIso ? ' desde las ' + fmtHM(desdeIso) : '';
+      terminar('No encontramos nada nuevo' + desdeTxt + ' (revisado ' + fmtHM() + ').');
+    });
   });
 
   mostrarSplash();
