@@ -17,7 +17,7 @@ import re
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 import uuid
@@ -171,6 +171,11 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                 (Contribuyente.ultimo_scrapeo_at.is_(None))
                 | (Contribuyente.actualizar_solicitado.is_(True))).limit(1))
         hay_lectura_activa = activa is not None
+        # Última vez que se revisó SUNAT (zAlerta-48 FASE D): la lectura más
+        # reciente entre los RUCs del usuario.
+        ultima = await session.scalar(
+            select(func.max(Contribuyente.ultimo_scrapeo_at)).where(cond))
+        ultima_actualizacion = ultima.isoformat() if ultima else None
 
     filas = []
     for n, ruc, razon in rows:
@@ -225,6 +230,8 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         "total": len(filas),
         "hay_lectura_activa": hay_lectura_activa,
         "lectura_pendiente": hay_lectura_activa,   # alias compat (JS viejo en caché)
+        "ultima_actualizacion": ultima_actualizacion,
+        "no_leidas": sum(1 for f in filas if not f.get("leida")),
         "filas": filas,
     })
 
