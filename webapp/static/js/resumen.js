@@ -233,7 +233,11 @@
       ? '<span class="rsm-pdf-badge" title="Documento de deuda en PDF"><span class="material-symbols-outlined">request_quote</span></span>'
       : ((f.adjuntos && f.adjuntos.length)
         ? '<span class="rsm-pdf-badge" title="Tiene PDF"><span class="material-symbols-outlined">picture_as_pdf</span></span>' : '');
-    const monto = f.monto ? '<span class="rsm-c-monto">' + esc(f.monto) + '</span>' : '';
+    // Monto: si está, lo mostramos; si es deuda SIN monto parseado, NUNCA "S/ 0"
+    // (engañoso) — un rótulo honesto (zAlerta-49). La deuda nunca se oculta.
+    const monto = f.monto
+      ? '<span class="rsm-c-monto">' + esc(f.monto) + '</span>'
+      : (f.tiene_deuda ? '<span class="rsm-c-monto rsm-c-monto--rev">Ver monto en el PDF</span>' : '');
     const btnLabel = BTN_LABEL[f.tipo] || BTN_LABEL.otro;
     // NUEVO (zAlerta-47): sin leer (server-side, compartido entre equipos).
     const nueva = !f.leida;
@@ -285,15 +289,21 @@
     const nInfo = _filas.length - nAccion;
     const deudaTotal = _filas.reduce((s, f) =>
       s + (f.tiene_deuda && typeof f.monto_num === 'number' ? f.monto_num : 0), 0);
+    // Deuda cuyo monto aún no se pudo leer (zAlerta-49): no falsear el total.
+    const deudaSinMonto = _filas.filter(
+      (f) => f.tiene_deuda && typeof f.monto_num !== 'number').length;
 
     // Métricas
     let metr = '<div class="rsm-card rsm-metr rsm-metr--rojo"><span class="rsm-metr-n">' + nAccion
       + '</span><span class="rsm-metr-l">Necesitan acción</span></div>'
       + '<div class="rsm-card rsm-metr rsm-metr--gris"><span class="rsm-metr-n">' + nInfo
       + '</span><span class="rsm-metr-l">Informativas</span></div>';
-    if (deudaTotal > 0) {
+    if (deudaTotal > 0 || deudaSinMonto > 0) {
+      const cifra = deudaTotal > 0 ? montoSoles(deudaTotal) : '—';
+      const nota = deudaSinMonto > 0
+        ? '<span class="rsm-metr-sub">+ ' + deudaSinMonto + ' por confirmar</span>' : '';
       metr += '<div class="rsm-card rsm-metr rsm-metr--deuda"><span class="rsm-metr-n">'
-        + montoSoles(deudaTotal) + '</span><span class="rsm-metr-l">Deuda total</span></div>';
+        + cifra + '</span><span class="rsm-metr-l">Deuda total' + nota + '</span></div>';
     }
 
     // Chips (solo los presentes; "Todo" siempre)
