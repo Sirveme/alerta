@@ -15,7 +15,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy import select, func
 
 from db import get_session
@@ -28,6 +28,7 @@ from ..estados import estado_conexion
 from ..deps import (
     UsuarioActual, usuario_actual, usuario_actual_opcional, requiere_escritura,
 )
+from ..deuda import deuda_estudio
 
 router = APIRouter(tags=["dashboard"])
 
@@ -229,13 +230,25 @@ async def dashboard(request: Request,
                 ~Contribuyente.id.in_(
                     select(ContribuyenteGrupo.contribuyente_id).where(
                         ContribuyenteGrupo.estudio_id == user.estudio_id))))
+        # Deuda agregada de toda la cartera (zAlerta-52). Multi-tenant por estudio.
+        deuda = await deuda_estudio(session, user.estudio_id)
     return templates.TemplateResponse(request, "dashboard.html", {
         "user": user,
         "resumen": resumen,
         "grupos": grupos,
         "total_clientes": total_clientes or 0,
         "sin_grupo": sin_grupo or 0,
+        "deuda": deuda,
     })
+
+
+@router.get("/api/estudio/deuda")
+async def api_estudio_deuda(user: UsuarioActual = Depends(usuario_actual)):
+    """Deuda agregada de la cartera del estudio (zAlerta-52). Multi-tenant: SOLO
+    los clientes del estudio del usuario. Alimenta el panel y el futuro export."""
+    async with get_session() as session:
+        data = await deuda_estudio(session, user.estudio_id)
+    return JSONResponse(data)
 
 
 @router.post("/grupos")

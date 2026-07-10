@@ -34,6 +34,7 @@ from cifrado import cifrar_clave_sol
 from ..core import templates, fecha_lima
 from ..deps import UsuarioActual, usuario_actual
 from ..estados import estado_conexion
+from ..deuda import extraer_monto, fmt_soles
 
 router = APIRouter(tags=["resumen"])
 
@@ -44,50 +45,10 @@ def _periodo_de(asunto: str | None) -> str:
     return "—"
 
 
-def _num(s: str) -> float | None:
-    """'1,164' / '1,234.00' → float. Usa la coma como separador de miles."""
-    try:
-        return float((s or "").replace(",", "").strip())
-    except ValueError:
-        return None
-
-
-# Anclas de monto en el PDF de deuda (zAlerta-38; provisional hasta el parser
-# estructurado de zAlerta-39). Calibradas con docs reales del RUC de prueba:
-#   OP/Multa: "...Monto Total S/ <importe> S/ <interés> S/ <total>"  → el 3º.
-_RE_MONTO_TOTAL3 = re.compile(
-    r"Monto\s*Total\s*S/\s*[\d.,]+\s*S/\s*[\d.,]+\s*S/\s*([\d.,]+)", re.I)
-_RE_MONTO_ANCLA = re.compile(
-    r"(?:total\s+deuda(?:\s+exigible)?|deuda\s+exigible|monto\s+total)"
-    r"[^S]{0,40}S/\s*([\d.,]+)", re.I)
-_RE_MONTO_TODOS = re.compile(r"S/\s*([\d.,]+)")
-
-
-def _monto_de_texto(texto: str | None) -> float | None:
-    """Extrae el MONTO TOTAL de deuda del pdf_texto crudo (provisional).
-
-    Prioridad: (1) bloque 'Monto Total S/ a S/ b S/ c' → c (OP/Multa);
-    (2) ancla 'total deuda exigible / monto total' → primer S/;
-    (3) fallback: el mayor importe S/ del documento (Coactiva/Fraccionamiento)."""
-    if not texto:
-        return None
-    m = _RE_MONTO_TOTAL3.search(texto)
-    if m:
-        return _num(m.group(1))
-    m = _RE_MONTO_ANCLA.search(texto)
-    if m:
-        return _num(m.group(1))
-    montos = [v for v in (_num(x) for x in _RE_MONTO_TODOS.findall(texto))
-              if v is not None]
-    return max(montos) if montos else None
-
-
-def _monto_fmt(monto: float | None) -> str | None:
-    """Formato es-PE: 1164.0 → 'S/ 1,164'. None si no hay monto."""
-    if monto is None:
-        return None
-    entero = abs(monto - round(monto)) < 0.005
-    return "S/ " + (f"{monto:,.0f}" if entero else f"{monto:,.2f}")
+# Monto de deuda: fuente ÚNICA en webapp/deuda.py (zAlerta-52) — sin copias
+# divergentes. Alias locales para no tocar el resto del archivo.
+_monto_de_texto = extraer_monto
+_monto_fmt = fmt_soles
 
 
 @router.get("/resumen", response_class=HTMLResponse)
