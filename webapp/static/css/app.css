@@ -1382,6 +1382,11 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-c-fecha { color:var(--texto-suave); display:inline-flex; align-items:center; gap:4px; }
 .rsm-c-fecha .ti { font-size:14px; }
 .rsm-c-monto { font-weight:800; color:var(--u-urgente); }
+/* zAlerta-49 · deuda sin monto parseado: rótulo honesto (no "S/ 0") */
+.rsm-c-monto--rev { color:var(--texto-suave); font-weight:600; font-style:italic;
+  font-size:.78rem; }
+.rsm-metr-sub { display:block; font-size:.66rem; color:var(--u-importante);
+  font-weight:700; margin-top:1px; }
 .rsm-c-vence { color:var(--texto); font-weight:600; }
 .rsm-c-tag { color:var(--texto-suave); font-style:italic; }
 .rsm-c-tag.rsm-lbl--rojo { color:var(--u-urgente); font-style:normal; font-weight:700; }
