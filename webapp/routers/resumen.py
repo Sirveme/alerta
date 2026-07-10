@@ -398,7 +398,12 @@ async def cred_guardar(contribuyente_id: uuid.UUID, request: Request,
                 clave_sol_cifrada=cifrar_clave_sol(clave_sol),
                 tipo_usuario=2, quien_cargo=user.id, valida=True,
                 ultimo_login_ok_at=ahora_lima()))
-        if contrib.estado == EstadoContribuyente.ERROR_CREDENCIAL:
+        # Guardar una credencial válida es RECONECTAR: reactiva el RUC venga de
+        # ERROR_CREDENCIAL o de INACTIVO (zAlerta-51: antes quedaba pegado en
+        # INACTIVO tras desconectar+reconectar → el fondo, que filtra estado=ACTIVO,
+        # lo saltaba del ciclo automático).
+        if contrib.estado in (EstadoContribuyente.ERROR_CREDENCIAL,
+                              EstadoContribuyente.INACTIVO):
             contrib.estado = EstadoContribuyente.ACTIVO
         contrib.credencial_error_avisada = False
         # Primera lectura inmediata (zAlerta-27): guardar una credencial válida
