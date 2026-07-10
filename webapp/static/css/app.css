@@ -1988,3 +1988,50 @@ a.tarjeta-link { display:block; color:inherit; }
   border-top:1px solid var(--borde); padding-top:14px; }
 .lp-foot-links { margin:0 0 8px; }
 .lp-foot-links a { color:var(--marca); text-decoration:none; font-weight:700; }
+
+/* ══════════════════════════════════════════════════════════════════
+   zAlerta-52 · Panel del contador: deuda agregada de la cartera
+   ══════════════════════════════════════════════════════════════════ */
+.pd { margin:18px 0 8px; }
+.pd-titulo { font-size:1.15rem; margin:0; color:var(--texto); }
+.pd-buscar { width:100%; margin:10px 0 12px; padding:10px 12px; border-radius:10px;
+  border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font:inherit; }
+.pd-bloques { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+@media (min-width:640px) { .pd-bloques { grid-template-columns:repeat(4,1fr); } }
+.pd-bloque { display:flex; flex-direction:column; gap:3px; text-align:left; cursor:pointer;
+  padding:13px 14px; border-radius:12px; background:var(--superficie);
+  border:1px solid var(--borde); border-left:5px solid var(--borde); }
+.pd-bloque:hover { border-color:var(--marca); }
+.pd-bloque--on { box-shadow:0 0 0 2px color-mix(in srgb,var(--marca) 40%,transparent); }
+.pd-bloque--cobranza_coactiva { border-left-color:var(--u-critica); }
+.pd-bloque--orden_pago { border-left-color:var(--u-urgente); }
+.pd-bloque--resolucion_multa { border-left-color:var(--u-importante); }
+.pd-bloque--fraccionamiento { border-left-color:var(--u-aldia); }
+.pd-bloque--resolucion_determinacion { border-left-color:var(--u-vip); }
+.pd-b-tipo { font-size:.74rem; font-weight:700; color:var(--texto-suave);
+  text-transform:uppercase; letter-spacing:.02em; }
+.pd-b-total { font-size:1.3rem; font-weight:800; color:var(--texto); line-height:1.1; }
+.pd-b-meta { font-size:.72rem; color:var(--texto-suave); }
+.pd-b-meta b { color:var(--u-importante); }
+/* Drill-down */
+.pd-drill { margin-top:14px; display:flex; flex-direction:column; gap:12px; }
+.pd-drill-head { font-size:1rem; color:var(--texto); }
+.pd-cliente { background:var(--superficie); border:1px solid var(--borde);
+  border-radius:12px; padding:12px 14px; }
+.pd-cli-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px;
+  flex-wrap:wrap; margin-bottom:8px; }
+.pd-cli-razon { display:block; color:var(--texto); }
+.pd-cli-ruc { font-size:.78rem; color:var(--texto-suave); }
+.pd-cli-total { font-size:1.05rem; font-weight:800; color:var(--u-urgente); white-space:nowrap; }
+.pd-cli-pc { font-size:.68rem; color:var(--u-importante); font-weight:700; }
+.pd-tabla-wrap { overflow-x:auto; }
+.pd-tabla { width:100%; border-collapse:collapse; font-size:.82rem; }
+.pd-tabla th { text-align:left; color:var(--texto-suave); font-weight:600; font-size:.72rem;
+  border-bottom:1px solid var(--borde); padding:4px 8px 6px; white-space:nowrap; }
+.pd-tabla td { padding:6px 8px; border-bottom:1px solid var(--borde); color:var(--texto); }
+.pd-td-monto { text-align:right; white-space:nowrap; }
+.pd-monto { font-weight:800; color:var(--u-urgente); }
+.pd-monto--rev { font-weight:600; font-style:italic; color:var(--texto-suave);
+  text-decoration:none; }
+.pd-tabla .material-symbols-outlined { font-size:16px; color:var(--u-urgente);
+  vertical-align:middle; }
