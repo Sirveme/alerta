@@ -137,14 +137,26 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         else:
             cond = Contribuyente.estudio_id == user.estudio_id
         sub = select(Contribuyente.id).where(cond)
+        # Las 40 notificaciones más recientes (informativos incluidos)…
+        recientes_ids = set(await session.scalars(
+            select(Notificacion.id).where(Notificacion.contribuyente_id.in_(sub))
+            .order_by(Notificacion.fecha_publica_sunat.desc().nullslast(),
+                      Notificacion.creado_at.desc()).limit(40)))
+        # …MÁS todas las que tienen DEUDA (documento_valorado). zAlerta-49: la
+        # deuda NUNCA se oculta por el LIMIT — antes 7 de 9 Órdenes de Pago
+        # (fecha vieja) caían fuera del top-40 y no se mostraban.
+        deuda_ids = set(await session.scalars(
+            select(DocumentoValorado.notificacion_id)
+            .join(Contribuyente, Contribuyente.id == DocumentoValorado.contribuyente_id)
+            .where(cond, DocumentoValorado.notificacion_id.is_not(None))))
+        todos_ids = recientes_ids | deuda_ids
         rows = (await session.execute(
             select(Notificacion, Contribuyente.ruc, Contribuyente.razon_social)
             .join(Contribuyente, Contribuyente.id == Notificacion.contribuyente_id)
             .options(selectinload(Notificacion.adjuntos))
-            .where(Notificacion.contribuyente_id.in_(sub))
+            .where(Notificacion.id.in_(todos_ids))
             .order_by(Notificacion.fecha_publica_sunat.desc().nullslast(),
-                      Notificacion.creado_at.desc())
-            .limit(40))).all()
+                      Notificacion.creado_at.desc()))).all()
         # Recordatorios activos del usuario (notif_id → modo) para pintar estado.
         recs = {str(nid): (modo.value if hasattr(modo, "value") else modo)
                 for nid, modo in (await session.execute(
