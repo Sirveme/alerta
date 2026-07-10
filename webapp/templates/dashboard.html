@@ -13,6 +13,29 @@
 
 {% include "_resumen.html" %}
 
+{% if deuda and deuda.tipos_orden %}
+<section class="pd" id="pd-deuda">
+  <div class="fila spread">
+    <h2 class="pd-titulo">Deuda de tu cartera</h2>
+    <span class="muted">{{ deuda.total_clientes }} cliente(s)</span>
+  </div>
+  <input class="pd-buscar" id="pd-buscar" type="search"
+         placeholder="Buscar cliente por RUC o razón social…" autocomplete="off">
+  <div class="pd-bloques">
+    {% for t in deuda.tipos_orden %}{% set b = deuda.por_tipo[t] %}
+    <button class="pd-bloque pd-bloque--{{ t }}" data-tipo="{{ t }}">
+      <span class="pd-b-tipo">{{ b.label }}</span>
+      <span class="pd-b-total">{{ b.total_fmt or '—' }}</span>
+      <span class="pd-b-meta">{{ b.n_clientes }} cliente(s) · {{ b.n_docs }} doc(s)
+        {%- if b.por_confirmar %} · <b>+{{ b.por_confirmar }} por confirmar</b>{% endif %}</span>
+    </button>
+    {% endfor %}
+  </div>
+  <div class="pd-drill" id="pd-drill" hidden></div>
+</section>
+<script id="pd-data" type="application/json">{{ deuda | tojson }}</script>
+{% endif %}
+
 {% if not grupos %}
   <div class="tarjeta">
     <p>Aún no tienes grupos. Empieza creando los grupos por régimen tributario.</p>
@@ -55,4 +78,8 @@
 <p class="muted mt">{{ sin_grupo }} cliente(s) sin grupo —
   <a href="/contribuyentes">verlos todos</a>.</p>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/panel-deuda.js"></script>
 {% endblock %}
