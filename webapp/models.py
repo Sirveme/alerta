@@ -28,12 +28,12 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
     Boolean, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text,
-    UniqueConstraint, Index, func,
+    UniqueConstraint, Index, CheckConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -979,4 +979,140 @@ class ArticuloBlog(Base, TimestampMixin):
         Enum(EstadoArticulo, native_enum=False, length=20),
         default=EstadoArticulo.BORRADOR, nullable=False)
     fecha_publicacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    vistas: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# ACCESO INSTITUCIONAL — FASE 1 (zAlerta-54)
+# ─────────────────────────────────────────────────────────────────────
+# Separa IDENTIDAD (persona que se autentica, un DNI = una fila) de sus
+# ACCESOS (permiso persona → buzón, con cargo y vigencia). Reemplazará la
+# mitad "identidad + pertenencia" de Usuario, pero en esta fase las tablas
+# quedan VACÍAS y SIN USO: nadie las lee ni escribe todavía. El sistema se
+# comporta idéntico. Backfill = Fase 2; dual-read = Fase 3; cutover = Fase 4.
+# Diseño completo en zAlerta-53-RESULTADO-DisenoAccesoInstitucional.md.
+# ═════════════════════════════════════════════════════════════════════
+class CargoInstitucional(str, enum.Enum):
+    """Título del acceso dentro de una institución/organización (zAlerta-54).
+    Se guarda como VARCHAR (native_enum=False → nombre del miembro). OTRO usa
+    el campo libre `cargo_libre`."""
+    DECANO = "decano"
+    DIRECTOR = "director"
+    CONTADOR = "contador"
+    ADMINISTRADOR = "administrador"
+    ASISTENTE = "asistente"
+    DUENO = "dueno"
+    OTRO = "otro"
+
+
+class RolSistema(str, enum.Enum):
+    """Rol de SISTEMA de una persona (zAlerta-58). Transversal a los accesos:
+    SOPORTE_GLOBAL ve TODOS los buzones (solo lectura, auditable). NULL = normal."""
+    SOPORTE_GLOBAL = "soporte_global"
+
+
+class Persona(Base, TimestampMixin):
+    """Identidad que se autentica. Login SOLO por DNI (zAlerta-58, decisión
+    permanente): un DNI = una fila. WhatsApp es solo contacto, nunca identidad.
+    La credencial (Argon2) se copia/crea aquí en el backfill (zAlerta-58)."""
+    __tablename__ = "personas"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    dni: Mapped[str] = mapped_column(String(8), unique=True, nullable=False, index=True)
+    nombre_completo: Mapped[str | None] = mapped_column(String(255))
+    whatsapp: Mapped[str | None] = mapped_column(String(20))   # solo contacto
+    correo: Mapped[str | None] = mapped_column(String(255))
+    # Argon2 (mismo hashing que el resto).
+    clave_hash: Mapped[str | None] = mapped_column(String(255))
+    # Clave inicial = DNI → forzar cambio en el primer login (personas nuevas).
+    debe_cambiar_clave: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Rol de sistema (SOPORTE_GLOBAL = ve todo, solo lectura). NULL = normal.
+    rol_sistema: Mapped[RolSistema | None] = mapped_column(
+        Enum(RolSistema, native_enum=False, length=20), nullable=True)
+
+    accesos: Mapped[list["Acceso"]] = relationship(
+        back_populates="persona", cascade="all, delete-orphan")
+
+
+class Acceso(Base, TimestampMixin):
+    """Permiso persona → buzón, con cargo y vigencia (zAlerta-54).
+    Destino DUAL, exactamente uno: `estudio_id` (acceso a TODA la organización)
+    o `contribuyente_id` (acceso a UN solo buzón — el caso asistente). Un acceso
+    con `vigencia_fin < hoy` deja de dar visibilidad (declarativo, sin job).
+    VACÍA y SIN USO en Fase 1."""
+    __tablename__ = "accesos"
+    __table_args__ = (
+        # Destino dual: exactamente uno de estudio_id / contribuyente_id.
+        CheckConstraint(
+            "(estudio_id IS NOT NULL) <> (contribuyente_id IS NOT NULL)",
+            name="ck_acceso_destino"),
+        # cargo_libre solo tiene sentido cuando el cargo es OTRO.
+        CheckConstraint(
+            "cargo_libre IS NULL OR cargo = 'OTRO'",
+            name="ck_acceso_cargo_libre"),
+        Index("ix_acceso_persona", "persona_id"),
+        Index("ix_acceso_estudio", "estudio_id"),
+        Index("ix_acceso_contribuyente", "contribuyente_id"),
+        Index("ix_acceso_vigencia_fin", "vigencia_fin"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+
+    # Destino (exactamente uno, por el CHECK ck_acceso_destino).
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=True)
+    contribuyente_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=True)
+
+    # Permisos (reusa RolUsuario) + título institucional (cargo).
+    rol: Mapped[RolUsuario] = mapped_column(
+        Enum(RolUsuario, native_enum=False, length=20),
+        default=RolUsuario.CONTADOR, nullable=False)
+    cargo: Mapped[CargoInstitucional | None] = mapped_column(
+        Enum(CargoInstitucional, native_enum=False, length=20), nullable=True)
+    cargo_libre: Mapped[str | None] = mapped_column(String(60))
+
+    # Vigencia declarativa: fin NULL = sin fin; fin < hoy = no da visibilidad.
+    vigencia_inicio: Mapped[date] = mapped_column(
+        Date, default=lambda: ahora_lima().date(), nullable=False)
+    vigencia_fin: Mapped[date | None] = mapped_column(Date, nullable=True)
+    es_solo_lectura: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    persona: Mapped["Persona"] = relationship(back_populates="accesos")
+    # Relaciones one-directional al destino: NO tocan los modelos existentes.
+    estudio: Mapped["EstudioContable | None"] = relationship(
+        foreign_keys=[estudio_id])
+    contribuyente: Mapped["Contribuyente | None"] = relationship(
+        foreign_keys=[contribuyente_id])
+
+
+class AuditoriaSoporte(Base):
+    """Registro de acceso de un SOPORTE_GLOBAL a un buzón ajeno (zAlerta-58).
+    Estructura ahora; el INSERT se cablea en Fase 3 cuando el código lea accesos.
+    El buzón se identifica por estudio_id y/o contribuyente_id."""
+    __tablename__ = "auditoria_soporte"
+    __table_args__ = (
+        Index("ix_auditoria_persona", "persona_id"),
+        Index("ix_auditoria_creado", "creado_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="SET NULL"),
+        nullable=True)
+    contribuyente_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="SET NULL"),
+        nullable=True)
+    accion: Mapped[str] = mapped_column(String(20), default="VER", nullable=False)
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
