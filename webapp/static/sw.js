@@ -5,7 +5,7 @@
    Push: handler listo; el ENVÍO real es una fase aparte.
    ═══════════════════════════════════════════════════════════════════ */
 
-const CACHE = 'alertape-v45';
+const CACHE = 'alertape-v46';
 // Nunca cachear video ni respuestas parciales (Range/206): Cache Storage no
 // admite 206 y lanzaría en cache.put (zAlerta-31 TEMA A).
 const RE_VIDEO = /\.(mp4|webm|mov|m4v)(\?|$)/i;
@@ -17,8 +17,11 @@ const ASSETS = [
   '/static/js/push.js',
   '/static/js/dock.js',
   '/static/js/onboarding.js',
+  '/static/js/pwa.js',
   '/static/img/favicon.svg',
   '/static/img/icono.svg',
+  '/static/img/icon-192.png',
+  '/static/img/icon-512.png',
   '/manifest.json',
 ];
 
@@ -65,12 +68,34 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // HTML / navegación: network-first con fallback a caché
+  // HTML / navegación: network-first, y OFFLINE sirve la última página cacheada
+  // (zAlerta-64): al perder red, se muestra la lista guardada del buzón —
+  // resumen.js la rehidrata desde IndexedDB— en vez de "Sin conexión".
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).catch(() => caches.match(req).then((hit) => hit ||
-        new Response('<h1>Sin conexión</h1><p>Reabre la app cuando tengas red.</p>',
-          { headers: { 'Content-Type': 'text/html; charset=utf-8' } })))
+      fetch(req).then((res) => {
+        // Guardar una copia de las navegaciones OK para servirlas sin red.
+        if (res && res.status === 200 && res.type === 'basic') {
+          const copia = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
+        }
+        return res;
+      }).catch(async () => {
+        // 1) la misma URL cacheada; 2) el buzón (/resumen) como mejor fallback;
+        // 3) la raíz; 4) recién ahí, el aviso de sin conexión.
+        const cache = await caches.open(CACHE);
+        return (await cache.match(req))
+          || (await cache.match('/resumen'))
+          || (await cache.match('/'))
+          || new Response(
+              '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+              '<div style="font-family:system-ui;background:#0E1117;color:#F0F3F8;min-height:100vh;' +
+              'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px">' +
+              '<h1 style="margin:0 0 8px">Sin conexión</h1>' +
+              '<p style="color:#9aa4b2;max-width:22rem">Abre la app una vez con internet para poder revisar ' +
+              'tu buzón guardado sin conexión. Los documentos PDF sí necesitan red.</p></div>',
+              { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      })
     );
   }
 });
@@ -82,8 +107,16 @@ self.addEventListener('push', (e) => {
   try { if (e.data) data = e.data.json(); } catch (_) {}
   const opts = {
     body: data.body || '',
-    icon: '/static/img/icono.svg',     // logo alerta.pe (colapsado)
-    badge: '/static/img/icono.svg',
+    icon: '/static/img/icon-192.png',  // logo alerta.pe (PNG para máxima compat)
+    badge: '/static/img/icon-192.png',
+    // Notoriedad (zAlerta-64): vibra, suena (silent:false) y re-avisa si llega
+    // algo nuevo del mismo buzón sin apilar en silencio.
+    vibrate: [200, 100, 200],
+    silent: false,
+    tag: data.tag || 'alertape-buzon',
+    renotify: true,
+    // La deuda/urgente NO se descarta sola: se queda hasta que la persona la ve.
+    requireInteraction: !!data.requiere,
     data: { url: data.url || '/resumen?from=push' },
   };
   // Imagen grande FIJA = leyenda de colores del semáforo (la sirve el backend).
