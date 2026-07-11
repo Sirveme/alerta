@@ -33,6 +33,12 @@ class UsuarioActual:
     rol: RolUsuario
     nombre: str
     tipo_cuenta: str = TipoCuenta.ESTUDIO.value
+    # ── Acceso Institucional (zAlerta-60, Fase 3) ──
+    persona_id: uuid.UUID | None = None       # login por persona (nuevo); None = login viejo
+    rol_sistema: str | None = None            # 'SOPORTE_GLOBAL' → ve todos los buzones
+    tiene_usuario: bool = True                # ¿hay fila en `usuarios`? (para FKs usuario_id)
+    solo_lectura_ctx: bool = False            # es_solo_lectura del acceso activo
+    multi_contexto: bool = False              # tiene >1 buzón → mostrar "cambiar buzón"
 
     @property
     def es_admin(self) -> bool:
@@ -44,9 +50,33 @@ class UsuarioActual:
         return self.tipo_cuenta == TipoCuenta.EMPRESARIO.value
 
     @property
+    def es_soporte_global(self) -> bool:
+        """SOPORTE_GLOBAL (zAlerta-60): ve todos los buzones, solo lectura, auditado."""
+        return self.rol_sistema == "SOPORTE_GLOBAL"
+
+    @property
     def solo_lectura(self) -> bool:
-        """Asistente o empresario = solo lectura (zAlerta-01 B.1 / zAlerta-06)."""
-        return self.rol == RolUsuario.ASISTENTE or self.es_empresario
+        """Asistente, empresario o acceso marcado es_solo_lectura = solo lectura."""
+        return (self.rol == RolUsuario.ASISTENTE or self.es_empresario
+                or self.solo_lectura_ctx)
+
+
+def _desde_sesion(sesion: dict) -> UsuarioActual:
+    """Construye UsuarioActual desde el payload de la cookie. Tolera cookies
+    viejas (sin los campos de Fase 3) con defaults."""
+    pid = sesion.get("pid")
+    return UsuarioActual(
+        id=uuid.UUID(sesion["uid"]),
+        estudio_id=uuid.UUID(sesion["eid"]),
+        rol=RolUsuario(sesion["rol"]),
+        nombre=sesion.get("nombre", ""),
+        tipo_cuenta=sesion.get("tc", TipoCuenta.ESTUDIO.value),
+        persona_id=uuid.UUID(pid) if pid else None,
+        rol_sistema=sesion.get("rs"),
+        tiene_usuario=sesion.get("tu", True),
+        solo_lectura_ctx=sesion.get("sl", False),
+        multi_contexto=sesion.get("mc", False),
+    )
 
 
 def usuario_actual(request: Request) -> UsuarioActual:
@@ -55,13 +85,7 @@ def usuario_actual(request: Request) -> UsuarioActual:
     if not sesion:
         raise RedirigirALogin()
     try:
-        return UsuarioActual(
-            id=uuid.UUID(sesion["uid"]),
-            estudio_id=uuid.UUID(sesion["eid"]),
-            rol=RolUsuario(sesion["rol"]),
-            nombre=sesion.get("nombre", ""),
-            tipo_cuenta=sesion.get("tc", TipoCuenta.ESTUDIO.value),
-        )
+        return _desde_sesion(sesion)
     except (KeyError, ValueError):
         raise RedirigirALogin()
 
@@ -75,13 +99,7 @@ def usuario_actual_opcional(request: Request) -> "UsuarioActual | None":
     if not sesion:
         return None
     try:
-        return UsuarioActual(
-            id=uuid.UUID(sesion["uid"]),
-            estudio_id=uuid.UUID(sesion["eid"]),
-            rol=RolUsuario(sesion["rol"]),
-            nombre=sesion.get("nombre", ""),
-            tipo_cuenta=sesion.get("tc", TipoCuenta.ESTUDIO.value),
-        )
+        return _desde_sesion(sesion)
     except (KeyError, ValueError):
         return None
 

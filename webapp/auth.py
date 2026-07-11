@@ -33,7 +33,10 @@ from argon2.exceptions import VerifyMismatchError, InvalidHashError
 from sqlalchemy import or_
 
 from db import get_session
-from models import Usuario, EstudioContable, RolUsuario, ahora_lima
+from models import (
+    Usuario, EstudioContable, RolUsuario, ahora_lima,
+    Persona, Acceso, AuditoriaSoporte,
+)
 
 from .core import templates
 
@@ -85,14 +88,72 @@ def leer_sesion(token: str | None) -> dict | None:
 
 
 def crear_token_usuario(usuario: Usuario, tipo_cuenta: str = "estudio") -> str:
+    """Token del login VIEJO (respaldo dual-read). tiene_usuario siempre True."""
     return firmar_sesion({
         "uid": str(usuario.id),
         "eid": str(usuario.estudio_id),
         "rol": usuario.rol.value,
         "tc": tipo_cuenta,            # tipo de cuenta (estudio | empresario)
         "nombre": usuario.nombre,
+        "tu": True,
         "exp": int(time.time()) + DURACION_SESION,
     })
+
+
+def crear_token_persona(persona: "Persona", estudio: "EstudioContable",
+                        acceso: "Acceso | None", tiene_usuario: bool,
+                        multi: bool) -> str:
+    """Token del login NUEVO (Acceso Institucional, zAlerta-60). El contexto
+    activo (eid/tc/rol) sale del acceso elegido → las queries existentes
+    (WHERE estudio_id==...) siguen funcionando sin cambios."""
+    return firmar_sesion({
+        "pid": str(persona.id),
+        # uid: para Duilio coincide con su usuarios.id (get(Usuario) funciona);
+        # para personas sin usuario es el persona.id (get(Usuario) → None, tolerado).
+        "uid": str(persona.id),
+        "eid": str(estudio.id),
+        "rol": (acceso.rol.value if acceso else RolUsuario.CONTADOR.value),
+        "tc": estudio.tipo_cuenta,
+        "rs": (persona.rol_sistema.name if persona.rol_sistema else None),
+        "tu": tiene_usuario,
+        "sl": bool(acceso.es_solo_lectura) if acceso else True,
+        "mc": multi,
+        "nombre": persona.nombre_completo or "",
+        "exp": int(time.time()) + DURACION_SESION,
+    })
+
+
+async def accesos_vigentes(session, persona_id):
+    """Accesos de la persona con vigencia vigente (fin NULL o >= hoy)."""
+    hoy = ahora_lima().date()
+    return (await session.execute(
+        select(Acceso).where(
+            Acceso.persona_id == persona_id,
+            or_(Acceso.vigencia_fin.is_(None), Acceso.vigencia_fin >= hoy))
+    )).scalars().all()
+
+
+async def _resolver_contexto_persona(session, persona) -> "tuple | None":
+    """Resuelve el contexto de entrada de una persona: (estudio, acceso, multi,
+    tiene_usuario). Devuelve None si no tiene accesos vigentes ni es soporte."""
+    accesos = await accesos_vigentes(session, persona.id)
+    soporte = persona.rol_sistema is not None and persona.rol_sistema.name == "SOPORTE_GLOBAL"
+    tiene_usuario = bool(await session.scalar(
+        select(Usuario.id).where(Usuario.dni == persona.dni)))
+    if accesos:
+        acceso = accesos[0]
+        estudio = await session.get(EstudioContable, acceso.estudio_id)
+    elif soporte:
+        estudio = await session.scalar(
+            select(EstudioContable).where(EstudioContable.activo == True)  # noqa: E712
+            .order_by(EstudioContable.razon_social).limit(1))
+        acceso = None
+    else:
+        return None
+    if estudio is None:
+        return None
+    multi = len(accesos) > 1 or soporte
+    return estudio, acceso, multi, tiene_usuario
 
 
 def set_cookie_sesion(resp, token: str) -> None:
@@ -138,7 +199,30 @@ async def login_post(
 ):
     ident = (dni or "").strip()
     async with get_session() as session:
-        # Login por DNI (estudio) o por WhatsApp (empresario, zAlerta-06).
+        # ═══ DUAL-READ (zAlerta-60) ═══
+        # 1) Modelo NUEVO: persona por DNI. Si resuelve, manda el nuevo.
+        persona = await session.scalar(select(Persona).where(Persona.dni == ident))
+        if (persona and persona.clave_hash
+                and verificar_clave(persona.clave_hash, clave)):
+            ctx = await _resolver_contexto_persona(session, persona)
+            if ctx is None:
+                return templates.TemplateResponse(
+                    request, "login.html",
+                    {"error": "Tu usuario no tiene buzones activos. "
+                              "Contacta a soporte."}, status_code=403)
+            estudio, acceso, multi, tiene_usuario = ctx
+            token = crear_token_persona(persona, estudio, acceso, tiene_usuario, multi)
+            # Clave-DNI temporal → forzar cambio antes de operar.
+            if persona.debe_cambiar_clave:
+                destino = "/cambiar-clave"
+            else:
+                destino = "/seleccionar-buzon" if multi else "/"
+            resp = RedirectResponse(destino, status_code=303)
+            set_cookie_sesion(resp, token)
+            return resp
+
+        # 2) RESPALDO: login VIEJO (usuarios) — tal cual funciona hoy.
+        #    DNI (estudio) o WhatsApp (empresario, zAlerta-06).
         usuario = await session.scalar(
             select(Usuario).where(
                 or_(Usuario.dni == ident, Usuario.whatsapp == ident),
@@ -194,6 +278,26 @@ async def cambiar_clave_post(
             request, "cambiar_clave.html",
             {"error": "Las claves no coinciden."}, status_code=400)
 
+    # ── Modo PERSONA (login nuevo): actualiza personas.clave_hash ──
+    pid = sesion.get("pid")
+    if pid:
+        async with get_session() as session:
+            persona = await session.get(Persona, uuid.UUID(pid))
+            if not persona:
+                return RedirectResponse("/login", status_code=303)
+            if clave_nueva == persona.dni:
+                return templates.TemplateResponse(
+                    request, "cambiar_clave.html",
+                    {"error": "La clave no puede ser igual a tu DNI."},
+                    status_code=400)
+            persona.clave_hash = hash_clave(clave_nueva)
+            persona.debe_cambiar_clave = False
+            await session.commit()
+        # Ya con clave nueva: al selector si tiene varios buzones, si no directo.
+        destino = "/seleccionar-buzon" if sesion.get("mc") else "/"
+        return RedirectResponse(destino, status_code=303)
+
+    # ── Modo USUARIO (login viejo) ──
     async with get_session() as session:
         usuario = await session.get(Usuario, uuid.UUID(sesion["uid"]))
         if not usuario:

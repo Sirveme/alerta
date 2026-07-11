@@ -27,7 +27,7 @@ from .deps import RedirigirALogin
 from . import auth
 from .routers import (
     dashboard, notificaciones, voz, actualizar, push, clientes, registro,
-    superadmin, landing, resumen, pagos, cuenta, blog, blog_admin,
+    superadmin, landing, resumen, pagos, cuenta, blog, blog_admin, seleccion,
 )
 
 app = FastAPI(title="alerta.pe", docs_url=None, redoc_url=None)
@@ -36,6 +36,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Routers
 app.include_router(auth.router)
+app.include_router(seleccion.router)     # selector de contexto (zAlerta-60)
 app.include_router(registro.router)
 app.include_router(dashboard.router)
 app.include_router(notificaciones.router)
