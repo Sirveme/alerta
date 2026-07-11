@@ -2062,3 +2062,25 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-buzon-punto { width:9px; height:9px; border-radius:50%; background:var(--marca);
   flex:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--marca) 22%,transparent); }
 .rsm-buzon-ruc { font-size:.78rem; font-weight:600; color:var(--texto-suave); }
+
+/* zAlerta-64 · Instalar PWA (botón Android + hoja iOS) */
+.pwa-cta { position:fixed; left:50%; transform:translateX(-50%);
+  bottom:calc(16px + env(safe-area-inset-bottom)); z-index:60;
+  display:inline-flex; align-items:center; gap:8px; padding:11px 18px;
+  border:none; border-radius:999px; cursor:pointer; font:inherit; font-weight:700;
+  color:#fff; background:var(--marca);
+  box-shadow:0 8px 24px color-mix(in srgb,var(--marca) 45%,transparent); }
+.pwa-cta:hover { filter:brightness(1.06); }
+.pwa-cta-ico { font-size:1.1rem; line-height:1; }
+.pwa-ios-fondo { position:fixed; inset:0; z-index:70; background:rgba(0,0,0,.6);
+  display:flex; align-items:flex-end; justify-content:center; }
+.pwa-ios-hoja { position:relative; width:100%; max-width:460px; margin:10px;
+  background:var(--superficie); border:1px solid var(--borde); border-radius:16px;
+  padding:20px 18px; color:var(--texto); }
+.pwa-ios-x { position:absolute; top:10px; right:12px; background:none; border:none;
+  color:var(--texto-suave); font-size:1.1rem; cursor:pointer; }
+.pwa-ios-titulo { font-size:1.1rem; font-weight:800; margin-bottom:10px;
+  display:flex; align-items:center; gap:8px; }
+.pwa-ios-hoja p { margin:6px 0; }
+.pwa-ios-ico { display:inline-block; padding:0 4px; }
+.pwa-ios-nota { font-size:.82rem; color:var(--texto-suave); }
