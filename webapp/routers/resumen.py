@@ -22,13 +22,15 @@ from sqlalchemy.orm import selectinload
 
 import uuid
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from db import get_session
 from models import (
     Contribuyente, CredencialSol, Notificacion, EstadoContribuyente,
     ETIQUETA_TIPO_DOCUMENTO, ahora_lima, Usuario,
     Recordatorio, ModoRecordatorio,
     SolicitudValidacionCredencial, EstadoValidacion,
-    DocumentoValorado,
+    DocumentoValorado, LecturaNotificacion, Acceso,
 )
 from cifrado import cifrar_clave_sol
 from ..core import templates, fecha_lima
@@ -134,6 +136,14 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                     select(DocumentoValorado).where(
                         DocumentoValorado.notificacion_id.in_(notif_ids)))).all():
                 vals[dv.notificacion_id] = dv
+        # Estado de lectura POR PERSONA (zAlerta-61): si hay persona, "leída" es
+        # tener fila en lectura_notificacion. Login viejo (sin persona) → flag global.
+        leidas_persona: set = set()
+        if user.persona_id and notif_ids:
+            leidas_persona = set(await session.scalars(
+                select(LecturaNotificacion.notificacion_id).where(
+                    LecturaNotificacion.persona_id == user.persona_id,
+                    LecturaNotificacion.notificacion_id.in_(notif_ids))))
         # Señal UNIFICADA de lectura activa (zAlerta-42/43): cubre la primera
         # lectura (ultimo_scrapeo_at NULL) Y las re-lecturas del botón "Actualizar
         # ahora" (actualizar_solicitado=True, que el worker baja al terminar). El
@@ -193,7 +203,7 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "urgencia": n.urgencia.value if hasattr(n.urgencia, "value") else "sin_clasificar",
             "ruc": ruc,
             "razon_social": razon or ruc,
-            "leida": bool(n.leida),
+            "leida": (n.id in leidas_persona) if user.persona_id else bool(n.leida),
             **deuda,
         })
 
@@ -410,6 +420,28 @@ async def api_notificacion_leida(notif_id: uuid.UUID,
             .where(Notificacion.id == notif_id, cond))
         if not notif:
             return JSONResponse({"ok": False}, status_code=404)
+
+        # ── PERSONA (zAlerta-61): estado por-persona, no toca el flag global ──
+        if user.persona_id:
+            # SOPORTE_GLOBAL no contamina el estado del equipo: solo se registra
+            # la lectura si la persona tiene acceso NOMINAL vigente a este buzón.
+            hoy = ahora_lima().date()
+            nominal = await session.scalar(
+                select(Acceso.id).where(
+                    Acceso.persona_id == user.persona_id,
+                    Acceso.estudio_id == user.estudio_id,
+                    (Acceso.vigencia_fin.is_(None)) | (Acceso.vigencia_fin >= hoy)))
+            if nominal:
+                await session.execute(
+                    pg_insert(LecturaNotificacion)
+                    .values(persona_id=user.persona_id, notificacion_id=notif_id,
+                            leida_at=ahora_lima())
+                    .on_conflict_do_nothing(
+                        index_elements=["persona_id", "notificacion_id"]))
+                await session.commit()
+            return JSONResponse({"ok": True})
+
+        # ── USUARIO viejo (sin persona): flag global, como hasta hoy ──
         if not notif.leida:
             notif.leida = True
             notif.leida_at = ahora_lima()
