@@ -4,9 +4,13 @@
 <div class="rsm" id="rsm">
   <a href="/" class="rsm-volver"><i class="ti ti-arrow-left"></i> Volver al inicio</a>
   <div class="fila spread">
-    <h1 class="titulo-pagina" style="margin:0">Tu Buzón SUNAT</h1>
+    <h1 class="titulo-pagina" style="margin:0">Buzón SUNAT</h1>
     <span class="rsm-estado" id="rsm-estado"></span>
   </div>
+  {% if buzon_nombre %}
+  <p class="rsm-buzon"><span class="rsm-buzon-punto"></span>{{ buzon_nombre }}{% if buzon_ruc %}
+    <span class="rsm-buzon-ruc">RUC {{ buzon_ruc }}</span>{% endif %}</p>
+  {% endif %}
   <p class="subtitulo">Lo que llegó a tu buzón. Queda <b>guardado en tu celular</b>:
     lo revisas cuando quieras, incluso sin internet.</p>
   <!-- Última revisión de SUNAT (zAlerta-48 FASE D). Lo rellena resumen.js. -->
