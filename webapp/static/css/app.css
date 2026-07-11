@@ -2055,3 +2055,10 @@ a.tarjeta-link { display:block; color:inherit; }
 .sel-razon { font-weight:700; flex:1; }
 .sel-cargo { font-size:.78rem; color:var(--marca); font-weight:700; white-space:nowrap; }
 .sel-actual { font-size:.7rem; color:var(--u-aldia); font-weight:700; text-transform:uppercase; }
+
+/* zAlerta-62 · Nombre del buzón activo en el encabezado de /resumen */
+.rsm-buzon { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  margin:2px 0 10px; font-size:1.02rem; font-weight:700; color:var(--texto); }
+.rsm-buzon-punto { width:9px; height:9px; border-radius:50%; background:var(--marca);
+  flex:none; box-shadow:0 0 0 3px color-mix(in srgb,var(--marca) 22%,transparent); }
+.rsm-buzon-ruc { font-size:.78rem; font-weight:600; color:var(--texto-suave); }
