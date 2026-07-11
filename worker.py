@@ -388,7 +388,8 @@ async def _enviar_push_agrupado(session) -> int:
         try:
             await push_service.notificar_usuario(
                 session, uid, "Novedades en tu Buzón SUNAT", body,
-                url="/resumen?from=push", acciones=True)
+                url="/resumen?from=push", acciones=True,
+                tag="alertape-buzon", requiere=(deuda > 0))
             enviados += 1
         except Exception as e:
             log(f"  push agrupado usuario {uid}: falló (sigo): {e}", "WARN")

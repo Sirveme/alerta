@@ -62,6 +62,10 @@ def _enviar_webpush_sync(sub: PushSuscripcion, payload: str) -> int | None:
             data=payload,
             vapid_private_key=_vapid_private_key(),
             vapid_claims={"sub": f"mailto:{_vapid_claim_email()}"},
+            ttl=86400,   # 1 día: si el dispositivo está offline, se entrega al reconectar.
+            # Alta prioridad (zAlerta-64): pide al proveedor/SO no agrupar ni
+            # diferir el aviso. El control TOTAL de sonido/canal es solo nativo.
+            headers={"Urgency": "high"},
         )
         return None
     except WebPushException as exc:
@@ -93,14 +97,19 @@ async def _enviar_a_usuario(session, usuario_id, payload: str) -> int:
 
 
 async def notificar_usuario(session, usuario_id, title: str, body: str,
-                            url: str = "/resumen", acciones: bool = False) -> int:
+                            url: str = "/resumen", acciones: bool = False,
+                            tag: str | None = None, requiere: bool = False) -> int:
     """Envía un push genérico a TODAS las suscripciones de un usuario (zAlerta-13:
     recordatorios "Recuérdame esto" y avisos de credencial caída). Seguro ante
-    fallos. Devuelve cuántas salieron OK."""
+    fallos. Devuelve cuántas salieron OK.
+
+    tag/requiere (zAlerta-64): el sw.js usa `tag` para re-avisar sin apilar y
+    `requiere` (requireInteraction) para que la deuda/urgente no se descarte sola."""
     if not _vapid_private_key():
         return 0
     payload = json.dumps({"title": title, "body": body, "url": url,
-                          "acciones": acciones})
+                          "acciones": acciones,
+                          "tag": tag or "alertape-buzon", "requiere": requiere})
     try:
         n = await _enviar_a_usuario(session, usuario_id, payload)
         await session.commit()
@@ -170,6 +179,8 @@ async def notificar_nuevas(session, contrib: Contribuyente, n_nuevas: int) -> di
         "url": "/resumen?from=push",   # RESUMEN → tabla con semáforo + splash
         "image": LEYENDA_IMG,          # imagen grande fija = leyenda de colores
         "acciones": True,              # el SW añade GRACIAS / RESUMEN
+        "tag": f"buzon-{contrib.id}",  # re-aviso por buzón sin apilar (zAlerta-64)
+        "requiere": bool(proximos),    # hay vencimientos → no descartar sola
     })
 
     enviadas = 0
