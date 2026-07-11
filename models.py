@@ -1116,3 +1116,28 @@ class AuditoriaSoporte(Base):
     accion: Mapped[str] = mapped_column(String(20), default="VER", nullable=False)
     creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+class LecturaNotificacion(Base):
+    """Estado de lectura POR PERSONA de una notificación (zAlerta-61, Capa 1).
+    Una fila = esta persona vio esta notif. Su ausencia = "Nuevo" para ella.
+    Reemplaza a `notificaciones.leida` como fuente de verdad para personas
+    (el flag global queda como fallback del login viejo). El índice por
+    notificacion_id habilita la Capa 2 ("¿quiénes leyeron esta notif?")."""
+    __tablename__ = "lectura_notificacion"
+    __table_args__ = (
+        UniqueConstraint("persona_id", "notificacion_id",
+                         name="uq_lectura_persona_notif"),
+        Index("ix_lectura_notif", "notificacion_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+    notificacion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
+        nullable=False)
+    leida_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
