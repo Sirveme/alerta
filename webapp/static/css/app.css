@@ -2035,3 +2035,23 @@ a.tarjeta-link { display:block; color:inherit; }
   text-decoration:none; }
 .pd-tabla .material-symbols-outlined { font-size:16px; color:var(--u-urgente);
   vertical-align:middle; }
+
+/* ══════════════════════════════════════════════════════════════════
+   zAlerta-60 · Selector de contexto (¿qué buzón quieres ver?)
+   ══════════════════════════════════════════════════════════════════ */
+.sel-wrap { max-width:560px; margin:0 auto; }
+.sel-buscar { width:100%; margin:6px 0 14px; padding:10px 12px; border-radius:10px;
+  border:1px solid var(--borde); background:var(--fondo); color:var(--texto); font:inherit; }
+.sel-seccion { font-size:.9rem; color:var(--texto-suave); margin:18px 0 8px;
+  text-transform:uppercase; letter-spacing:.02em; font-weight:700; }
+.sel-lista { display:flex; flex-direction:column; gap:8px; }
+.sel-item { margin:0; }
+.sel-btn { width:100%; display:flex; align-items:center; gap:10px; text-align:left;
+  padding:14px 16px; border-radius:12px; cursor:pointer;
+  background:var(--superficie); border:1px solid var(--borde); color:var(--texto); font:inherit; }
+.sel-btn:hover { border-color:var(--marca); }
+.sel-item--activo .sel-btn { border-color:var(--marca);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--marca) 30%,transparent); }
+.sel-razon { font-weight:700; flex:1; }
+.sel-cargo { font-size:.78rem; color:var(--marca); font-weight:700; white-space:nowrap; }
+.sel-actual { font-size:.7rem; color:var(--u-aldia); font-weight:700; text-transform:uppercase; }
