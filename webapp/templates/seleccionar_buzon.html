@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}Elige un buzón · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="sel-wrap">
+  <h1 class="titulo-pagina">¿Qué buzón quieres ver?</h1>
+  <p class="subtitulo">Tienes acceso a varios buzones. Elige uno para entrar; puedes cambiar cuando quieras desde el menú.</p>
+
+  {% if soporte %}
+  <input class="sel-buscar" id="sel-buscar" type="search"
+         placeholder="Buscar por razón social…" autocomplete="off">
+  {% endif %}
+
+  {% if propios %}
+  <h2 class="sel-seccion">Tus buzones</h2>
+  <div class="sel-lista">
+    {% for b in propios %}
+    <form method="post" action="/seleccionar-buzon" class="sel-item{% if b.activo %} sel-item--activo{% endif %}"
+          data-razon="{{ b.razon|lower }}">
+      <input type="hidden" name="estudio_id" value="{{ b.eid }}">
+      <button type="submit" class="sel-btn">
+        <span class="sel-razon">{{ b.razon }}</span>
+        {% if b.cargo %}<span class="sel-cargo">{{ b.cargo }}</span>{% endif %}
+        {% if b.activo %}<span class="sel-actual">actual</span>{% endif %}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if otros %}
+  <h2 class="sel-seccion">Todos los buzones <span class="muted">(soporte)</span></h2>
+  <div class="sel-lista" id="sel-otros">
+    {% for b in otros %}
+    <form method="post" action="/seleccionar-buzon" class="sel-item{% if b.activo %} sel-item--activo{% endif %}"
+          data-razon="{{ b.razon|lower }}">
+      <input type="hidden" name="estudio_id" value="{{ b.eid }}">
+      <button type="submit" class="sel-btn">
+        <span class="sel-razon">{{ b.razon }}</span>
+        {% if b.activo %}<span class="sel-actual">actual</span>{% endif %}
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not propios and not otros %}
+  <p class="muted">No tienes buzones activos. Contacta a soporte.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if soporte %}
+<script>
+  (function () {
+    var q = document.getElementById('sel-buscar');
+    if (!q) return;
+    q.addEventListener('input', function () {
+      var t = this.value.trim().toLowerCase();
+      document.querySelectorAll('.sel-item').forEach(function (it) {
+        it.style.display = (!t || (it.dataset.razon || '').indexOf(t) >= 0) ? '' : 'none';
+      });
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

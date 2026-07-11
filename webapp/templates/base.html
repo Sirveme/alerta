@@ -59,6 +59,9 @@
       <button id="btn-mas" class="btn-icono" title="Acciones rápidas" aria-label="Acciones rápidas">+</button>
       {% endif %}
       <button id="btn-tema" class="btn-icono" title="Tema" aria-label="Cambiar tema">◐</button>
+      {% if user.multi_contexto %}
+      <a href="/seleccionar-buzon" class="nav-link" title="Cambiar buzón">Cambiar buzón</a>
+      {% endif %}
       <span class="usuario-chip nav-pc">{{ user.nombre }}</span>
       <a href="/logout" class="nav-link">Salir</a>
     </nav>
