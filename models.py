@@ -1004,21 +1004,31 @@ class CargoInstitucional(str, enum.Enum):
     OTRO = "otro"
 
 
+class RolSistema(str, enum.Enum):
+    """Rol de SISTEMA de una persona (zAlerta-58). Transversal a los accesos:
+    SOPORTE_GLOBAL ve TODOS los buzones (solo lectura, auditable). NULL = normal."""
+    SOPORTE_GLOBAL = "soporte_global"
+
+
 class Persona(Base, TimestampMixin):
-    """Identidad que se autentica. Un DNI = una fila (único global) → acaba con
-    la ambigüedad del login actual (mismo DNI en varias filas de usuarios).
-    La credencial (Argon2) se mueve aquí en Fase 2; por ahora `clave_hash` vive
-    vacía. VACÍA y SIN USO en Fase 1."""
+    """Identidad que se autentica. Login SOLO por DNI (zAlerta-58, decisión
+    permanente): un DNI = una fila. WhatsApp es solo contacto, nunca identidad.
+    La credencial (Argon2) se copia/crea aquí en el backfill (zAlerta-58)."""
     __tablename__ = "personas"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
     dni: Mapped[str] = mapped_column(String(8), unique=True, nullable=False, index=True)
     nombre_completo: Mapped[str | None] = mapped_column(String(255))
-    whatsapp: Mapped[str | None] = mapped_column(String(20))
+    whatsapp: Mapped[str | None] = mapped_column(String(20))   # solo contacto
     correo: Mapped[str | None] = mapped_column(String(255))
-    # Argon2 (mismo hashing que el resto). Nullable en Fase 1: se puebla en Fase 2.
+    # Argon2 (mismo hashing que el resto).
     clave_hash: Mapped[str | None] = mapped_column(String(255))
+    # Clave inicial = DNI → forzar cambio en el primer login (personas nuevas).
+    debe_cambiar_clave: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Rol de sistema (SOPORTE_GLOBAL = ve todo, solo lectura). NULL = normal.
+    rol_sistema: Mapped[RolSistema | None] = mapped_column(
+        Enum(RolSistema, native_enum=False, length=20), nullable=True)
 
     accesos: Mapped[list["Acceso"]] = relationship(
         back_populates="persona", cascade="all, delete-orphan")
@@ -1080,3 +1090,29 @@ class Acceso(Base, TimestampMixin):
         foreign_keys=[estudio_id])
     contribuyente: Mapped["Contribuyente | None"] = relationship(
         foreign_keys=[contribuyente_id])
+
+
+class AuditoriaSoporte(Base):
+    """Registro de acceso de un SOPORTE_GLOBAL a un buzón ajeno (zAlerta-58).
+    Estructura ahora; el INSERT se cablea en Fase 3 cuando el código lea accesos.
+    El buzón se identifica por estudio_id y/o contribuyente_id."""
+    __tablename__ = "auditoria_soporte"
+    __table_args__ = (
+        Index("ix_auditoria_persona", "persona_id"),
+        Index("ix_auditoria_creado", "creado_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="SET NULL"),
+        nullable=True)
+    contribuyente_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="SET NULL"),
+        nullable=True)
+    accion: Mapped[str] = mapped_column(String(20), default="VER", nullable=False)
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
