@@ -27,7 +27,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from db import get_session
 from models import (
     Contribuyente, CredencialSol, Notificacion, EstadoContribuyente,
-    ETIQUETA_TIPO_DOCUMENTO, ahora_lima, Usuario,
+    ETIQUETA_TIPO_DOCUMENTO, ahora_lima, Usuario, EstudioContable,
     Recordatorio, ModoRecordatorio,
     SolicitudValidacionCredencial, EstadoValidacion,
     DocumentoValorado, LecturaNotificacion, Acceso,
@@ -83,11 +83,23 @@ async def resumen_page(request: Request,
             conexiones.append(cx)
     # zAlerta-34 Paso 4: indicador de espera estilizado mientras la primera
     # lectura está en curso (cualquier RUC con primera_lectura activa).
+    # Identificación del BUZÓN ACTIVO (zAlerta-62): esencial en multi-contexto y
+    # SOPORTE_GLOBAL, para saber en qué empresa estás parado.
+    if user.es_empresario and contribs:
+        buzon_nombre = contribs[0].razon_social or contribs[0].ruc
+        buzon_ruc = contribs[0].ruc
+    else:
+        async with get_session() as session:
+            buzon_nombre = await session.scalar(
+                select(EstudioContable.razon_social).where(
+                    EstudioContable.id == user.estudio_id))
+        buzon_ruc = None
     ahora = ahora_lima()
     onboarding = any(c.get("primera_lectura") for c in conexiones)
     return templates.TemplateResponse(request, "resumen.html", {
         "user": user, "conexiones": conexiones,
         "onboarding": onboarding,
+        "buzon_nombre": buzon_nombre, "buzon_ruc": buzon_ruc,
         "anio_actual": ahora.year, "anio_anterior": ahora.year - 1})
 
 
