@@ -109,6 +109,11 @@ VISOR_BASE = "https://ww1.sunat.gob.pe/ol-ti-itvisornoti"
 
 DESCARGAS = Path("./descargas")
 
+# Año DESDE el que se baja el 2º PDF de DEUDA (zAlerta-62: deuda histórica).
+# Solo afecta a DEUDA (OP/Multa/Coactiva/Fraccionamiento), nunca a informativos
+# (dos velocidades, zAlerta-45). Configurable por env; default 2019.
+ANIO_DEUDA_DESDE = int(os.getenv("ANIO_DEUDA_DESDE", "2019"))
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Login
@@ -795,11 +800,15 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None) -> dict:
                                 (tipo_msj, str(cm)),
                                 {"cod": cod_carp, "nom": nom_carp})
 
-            # Estado del 2º PDF de deuda (zAlerta-34 Paso 2): solo deuda de
-            # año actual + anterior. El self-check del PRIMER documento decide
-            # si el lote sigue o se aborta (no bajar 100 PDFs equivocados).
+            # Estado del 2º PDF de deuda (zAlerta-34 Paso 2). zAlerta-62: deuda
+            # HISTÓRICA — se baja desde ANIO_DEUDA_DESDE hasta el año actual (no
+            # solo actual+anterior). Solo DEUDA; los informativos siguen sin bajar
+            # (dos velocidades). El self-check del PRIMER documento decide si el
+            # lote sigue o se aborta (no bajar 100 PDFs equivocados).
             anio_actual = ahora_lima().year
-            anios_descarga = {anio_actual, anio_actual - 1}
+            # min() garantiza que NUNCA baje del comportamiento previo (actual+anterior).
+            anios_descarga = set(range(min(ANIO_DEUDA_DESDE, anio_actual - 1),
+                                       anio_actual + 1))
             self_check = {"hecho": False, "ok": None, "abortado": False}
             resultado["valorados_intentados"] = 0
             resultado["valorados_descargados"] = 0
