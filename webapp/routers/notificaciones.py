@@ -135,6 +135,9 @@ async def reaccionar(
             else:
                 existente.tipo = tipo
         else:
+            # Personas sin fila en `usuarios` (acceso institucional) no reaccionan.
+            if not user.tiene_usuario:
+                return JSONResponse({"ok": False, "error": "Solo lectura."}, status_code=403)
             session.add(Reaccion(
                 estudio_id=user.estudio_id, usuario_id=user.id,
                 notificacion_id=notif_id, tipo=tipo))

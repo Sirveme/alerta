@@ -279,6 +279,10 @@ async def api_recordatorio(request: Request,
                 rec.activo = False
                 await session.commit()
             return JSONResponse({"ok": True, "recordatorio": None})
+        # Personas sin fila en `usuarios` (acceso institucional solo lectura) no
+        # pueden crear recordatorios (FK usuario_id). No-op amable.
+        if not rec and not user.tiene_usuario:
+            return JSONResponse({"ok": False, "error": "Solo lectura."}, status_code=403)
         if rec:
             rec.modo = ModoRecordatorio(modo)
             rec.activo = True

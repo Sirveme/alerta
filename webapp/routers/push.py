@@ -53,6 +53,10 @@ async def suscribir(request: Request,
             existente.auth = auth
             existente.activa = True
         else:
+            # Personas sin fila en `usuarios` (acceso institucional) no guardan
+            # suscripción push (FK usuario_id). No-op amable.
+            if not user.tiene_usuario:
+                return JSONResponse({"ok": True, "skip": True})
             session.add(PushSuscripcion(
                 estudio_id=user.estudio_id, usuario_id=user.id,
                 endpoint=endpoint, p256dh=p256dh, auth=auth, activa=True))
