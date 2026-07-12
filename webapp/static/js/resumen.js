@@ -23,6 +23,7 @@
     fraccionamiento: 'Se refiere a un fraccionamiento de deuda. Revisa las cuotas y sus fechas para no perder el beneficio.',
     esquela: 'SUNAT te comunica una observación o te pide algo. Lee qué solicita y atiéndelo dentro del plazo indicado.',
     aviso: 'Es un aviso informativo. Revísalo cuando puedas; por lo general no requiere acción urgente.',
+    pago: 'Es la constancia de un pago realizado ante SUNAT. Confirma que el pago quedó registrado y guarda el comprobante.',
     otro: 'Revisa el documento y, si tiene plazo, atiéndelo a tiempo. Ante dudas, consulta con tu contador.',
   };
 
@@ -34,8 +35,35 @@
     resolucion_determinacion: 'Ver resolución',
     fraccionamiento: 'Ver cuotas',
     esquela: 'Ver esquela',
+    pago: 'Ver constancia',
     otro: 'Ver detalle',
   };
+
+  // Datos ricos de un PAGO confirmado (zAlerta-69) → lista de "Etiqueta: valor".
+  function pagoDatos(pg) {
+    const f = [];
+    if (pg.importe_fmt) f.push('Importe: <b>' + esc(pg.importe_fmt) + '</b>');
+    if (pg.tributo) f.push('Tributo: ' + esc(pg.tributo));
+    if (pg.periodo) f.push('Periodo: ' + esc(pg.periodo));
+    if (pg.valor_pagado) f.push('Valor pagado: ' + esc(pg.valor_pagado));
+    if (pg.banco) f.push('Banco: ' + esc(pg.banco));
+    if (pg.n_operacion) f.push('N° operación: ' + esc(pg.n_operacion));
+    if (pg.n_orden) f.push('N° orden: ' + esc(pg.n_orden));
+    return f;
+  }
+  function pagoModal(pg) {
+    const datos = pagoDatos(pg);
+    const pdf = pg.gcs_disponible
+      ? '<div class="rsm-mod-pdf"><span class="material-symbols-outlined">receipt_long</span>'
+        + '<span class="rsm-mod-pdf-nom">Constancia de pago</span>'
+        + '<a class="rsm-mod-btn" href="/valorados/' + esc(pg.valorado_id) + '/ver" target="_blank" rel="noopener">Ver PDF</a>'
+        + '<a class="rsm-mod-btn rsm-mod-btn--sec" href="/valorados/' + esc(pg.valorado_id) + '/descargar">Descargar</a></div>'
+      : '';
+    return '<div class="rsm-mod-pdfs"><div class="rsm-mod-lbl">Pago confirmado</div>'
+      + (datos.length ? '<div class="rsm-pago-datos">' + datos.map((d) => '<span>' + d + '</span>').join('') + '</div>'
+          : '<div class="rsm-pago-datos"><span class="muted">Abre el PDF para ver el detalle del pago.</span></div>')
+      + pdf + '</div>';
+  }
   const URG_LBL = {
     critica: 'Crítica', urgente: 'Urgente', importante: 'Importante',
     informativa: 'Informativa', sin_clasificar: 'Informativa',
@@ -84,6 +112,7 @@
         + (f.tiene_deuda ? 'Constancia de notificación' : 'Documentos adjuntos')
         + '</div>' + cons + '</div>';
     }
+    if (f.es_pago && f.pago) pdfHtml = pagoModal(f.pago) + pdfHtml;
     if (!pdfHtml) pdfHtml = '<div class="rsm-mod-sinpdf">Esta notificación no tiene PDF.</div>';
 
     const ov = document.createElement('div');
@@ -233,18 +262,33 @@
       + '<span class="rsm-eq-lista">' + chips + '</span></div>';
   }
 
+  // Chip compacto de PAGO confirmado en la tarjeta (zAlerta-69).
+  function pagoChip(f) {
+    if (!f.es_pago || !f.pago) return '';
+    const pg = f.pago, bits = [];
+    if (pg.importe_fmt) bits.push('<b>' + esc(pg.importe_fmt) + '</b>');
+    if (pg.tributo) bits.push(esc(pg.tributo));
+    if (pg.periodo) bits.push('periodo ' + esc(pg.periodo));
+    return '<div class="rsm-pago-chip"><span class="material-symbols-outlined">receipt_long</span>'
+      + '<span>Pago confirmado' + (bits.length ? ': ' + bits.join(' · ') : '') + '</span></div>';
+  }
+
   function tarjeta(f, i) {
     const sem = semColor(f);
     const conPlazo = !!f.vence_iso;
-    const venceTxt = conPlazo
-      ? '<span class="rsm-c-vence">Vence ' + esc(f.vence) + '</span>'
-      : (sem === 'rojo' ? '<span class="rsm-c-tag rsm-lbl--rojo">Urgente</span>'
-        : sem === 'ambar' ? '<span class="rsm-c-tag rsm-lbl--ambar">Importante</span>'
-          : '<span class="rsm-c-tag">Informativo</span>');
-    const badge = (f.tiene_deuda && f.gcs_disponible)
+    const venceTxt = f.es_pago
+      ? '<span class="rsm-c-tag rsm-lbl--pago">Pago confirmado</span>'
+      : (conPlazo
+        ? '<span class="rsm-c-vence">Vence ' + esc(f.vence) + '</span>'
+        : (sem === 'rojo' ? '<span class="rsm-c-tag rsm-lbl--rojo">Urgente</span>'
+          : sem === 'ambar' ? '<span class="rsm-c-tag rsm-lbl--ambar">Importante</span>'
+            : '<span class="rsm-c-tag">Informativo</span>'));
+    const badge = f.es_pago
+      ? '<span class="rsm-pdf-badge" title="Constancia de pago en PDF"><span class="material-symbols-outlined">receipt_long</span></span>'
+      : ((f.tiene_deuda && f.gcs_disponible)
       ? '<span class="rsm-pdf-badge" title="Documento de deuda en PDF"><span class="material-symbols-outlined">request_quote</span></span>'
       : ((f.adjuntos && f.adjuntos.length)
-        ? '<span class="rsm-pdf-badge" title="Tiene PDF"><span class="material-symbols-outlined">picture_as_pdf</span></span>' : '');
+        ? '<span class="rsm-pdf-badge" title="Tiene PDF"><span class="material-symbols-outlined">picture_as_pdf</span></span>' : ''));
     // Monto: si está, lo mostramos; si es deuda SIN monto parseado, NUNCA "S/ 0"
     // (engañoso) — un rótulo honesto (zAlerta-49). La deuda nunca se oculta.
     const monto = f.monto
@@ -261,6 +305,7 @@
       + '<div class="rsm-c-meta">'
       + '<span class="rsm-c-fecha"><i class="ti ti-calendar"></i> ' + esc(f.fecha || '—') + '</span>'
       + monto + venceTxt + '</div>'
+      + pagoChip(f)
       + equipoHTML(f)
       + '<div class="rsm-c-acc"><button class="rsm-b" data-i="' + i + '">' + esc(btnLabel) + '</button></div>'
       + '</div>';
