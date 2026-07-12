@@ -17,7 +17,7 @@ import re
 
 from sqlalchemy import select, func
 
-from models import DocumentoValorado, Contribuyente, Notificacion
+from models import DocumentoValorado, Contribuyente, Notificacion, TipoValorado
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -73,6 +73,64 @@ def monto_de_valorado(dv) -> float | None:
     return extraer_monto(dv.pdf_texto)
 
 
+# ─────────────────────────────────────────────────────────────────────
+# PAGOS confirmados: extracción de datos del Formulario 1662 (zAlerta-69)
+# ─────────────────────────────────────────────────────────────────────
+# Best-effort sobre el pdf_texto de la constancia (provisional, como el monto de
+# deuda). Cada campo es opcional: si no se detecta, la UI muestra "Ver PDF".
+# Se afina contra el texto real tras el primer re-scrapeo del 1662.
+_RE_PG_PERIODO = re.compile(
+    r"per[ií]odo\s*(?:tributario)?\s*:?\s*(\d{2}\s*[/-]\s*\d{4}|\d{4}\s*[-/]\s*\d{2}|\d{6})", re.I)
+_RE_PG_IMPORTE = re.compile(
+    r"(?:importe\s*(?:total|pagado)?|total\s*(?:pagado|a\s*pagar)?)\s*:?\s*S?\s*/?\s*([\d.,]+)", re.I)
+# Frontera: corta el capturado al llegar a la siguiente etiqueta del formulario
+# (o a 2+ espacios / salto de línea). Robusto aunque el pdf_texto venga en 1 línea.
+_PG_STOP = (r"(?=\s{2,}|\n|$|\bimporte\b|\bbanco\b|\bfecha\b|\bnumero\b|\bn[°ºo]\b|"
+            r"\bc[oó]digo\b|\bruc\b|\bper[ií]odo\b|\bdocumento\b|\bvalor\b|\boperaci)")
+_RE_PG_TRIBUTO = re.compile(
+    r"(?:tributo|concepto|c[oó]digo\s*de\s*tributo)\s*:?\s*(?:\d{3,5}\s*[-–]\s*)?"
+    r"([A-Za-zÁÉÍÓÚÑáéíóúñ][A-Za-zÁÉÍÓÚÑáéíóúñ .]{3,55}?)" + _PG_STOP, re.I)
+_RE_PG_ORDEN = re.compile(
+    r"(?:n[°ºo]?\s*(?:de\s*)?orden|n[uú]mero\s*de\s*orden)\s*:?\s*(\d{6,})", re.I)
+_RE_PG_OPERACION = re.compile(
+    r"(?:n[°ºo]?\s*(?:de\s*)?operaci[oó]n|n[uú]mero\s*de\s*operaci[oó]n)\s*:?\s*(\d{4,})", re.I)
+_RE_PG_BANCO = re.compile(
+    r"(?:banco|entidad(?:\s*(?:bancaria|financiera))?)\s*:?\s*"
+    r"([A-Za-zÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ .]{1,28}?)" + _PG_STOP, re.I)
+_RE_PG_VALOR = re.compile(
+    r"(?:n[uú]mero\s*(?:de\s*)?(?:documento|valor)|valor|documento)\s*:?\s*(\d{10,})", re.I)
+_RE_PG_RUC = re.compile(r"\bruc\b\s*:?\s*(\d{11})", re.I)
+_RE_PG_FECHA = re.compile(
+    r"fecha\s*(?:de\s*pago|de\s*presentaci[oó]n)?\s*:?\s*(\d{2}[/-]\d{2}[/-]\d{4})", re.I)
+
+
+def _grp(rx, texto):
+    m = rx.search(texto or "")
+    return m.group(1).strip() if m else None
+
+
+def extraer_pago(texto: str | None) -> dict:
+    """Datos estructurados de una constancia de pago (Formulario 1662).
+    Devuelve un dict con los campos detectados (None si no se hallan). El
+    'valor_pagado' + 'periodo' + 'tributo' son la clave para cruzar con la
+    deuda original en el prompt siguiente (SIN calcular saldo)."""
+    t = texto or ""
+    importe = _grp(_RE_PG_IMPORTE, t)
+    imp_num = _num(importe) if importe else None
+    return {
+        "ruc": _grp(_RE_PG_RUC, t),
+        "periodo": (_grp(_RE_PG_PERIODO, t) or "").replace(" ", "") or None,
+        "valor_pagado": _grp(_RE_PG_VALOR, t),
+        "tributo": (_grp(_RE_PG_TRIBUTO, t) or "").strip() or None,
+        "importe_num": imp_num,
+        "importe_fmt": fmt_soles(imp_num),
+        "banco": (_grp(_RE_PG_BANCO, t) or "").strip() or None,
+        "n_operacion": _grp(_RE_PG_OPERACION, t),
+        "n_orden": _grp(_RE_PG_ORDEN, t),
+        "fecha": _grp(_RE_PG_FECHA, t),
+    }
+
+
 # Etiqueta legible por TipoValorado (reusa el catálogo de tipos de documento).
 ETIQUETA_VALORADO = {
     "cobranza_coactiva": "Cobranza Coactiva",
@@ -80,6 +138,7 @@ ETIQUETA_VALORADO = {
     "resolucion_multa": "Resoluciones de Multa",
     "fraccionamiento": "Fraccionamientos",
     "resolucion_determinacion": "Resoluciones de Determinación",
+    "pago": "Pagos confirmados",
 }
 # Orden de presentación de los bloques (los 4 principales primero).
 ORDEN_TIPOS = ["cobranza_coactiva", "orden_pago", "resolucion_multa",
@@ -103,7 +162,9 @@ async def deuda_estudio(session, estudio_id) -> dict:
         .join(Contribuyente, Contribuyente.id == DocumentoValorado.contribuyente_id)
         .join(Notificacion, Notificacion.id == DocumentoValorado.notificacion_id,
               isouter=True)
-        .where(Contribuyente.estudio_id == estudio_id))).all()
+        .where(Contribuyente.estudio_id == estudio_id,
+               # PAGO no es deuda (zAlerta-69): fuera del panel de deuda.
+               DocumentoValorado.tipo_valorado != TipoValorado.PAGO))).all()
 
     # Estructura intermedia: tipo → ruc → {razon, docs[], total, por_confirmar}
     por_tipo: dict[str, dict] = {}
