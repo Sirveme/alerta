@@ -69,6 +69,29 @@
     informativa: 'Informativa', sin_clasificar: 'Informativa',
   };
 
+  // Orientación específica por subtipo coactivo (zAlerta-70). "Informa, no asesora":
+  // la Conclusión NO afirma extinción de deuda.
+  function coactivoOrienta(c) {
+    if (c.tercero_retenedor) return 'Eres tercero retenedor: debes retener el importe indicado y comunicarlo a SUNAT dentro del plazo (5 días hábiles). El incumplimiento puede generar responsabilidad solidaria.';
+    const T = {
+      ejecucion: 'Cobranza coactiva de una deuda exigible. Revisa el monto y el plazo; atiéndela cuanto antes para evitar embargos.',
+      retencion: 'Medida de retención sobre fondos o cuentas por una deuda en cobranza. Revisa el detalle en el PDF.',
+      levantamiento: 'El embargo fue levantado. Es una buena noticia; guarda la constancia.',
+      reduccion: 'Se redujo el monto embargado. Revisa el nuevo importe en el PDF.',
+      conclusion: 'El procedimiento coactivo concluyó. Concluir no significa que la deuda esté extinguida: verifica el estado de la deuda.',
+      fl: 'Actuación administrativa interna del expediente. Informativa, sin acción inmediata.',
+    };
+    return T[c.subtipo] || null;
+  }
+  function coactivoPDF(c) {
+    if (!c.valorado_id || !c.gcs_disponible) return '';
+    return '<div class="rsm-mod-pdfs"><div class="rsm-mod-lbl">Documento</div>'
+      + '<div class="rsm-mod-pdf"><span class="material-symbols-outlined">description</span>'
+      + '<span class="rsm-mod-pdf-nom">Resolución coactiva</span>'
+      + '<a class="rsm-mod-btn" href="/valorados/' + esc(c.valorado_id) + '/ver" target="_blank" rel="noopener">Ver PDF</a>'
+      + '<a class="rsm-mod-btn rsm-mod-btn--sec" href="/valorados/' + esc(c.valorado_id) + '/descargar">Descargar</a></div></div>';
+  }
+
   // ── Modal custom (sin diálogos nativos): detalle + orientación + PDFs ──
   function abrirModal(f) {
     if (!f) return;
@@ -81,7 +104,8 @@
       pintarLista();
     }
     const sem = semColor(f);
-    const orienta = ORIENTA[f.tipo] || ORIENTA.otro;
+    const orienta = (f.coactivo && coactivoOrienta(f.coactivo))
+      || ORIENTA[f.tipo] || ORIENTA.otro;
     const meta = [];
     meta.push('<span class="rsm-mod-chip sem-bg--' + sem + '">' + esc(URG_LBL[f.urgencia] || 'Informativa') + '</span>');
     if (f.monto) meta.push('<span class="rsm-mod-chip rsm-mod-chip--deuda">' + esc(f.monto) + '</span>');
@@ -113,6 +137,7 @@
         + '</div>' + cons + '</div>';
     }
     if (f.es_pago && f.pago) pdfHtml = pagoModal(f.pago) + pdfHtml;
+    if (f.coactivo) pdfHtml = coactivoChip(f) + coactivoPDF(f.coactivo) + pdfHtml;
     if (!pdfHtml) pdfHtml = '<div class="rsm-mod-sinpdf">Esta notificación no tiene PDF.</div>';
 
     const ov = document.createElement('div');
@@ -244,7 +269,28 @@
   const CHIPS_ORDEN = ['todo', 'cobranza_coactiva', 'orden_pago', 'multa',
     'fraccionamiento', 'resolucion_determinacion', 'informativas'];
   function grupoDe(f) { return DEUDA_TIPOS.indexOf(f.tipo) >= 0 ? f.tipo : 'informativas'; }
-  function tipoLegible(f) { return f.documento || TIPO_LBL[grupoDe(f)] || 'Notificación'; }
+  function tipoLegible(f) {
+    // Subtipo coactivo (zAlerta-70): la etiqueta específica manda ("Embargo
+    // levantado", "Retención a terceros", etc.) sobre el genérico "Cobranza Coactiva".
+    if (f.coactivo && f.coactivo.etiqueta) return f.coactivo.etiqueta;
+    return f.documento || TIPO_LBL[grupoDe(f)] || 'Notificación';
+  }
+
+  // Chip + alerta del subtipo coactivo en la tarjeta (zAlerta-70).
+  function coactivoChip(f) {
+    const c = f.coactivo;
+    if (!c || !c.subtipo) return '';
+    let html = '';
+    if (c.tercero_retenedor) {
+      html += '<div class="rsm-coa-alerta">⚠ Acción requerida: eres tercero retenedor'
+        + (c.deudor_ruc ? ' del RUC ' + esc(c.deudor_ruc) : '')
+        + '. Debes retener y comunicar a SUNAT dentro del plazo (5 días hábiles).</div>';
+    }
+    if (c.subtipo === 'conclusion') {
+      html += '<div class="rsm-coa-nota rsm-coa--cierre">Procedimiento coactivo concluido — verifica el estado de la deuda.</div>';
+    }
+    return html;
+  }
   function montoSoles(n) { return 'S/ ' + Math.round(n).toLocaleString('es-PE'); }
 
   let _filtro = 'todo';
@@ -294,7 +340,7 @@
     const monto = f.monto
       ? '<span class="rsm-c-monto">' + esc(f.monto) + '</span>'
       : (f.tiene_deuda ? '<span class="rsm-c-monto rsm-c-monto--rev">Ver monto en el PDF</span>' : '');
-    const btnLabel = BTN_LABEL[f.tipo] || BTN_LABEL.otro;
+    const btnLabel = (f.coactivo && f.coactivo.accion) || BTN_LABEL[f.tipo] || BTN_LABEL.otro;
     // NUEVO (zAlerta-47): sin leer (server-side, compartido entre equipos).
     const nueva = !f.leida;
     const badgeNuevo = nueva ? '<span class="rsm-nuevo">Nuevo</span>' : '';
@@ -305,6 +351,7 @@
       + '<div class="rsm-c-meta">'
       + '<span class="rsm-c-fecha"><i class="ti ti-calendar"></i> ' + esc(f.fecha || '—') + '</span>'
       + monto + venceTxt + '</div>'
+      + coactivoChip(f)
       + pagoChip(f)
       + equipoHTML(f)
       + '<div class="rsm-c-acc"><button class="rsm-b" data-i="' + i + '">' + esc(btnLabel) + '</button></div>'
