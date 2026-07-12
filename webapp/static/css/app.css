@@ -2104,3 +2104,11 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-pago-datos { display:flex; flex-direction:column; gap:4px; margin:4px 0 10px;
   font-size:.9rem; color:var(--texto); }
 .rsm-pago-datos span { padding:2px 0; border-bottom:1px dashed var(--borde); }
+
+/* zAlerta-70 · Subtipos de resolución coactiva: alertas y notas */
+.rsm-coa-alerta { margin:8px 0 2px; padding:8px 10px; border-radius:8px; font-size:.82rem;
+  font-weight:600; color:var(--u-critica);
+  background:color-mix(in srgb,var(--u-critica) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--u-critica) 40%,transparent); }
+.rsm-coa-nota { margin:8px 0 2px; padding:8px 10px; border-radius:8px; font-size:.82rem;
+  color:var(--texto-suave); background:var(--superficie-2); border:1px solid var(--borde); }
