@@ -221,6 +221,18 @@
   let _filtro = 'todo';
   let _filas = [];
 
+  // Estado de lectura de EQUIPO (Capa 2, zAlerta-68): solo buzones de 2+ personas.
+  function equipoHTML(f) {
+    const eq = f.equipo;
+    if (!eq || !eq.miembros || eq.total < 2) return '';
+    const chips = eq.miembros.map((m) =>
+      '<span class="rsm-eq-m rsm-eq-m--' + (m.leida ? 'si' : 'no') + '">'
+      + esc(m.nombre) + ' ' + (m.leida ? '✓' : '✗') + '</span>').join('');
+    return '<div class="rsm-equipo">'
+      + '<span class="rsm-eq-n">' + eq.leidos + ' de ' + eq.total + ' leyeron</span>'
+      + '<span class="rsm-eq-lista">' + chips + '</span></div>';
+  }
+
   function tarjeta(f, i) {
     const sem = semColor(f);
     const conPlazo = !!f.vence_iso;
@@ -249,6 +261,7 @@
       + '<div class="rsm-c-meta">'
       + '<span class="rsm-c-fecha"><i class="ti ti-calendar"></i> ' + esc(f.fecha || '—') + '</span>'
       + monto + venceTxt + '</div>'
+      + equipoHTML(f)
       + '<div class="rsm-c-acc"><button class="rsm-b" data-i="' + i + '">' + esc(btnLabel) + '</button></div>'
       + '</div>';
   }
