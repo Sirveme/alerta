@@ -18,6 +18,7 @@ import re
 from sqlalchemy import select, func
 
 from models import DocumentoValorado, Contribuyente, Notificacion, TipoValorado
+from clasificacion import COACTIVO_NO_SUMA
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -109,6 +110,17 @@ def _grp(rx, texto):
     return m.group(1).strip() if m else None
 
 
+# Retención a Terceros (zAlerta-70): RUC del DEUDOR TRIBUTARIO en el PDF. Si
+# difiere del RUC del buzón, el contribuyente es el TERCERO RETENEDOR (acción).
+_RE_DEUDOR = re.compile(r"deudor\s*(?:tributario)?[^0-9]{0,60}(\d{11})", re.I)
+
+
+def deudor_de_retencion(texto: str | None) -> str | None:
+    """RUC del deudor tributario en una Retención a Terceros (o None)."""
+    m = _RE_DEUDOR.search(texto or "")
+    return m.group(1) if m else None
+
+
 def extraer_pago(texto: str | None) -> dict:
     """Datos estructurados de una constancia de pago (Formulario 1662).
     Devuelve un dict con los campos detectados (None si no se hallan). El
@@ -158,7 +170,7 @@ async def deuda_estudio(session, estudio_id) -> dict:
     """
     rows = (await session.execute(
         select(DocumentoValorado, Contribuyente.ruc, Contribuyente.razon_social,
-               Notificacion.fecha_publica_sunat)
+               Notificacion.fecha_publica_sunat, Notificacion.subtipo_coactivo)
         .join(Contribuyente, Contribuyente.id == DocumentoValorado.contribuyente_id)
         .join(Notificacion, Notificacion.id == DocumentoValorado.notificacion_id,
               isouter=True)
@@ -168,9 +180,13 @@ async def deuda_estudio(session, estudio_id) -> dict:
 
     # Estructura intermedia: tipo → ruc → {razon, docs[], total, por_confirmar}
     por_tipo: dict[str, dict] = {}
-    for dv, ruc, razon, fecha_pub in rows:
+    for dv, ruc, razon, fecha_pub, subtipo in rows:
         tipo = (dv.tipo_valorado.value if hasattr(dv.tipo_valorado, "value")
                 else dv.tipo_valorado)
+        # Coactivas que NO son deuda (Retención/Levantamiento/Reducción/Conclusión/
+        # FL) NO suman en el panel (zAlerta-70): fuera del total, sin inflar.
+        if tipo == "cobranza_coactiva" and subtipo in COACTIVO_NO_SUMA:
+            continue
         monto = monto_de_valorado(dv)
         fecha = None
         if dv.fecha_emision:
