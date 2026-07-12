@@ -36,7 +36,8 @@ from cifrado import cifrar_clave_sol
 from ..core import templates, fecha_lima
 from ..deps import UsuarioActual, usuario_actual
 from ..estados import estado_conexion
-from ..deuda import extraer_monto, fmt_soles, extraer_pago
+from ..deuda import extraer_monto, fmt_soles, extraer_pago, deudor_de_retencion
+from clasificacion import COACTIVO_META, COACTIVO_NO_SUMA
 
 router = APIRouter(tags=["resumen"])
 
@@ -210,10 +211,13 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         adjuntos = [{"id": str(a.id), "nombre": a.nombre_archivo}
                     for a in (n.adjuntos or [])
                     if a.bytea_temporal is not None or a.gcs_key]
-        # Documento valorado: DEUDA o PAGO confirmado (zAlerta-69).
+        # Documento valorado: DEUDA, PAGO (zAlerta-69) o COACTIVA por subtipo (zAlerta-70).
         dv = vals.get(n.id)
         deuda = {"tiene_deuda": False}
         pago = None
+        coactivo = None
+        # Subtipo coactivo que NO es deuda (retención/alivio/cierre/admin).
+        coa_no_deuda = (n.subtipo_coactivo in COACTIVO_NO_SUMA)
         if dv is not None:
             tv = (dv.tipo_valorado.value if hasattr(dv.tipo_valorado, "value")
                   else dv.tipo_valorado)
@@ -225,6 +229,10 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                     "num_orden": p.get("n_orden") or dv.num_documento,
                     **p,
                 }
+            elif tv == "cobranza_coactiva" and coa_no_deuda:
+                # Coactiva que no es deuda: PDF disponible, sin monto (no infla).
+                coactivo = {"valorado_id": str(dv.id),
+                            "gcs_disponible": bool(dv.gcs_key)}
             else:
                 monto = _monto_de_texto(dv.pdf_texto)
                 deuda = {
@@ -236,6 +244,20 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                     "monto_num": monto,
                     "gcs_disponible": bool(dv.gcs_key),
                 }
+        # Metadatos del subtipo coactivo (etiqueta/acción/grupo/color) para la UI.
+        if n.subtipo_coactivo and n.subtipo_coactivo in COACTIVO_META:
+            m = COACTIVO_META[n.subtipo_coactivo]
+            coactivo = coactivo or {}
+            coactivo.update({
+                "subtipo": n.subtipo_coactivo, "grupo": m["grupo"],
+                "etiqueta": m["etiqueta"], "accion": m["accion"],
+            })
+            # Retención a terceros: ¿el deudor del PDF es OTRO RUC? → acción requerida.
+            if n.subtipo_coactivo == "retencion" and dv is not None:
+                deudor = deudor_de_retencion(dv.pdf_texto)
+                if deudor and deudor != ruc:
+                    coactivo["tercero_retenedor"] = True
+                    coactivo["deudor_ruc"] = deudor
         fila = {
             "id": str(n.id),
             "documento": documento,
@@ -256,6 +278,7 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "leida": (n.id in leidas_persona) if user.persona_id else bool(n.leida),
             "es_pago": pago is not None,
             "pago": pago,
+            "coactivo": coactivo,
             **deuda,
         }
         # Estado de equipo (Capa 2): solo si el buzón tiene 2+ personas.
