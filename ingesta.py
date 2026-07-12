@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models import (
     Contribuyente, Notificacion, Adjunto, TipoDocumento,
     DocumentoValorado, TipoValorado)
-from clasificacion import clasificar
+from clasificacion import clasificar, subtipo_coactivo
 import gcs
 
 TZ_LIMA = ZoneInfo("America/Lima")
@@ -145,6 +145,9 @@ async def ingestar_resultado(
         asunto_msg = msg.get("asunto")
         tipo_doc, urgencia, _fuente = clasificar(
             nom_carp, asunto_msg, bool(msg.get("urgente")))
+        # Subtipo coactivo (zAlerta-70): solo si es cobranza coactiva.
+        sub_coa = (subtipo_coactivo(asunto_msg)
+                   if tipo_doc == TipoDocumento.COBRANZA_COACTIVA else None)
         if tipo_doc == TipoDocumento.OTRO and (nom_carp or asunto_msg):
             stats.setdefault("no_clasificados", set()).add(
                 (nom_carp or "")[:30] + " | " + (asunto_msg or "")[:50])
@@ -186,6 +189,15 @@ async def ingestar_resultado(
                 existe.urgencia = urgencia
                 existe.clasificado_at = ahora_lima()
                 stats["reclasificados"] = stats.get("reclasificados", 0) + 1
+            # Backfill del SUBTIPO coactivo (zAlerta-70): las coactivas viejas no
+            # tienen subtipo; al re-barrer se les asigna y se ajusta el color
+            # (un Levantamiento deja de ser rojo).
+            elif (tipo_doc == TipoDocumento.COBRANZA_COACTIVA
+                  and sub_coa and existe.subtipo_coactivo != sub_coa):
+                existe.subtipo_coactivo = sub_coa
+                existe.urgencia = urgencia
+                existe.clasificado_at = ahora_lima()
+                stats["reclasificados"] = stats.get("reclasificados", 0) + 1
         else:
             notif = Notificacion(
                 estudio_id=estudio_id,
@@ -203,6 +215,7 @@ async def ingestar_resultado(
                 cod_carpeta=cod_carp,
                 nombre_carpeta=nom_carp,
                 tipo_documento_enum=tipo_doc,
+                subtipo_coactivo=sub_coa,
                 urgencia=urgencia,
                 clasificado_at=ahora_lima(),
             )

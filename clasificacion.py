@@ -124,8 +124,66 @@ def _por_asunto(asunto: str | None) -> tuple[TipoDocumento, Urgencia, bool]:
 _URG_BAJAS = (Urgencia.SIN_CLASIFICAR, Urgencia.INFORMATIVA)
 
 
-def clasificar(nombre_carpeta: str | None, asunto: str | None,
-               urgente: bool = False) -> tuple[TipoDocumento, Urgencia, str | None]:
+# ─────────────────────────────────────────────────────────────────────
+# SUBTIPOS de Resolución Coactiva (zAlerta-70). 4 grupos con trato distinto:
+#   RIESGO (rojo), ALIVIO (verde), CIERRE (neutro), ADMIN (gris).
+# Detección por ASUNTO, ORDEN IMPORTA: lo específico antes que lo genérico.
+# ─────────────────────────────────────────────────────────────────────
+_SUBTIPOS_COACTIVOS: list[tuple[tuple[str, ...], str]] = [
+    (("retencion", "tercero"),      "retencion"),      # medida cautelar sobre 3ros
+    (("retencion a tercero",),      "retencion"),
+    (("levantamiento", "embargo"),  "levantamiento"),  # ALIVIO
+    (("levanta", "embargo"),        "levantamiento"),
+    (("reduccion", "embargo"),      "reduccion"),       # ALIVIO
+    (("reduce", "embargo"),         "reduccion"),
+    (("conclusion",),               "conclusion"),      # CIERRE (numeral de sustento)
+    (("concluye",),                 "conclusion"),
+    (("coactiva fl",),              "fl"),              # ADMIN (actuación interna)
+    (("resolucion coactiva fl",),   "fl"),
+    (("ejecucion coactiva",),       "ejecucion"),       # REC (la deuda)
+    (("ejecucion de cobranza",),    "ejecucion"),
+]
+
+# Metadatos por subtipo: grupo, urgencia (color), si CUENTA como deuda, etiqueta,
+# acción y orientación. "informa, no asesora" (Conclusión: no afirma extinción).
+COACTIVO_META: dict[str, dict] = {
+    "ejecucion":    {"grupo": "riesgo", "urgencia": Urgencia.CRITICA,
+                     "deuda": True,  "etiqueta": "Cobranza Coactiva",
+                     "accion": "Ver deuda y plazo"},
+    "retencion":    {"grupo": "riesgo", "urgencia": Urgencia.CRITICA,
+                     "deuda": False, "etiqueta": "Retención a terceros",
+                     "accion": "Ver retención"},
+    "levantamiento": {"grupo": "alivio", "urgencia": Urgencia.INFORMATIVA,
+                      "deuda": False, "etiqueta": "Embargo levantado",
+                      "accion": "Ver constancia"},
+    "reduccion":    {"grupo": "alivio", "urgencia": Urgencia.IMPORTANTE,
+                     "deuda": False, "etiqueta": "Embargo reducido",
+                     "accion": "Ver detalle"},
+    "conclusion":   {"grupo": "cierre", "urgencia": Urgencia.INFORMATIVA,
+                     "deuda": False, "etiqueta": "Procedimiento concluido",
+                     "accion": "Verifica el estado de la deuda"},
+    "fl":           {"grupo": "admin", "urgencia": Urgencia.INFORMATIVA,
+                     "deuda": False, "etiqueta": "Actuación administrativa",
+                     "accion": "Ver detalle"},
+}
+# Subtipos coactivos que NO suman monto propio en el panel de deuda (zAlerta-70).
+COACTIVO_NO_SUMA = {s for s, m in COACTIVO_META.items() if not m["deuda"]}
+
+
+def subtipo_coactivo(asunto: str | None) -> str | None:
+    """Subtipo de una resolución coactiva por su asunto, o None si genérico.
+    Si es coactiva pero no calza ningún patrón, el caller la trata como
+    'ejecucion' (REC) por prudencia: ante duda, es riesgo/deuda."""
+    a = _norm(asunto)
+    if not a:
+        return None
+    for claves, sub in _SUBTIPOS_COACTIVOS:
+        if all(k in a for k in claves):
+            return sub
+    return None
+
+
+def _clasificar_base(nombre_carpeta, asunto, urgente):
     """Devuelve (tipo_documento, urgencia, fuente).
 
     fuente ∈ {"carpeta","asunto","indurg",None}. None = nada resolvió (OTRO puro).
@@ -154,3 +212,17 @@ def clasificar(nombre_carpeta: str | None, asunto: str | None,
     if urgente:
         return TipoDocumento.OTRO, Urgencia.IMPORTANTE, "indurg"
     return TipoDocumento.OTRO, Urgencia.INFORMATIVA, None
+
+
+def clasificar(nombre_carpeta: str | None, asunto: str | None,
+               urgente: bool = False) -> tuple[TipoDocumento, Urgencia, str | None]:
+    """Clasifica → (tipo_documento, urgencia, fuente). zAlerta-70: si es coactiva,
+    su SUBTIPO ajusta la urgencia (un Levantamiento es VERDE, no rojo). El tipo
+    sigue siendo COBRANZA_COACTIVA; el subtipo (para etiqueta/deuda) se obtiene
+    aparte con subtipo_coactivo()."""
+    tipo, urg, fuente = _clasificar_base(nombre_carpeta, asunto, urgente)
+    if tipo == TipoDocumento.COBRANZA_COACTIVA:
+        st = subtipo_coactivo(asunto)
+        if st and st in COACTIVO_META:
+            urg = COACTIVO_META[st]["urgencia"]
+    return tipo, urg, fuente

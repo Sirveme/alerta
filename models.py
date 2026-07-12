@@ -488,6 +488,10 @@ class Notificacion(Base, TimestampMixin):
     # Enum para filtros fiables (zAlerta-01 A.4). Conserva el String libre de arriba.
     tipo_documento_enum: Mapped[TipoDocumento | None] = mapped_column(
         Enum(TipoDocumento), default=TipoDocumento.OTRO, nullable=True, index=True)
+    # Subtipo de resolución coactiva (zAlerta-70): ejecucion/retencion/
+    # levantamiento/reduccion/conclusion/fl. VARCHAR (sin enum pg → sin DDL de tipo).
+    # Determina grupo (riesgo/alivio/cierre/admin), color, etiqueta y si es deuda.
+    subtipo_coactivo: Mapped[str | None] = mapped_column(String(20))
     plazo_vencimiento: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     clasificado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resumen_ia: Mapped[str | None] = mapped_column(Text)  # insight del agente IA
