@@ -52,6 +52,8 @@ async def main() -> None:
     ap.add_argument("--body", default="Si ves esto, el push llega bien. (zAlerta-63)")
     ap.add_argument("--url", default="/resumen?from=push")
     ap.add_argument("--dry", action="store_true", help="Solo listar, no enviar.")
+    ap.add_argument("--show-headers", action="store_true",
+                    help="Imprime los headers reales que van a FCM (prueba Urgency: high) y no envía.")
     args = ap.parse_args()
 
     if not args.dni and not args.usuario:
@@ -91,7 +93,31 @@ async def main() -> None:
         payload = json.dumps({
             "title": args.title, "body": args.body,
             "url": args.url, "acciones": True,
+            "tag": "alertape-buzon", "requiere": True,   # mismo camino que el push real
         })
+
+        # Prueba de prioridad: muestra los headers EXACTOS que van a FCM (no envía).
+        if args.show_headers:
+            from pywebpush import webpush
+            import re
+            s = subs[0]
+            cmd = webpush(
+                subscription_info={"endpoint": s.endpoint,
+                                   "keys": {"p256dh": s.p256dh, "auth": s.auth}},
+                data=payload, vapid_private_key=os.getenv("VAPID_PRIVATE_KEY"),
+                vapid_claims={"sub": f"mailto:{push_service._vapid_claim_email()}"},
+                ttl=86400, headers={"Urgency": "high"}, curl=True)
+            print("Headers reales hacia FCM:")
+            for h in re.findall(r'-H "([^"]+)"', cmd):
+                print("  ", h.split(",")[0][:80])
+            print("→ Debe verse 'urgency: high'. (no se envió nada)")
+            return
+
+        # Envío real, con marca de tiempo para MEDIR la latencia hasta el celular.
+        from datetime import datetime, timezone, timedelta
+        t_lima = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=-5)))
+        print(f"\n⏱  ENVIADO a las {t_lima:%H:%M:%S} (hora Lima). "
+              f"Anota a qué hora aparece en el celular → esa diferencia es la latencia FCM→dispositivo.")
         ok = falla = 0
         for s in subs:
             status = await asyncio.to_thread(push_service._enviar_webpush_sync, s, payload)
@@ -99,10 +125,10 @@ async def main() -> None:
                 print(f"  ✗ {str(s.id)[:8]}  muerta (status {status})")
                 falla += 1
             else:
-                print(f"  ✓ {str(s.id)[:8]}  enviada (status {status or 'OK/201'})")
+                print(f"  ✓ {str(s.id)[:8]}  aceptada por FCM (201)")
                 ok += 1
-        print(f"\nResultado: {ok} enviada(s), {falla} muerta(s). "
-              f"Revisa el dispositivo — debe aparecer la notificación.")
+        print(f"\nResultado: {ok} aceptada(s) por FCM, {falla} muerta(s). "
+              f"El '201' es solo que FCM la recibió; la latencia real se mide en el celular.")
     await eng.dispose()
 
 
