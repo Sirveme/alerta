@@ -372,6 +372,12 @@ class Contribuyente(Base, TimestampMixin):
     # si esto existe (hubo un full previo = base contra la que comparar). El primer
     # scan y el barrido nocturno lo setean.
     ultimo_barrido_full_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Filtro de años de deuda POR BUZÓN (zAlerta-72). `desde` = año desde el que el
+    # usuario quiere VER su deuda (filtro de lectura, sube/baja libre). `cubierto`
+    # = año más antiguo REALMENTE descargado a BD (el scraper baja desde aquí; solo
+    # decrece al ampliar). NULL en ambos → default año_actual − 2.
+    anio_deuda_desde: Mapped[int | None] = mapped_column(Integer)
+    anio_deuda_cubierto_desde: Mapped[int | None] = mapped_column(Integer)
     # Aviso (push) "tu credencial dejó de servir" enviado UNA vez al entrar en
     # ERROR_CREDENCIAL (zAlerta-13 P2). Se limpia al reconectar.
     credencial_error_avisada: Mapped[bool] = mapped_column(
