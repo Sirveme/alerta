@@ -669,7 +669,8 @@ def _tiene_monto(texto: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────
 # Orquestación
 # ─────────────────────────────────────────────────────────────────────
-def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None) -> dict:
+def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
+                 anio_desde: int | None = None) -> dict:
     # conocidos (zAlerta-46): set de cod_mensaje ya en BD. Si se pasa → lectura
     # INCREMENTAL (para cuando una página completa ya es conocida y salta los
     # mensajes ya vistos). Si es None → barrido COMPLETO.
@@ -806,9 +807,11 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None) -> dict:
             # (dos velocidades). El self-check del PRIMER documento decide si el
             # lote sigue o se aborta (no bajar 100 PDFs equivocados).
             anio_actual = ahora_lima().year
-            # min() garantiza que NUNCA baje del comportamiento previo (actual+anterior).
-            anios_descarga = set(range(min(ANIO_DEUDA_DESDE, anio_actual - 1),
-                                       anio_actual + 1))
+            # zAlerta-72: el año-desde viene POR BUZÓN (anio_desde). Si no se pasa,
+            # default año_actual − 2 (arranque rápido). min() garantiza cubrir al
+            # menos actual+anterior (nunca menos que el comportamiento base).
+            desde = anio_desde if anio_desde else (anio_actual - 2)
+            anios_descarga = set(range(min(desde, anio_actual - 1), anio_actual + 1))
             self_check = {"hecho": False, "ok": None, "abortado": False}
             resultado["valorados_intentados"] = 0
             resultado["valorados_descargados"] = 0

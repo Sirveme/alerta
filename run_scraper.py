@@ -57,14 +57,16 @@ async def _contribuyentes_a_scrapear(session, ruc_filtro: str | None):
 
 
 def _scrapear_sync(ruc: str, usuario_sol: str, clave_sol: str,
-                   conocidos: set | None = None) -> dict:
+                   conocidos: set | None = None,
+                   anio_desde: int | None = None) -> dict:
     """Llama al scraper Playwright (sync) con las credenciales descifradas.
-    conocidos (zAlerta-46): set de cod_mensaje ya en BD → lectura incremental."""
+    conocidos (zAlerta-46): set de cod_mensaje ya en BD → lectura incremental.
+    anio_desde (zAlerta-72): año más antiguo de deuda a descargar (por buzón)."""
     cfg = scraper.SunatConfig(
         ruc=ruc, usuario_sol=usuario_sol, clave_sol=clave_sol,
         headless=True,
     )
-    return scraper.scrapear_ruc(cfg, conocidos=conocidos)
+    return scraper.scrapear_ruc(cfg, conocidos=conocidos, anio_desde=anio_desde)
 
 
 async def procesar_contribuyente(session, contrib: Contribuyente,
@@ -103,10 +105,16 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
     modo = "FULL" if hacer_full else f"incremental ({len(conocidos)} conocidos)"
     log(f"  {contrib.ruc}: scrapeando [{modo}]...")
 
+    # Año-desde de deuda POR BUZÓN (zAlerta-72): el scraper baja desde el año
+    # CUBIERTO (piso de descarga); si no hay, default año_actual − 2.
+    anio_desde = (contrib.anio_deuda_cubierto_desde
+                  or contrib.anio_deuda_desde
+                  or (datetime.now(TZ_LIMA).year - 2))
+
     # El scraper es sync (Playwright sync_api); lo corremos en un thread
     # para no bloquear el loop async.
     resultado = await asyncio.to_thread(
-        _scrapear_sync, contrib.ruc, cred.usuario_sol, clave, conocidos)
+        _scrapear_sync, contrib.ruc, cred.usuario_sol, clave, conocidos, anio_desde)
 
     if not resultado.get("exito"):
         log(f"  {contrib.ruc}: scraping falló.", "ERROR")
