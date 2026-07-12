@@ -17,8 +17,24 @@ import re
 
 from sqlalchemy import select, func
 
-from models import DocumentoValorado, Contribuyente, Notificacion, TipoValorado
+from models import (
+    DocumentoValorado, Contribuyente, Notificacion, TipoValorado, ahora_lima)
 from clasificacion import COACTIVO_NO_SUMA
+
+
+def anio_deuda_desde_default() -> int:
+    """Año-desde por defecto (zAlerta-72): año actual − 2 (arranque rápido)."""
+    return ahora_lima().year - 2
+
+
+def _anio_de_valorado(dv, fecha_pub) -> int | None:
+    """Año del documento valorado (para el filtro de años). Usa fecha_emisión;
+    si no, la fecha de publicación de la notificación."""
+    if getattr(dv, "fecha_emision", None):
+        return dv.fecha_emision.year
+    if fecha_pub:
+        return fecha_pub.year
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -170,7 +186,8 @@ async def deuda_estudio(session, estudio_id) -> dict:
     """
     rows = (await session.execute(
         select(DocumentoValorado, Contribuyente.ruc, Contribuyente.razon_social,
-               Notificacion.fecha_publica_sunat, Notificacion.subtipo_coactivo)
+               Notificacion.fecha_publica_sunat, Notificacion.subtipo_coactivo,
+               Contribuyente.anio_deuda_desde)
         .join(Contribuyente, Contribuyente.id == DocumentoValorado.contribuyente_id)
         .join(Notificacion, Notificacion.id == DocumentoValorado.notificacion_id,
               isouter=True)
@@ -178,11 +195,17 @@ async def deuda_estudio(session, estudio_id) -> dict:
                # PAGO no es deuda (zAlerta-69): fuera del panel de deuda.
                DocumentoValorado.tipo_valorado != TipoValorado.PAGO))).all()
 
+    desde_default = anio_deuda_desde_default()
     # Estructura intermedia: tipo → ruc → {razon, docs[], total, por_confirmar}
     por_tipo: dict[str, dict] = {}
-    for dv, ruc, razon, fecha_pub, subtipo in rows:
+    for dv, ruc, razon, fecha_pub, subtipo, anio_desde in rows:
         tipo = (dv.tipo_valorado.value if hasattr(dv.tipo_valorado, "value")
                 else dv.tipo_valorado)
+        # Filtro de años POR BUZÓN (zAlerta-72): oculta la deuda más vieja que el
+        # año elegido (se CONSERVA en BD; solo no se muestra).
+        anio_doc = _anio_de_valorado(dv, fecha_pub)
+        if anio_doc is not None and anio_doc < (anio_desde or desde_default):
+            continue
         # Coactivas que NO son deuda (Retención/Levantamiento/Reducción/Conclusión/
         # FL) NO suman en el panel (zAlerta-70): fuera del total, sin inflar.
         if tipo == "cobranza_coactiva" and subtipo in COACTIVO_NO_SUMA:
