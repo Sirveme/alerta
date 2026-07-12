@@ -36,7 +36,8 @@ from cifrado import cifrar_clave_sol
 from ..core import templates, fecha_lima
 from ..deps import UsuarioActual, usuario_actual
 from ..estados import estado_conexion
-from ..deuda import extraer_monto, fmt_soles, extraer_pago, deudor_de_retencion
+from ..deuda import (extraer_monto, fmt_soles, extraer_pago, deudor_de_retencion,
+                     anio_deuda_desde_default)
 from clasificacion import COACTIVO_META, COACTIVO_NO_SUMA
 
 router = APIRouter(tags=["resumen"])
@@ -126,12 +127,20 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             .order_by(Notificacion.fecha_publica_sunat.desc().nullslast(),
                       Notificacion.creado_at.desc()).limit(40)))
         # …MÁS todas las que tienen DEUDA (documento_valorado). zAlerta-49: la
-        # deuda NUNCA se oculta por el LIMIT — antes 7 de 9 Órdenes de Pago
-        # (fecha vieja) caían fuera del top-40 y no se mostraban.
+        # deuda NUNCA se oculta por el LIMIT. zAlerta-72: pero SÍ se filtra por el
+        # año-desde del buzón (la deuda más vieja se conserva en BD, no se muestra).
+        desde_default = anio_deuda_desde_default()
+        _anio_doc = func.coalesce(
+            func.extract("year", DocumentoValorado.fecha_emision),
+            func.extract("year", Notificacion.fecha_publica_sunat))
         deuda_ids = set(await session.scalars(
             select(DocumentoValorado.notificacion_id)
             .join(Contribuyente, Contribuyente.id == DocumentoValorado.contribuyente_id)
-            .where(cond, DocumentoValorado.notificacion_id.is_not(None))))
+            .join(Notificacion, Notificacion.id == DocumentoValorado.notificacion_id)
+            .where(cond, DocumentoValorado.notificacion_id.is_not(None),
+                   or_(_anio_doc.is_(None),
+                       _anio_doc >= func.coalesce(
+                           Contribuyente.anio_deuda_desde, desde_default)))))
         todos_ids = recientes_ids | deuda_ids
         rows = (await session.execute(
             select(Notificacion, Contribuyente.ruc, Contribuyente.razon_social)
@@ -467,6 +476,11 @@ async def cred_guardar(contribuyente_id: uuid.UUID, request: Request,
                               EstadoContribuyente.INACTIVO):
             contrib.estado = EstadoContribuyente.ACTIVO
         contrib.credencial_error_avisada = False
+        # Default del filtro de años de deuda (zAlerta-72): al conectar, año
+        # actual − 2 (arranque rápido). Ajustable luego en la config del buzón.
+        if contrib.anio_deuda_desde is None:
+            contrib.anio_deuda_desde = anio_deuda_desde_default()
+            contrib.anio_deuda_cubierto_desde = contrib.anio_deuda_desde
         # Primera lectura inmediata (zAlerta-27): guardar una credencial válida
         # (alta o reconexión) encola una lectura fresca en la cola diurna del
         # botón "Actualizar ahora"; el worker la procesa y limpia el flag.

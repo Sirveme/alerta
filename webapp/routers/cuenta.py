@@ -15,10 +15,11 @@ ACCIÓN dominante contextual al estado. Reusa:
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy import select
 
 from db import get_session
@@ -27,8 +28,9 @@ from models import (
     ahora_lima,
 )
 from ..core import templates, fecha_lima, WHATSAPP_SOPORTE
-from ..deps import UsuarioActual, usuario_actual
+from ..deps import UsuarioActual, usuario_actual, contribuyente_accesible
 from ..estados import estado_conexion
+from ..deuda import anio_deuda_desde_default
 
 router = APIRouter(tags=["cuenta"])
 
@@ -90,6 +92,8 @@ async def mi_cuenta(request: Request,
                 "razon_social": ct.razon_social or ct.ruc,
                 "conexion": cx, "usuario_sol": cred.usuario_sol if cred else "",
                 "tiene_cred": cred is not None,
+                # Filtro de años de deuda por buzón (zAlerta-72).
+                "anio_deuda_desde": ct.anio_deuda_desde or anio_deuda_desde_default(),
             })
         # Historial de pagos (simple).
         pagos = list(await session.scalars(
@@ -115,4 +119,46 @@ async def mi_cuenta(request: Request,
         "vence": fecha_lima(estudio.suscripcion_vence_at) if estudio and estudio.suscripcion_vence_at else None,
         "historial": historial,
         "whatsapp_soporte": WHATSAPP_SOPORTE,
+        "anio_actual": ahora_lima().year,
+        "anio_min": 2010,   # SUNAT rara vez tiene deuda vía buzón más antigua
     })
+
+
+@router.post("/api/buzon/{contribuyente_id}/anio-deuda")
+async def set_anio_deuda(contribuyente_id: uuid.UUID, request: Request,
+                         anio: int = Form(...),
+                         user: UsuarioActual = Depends(usuario_actual)):
+    """Fija el año-desde de deuda de un buzón (zAlerta-72). Ampliar (año más
+    antiguo que lo cubierto) → FULL dirigido + aviso "trayendo historial".
+    Reducir/ampliar dentro de lo cubierto → solo cambia el filtro (sin re-scrapear,
+    la deuda vieja se CONSERVA en BD)."""
+    ahora = ahora_lima()
+    try:
+        nuevo = int(anio)
+    except (ValueError, TypeError):
+        return JSONResponse({"ok": False, "error": "Año inválido."}, status_code=400)
+    nuevo = max(2010, min(nuevo, ahora.year))   # límites sensatos
+
+    async with get_session() as session:
+        contrib = await contribuyente_accesible(session, user, contribuyente_id)
+        if not contrib:
+            return JSONResponse({"ok": False, "error": "Buzón no encontrado."},
+                                status_code=404)
+        cubierto = contrib.anio_deuda_cubierto_desde or anio_deuda_desde_default()
+        contrib.anio_deuda_desde = nuevo
+        ampliado = nuevo < cubierto
+        if ampliado:
+            # Traer historial faltante: baja el piso cubierto y fuerza un FULL.
+            contrib.anio_deuda_cubierto_desde = nuevo
+            contrib.ultimo_barrido_full_at = None
+        elif contrib.anio_deuda_cubierto_desde is None:
+            contrib.anio_deuda_cubierto_desde = cubierto
+        await session.commit()
+
+    if ampliado:
+        msg = (f"Estamos trayendo tu historial de deuda desde {nuevo}. "
+               f"Puede tardar unos minutos; se irá completando solo.")
+    else:
+        msg = f"Listo. Ahora ves tu deuda desde {nuevo}."
+    return JSONResponse({"ok": True, "anio": nuevo, "ampliado": ampliado,
+                         "mensaje": msg})
