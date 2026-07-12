@@ -108,6 +108,7 @@ class TipoDocumento(str, enum.Enum):
     FRACCIONAMIENTO = "fraccionamiento"
     ESQUELA = "esquela"
     COBRANZA_COACTIVA = "cobranza_coactiva"
+    PAGO = "pago"              # constancia de pago (Formulario 1662, zAlerta-69)
     AVISO = "aviso"
     OTRO = "otro"
 
@@ -120,6 +121,7 @@ ETIQUETA_TIPO_DOCUMENTO: dict[str, str] = {
     "fraccionamiento": "Fraccionamientos",
     "esquela": "Esquelas",
     "cobranza_coactiva": "Cobranza Coactiva",
+    "pago": "Pagos confirmados",
     "aviso": "Avisos",
     "otro": "Otros",
 }
@@ -133,16 +135,19 @@ class TipoValorado(str, enum.Enum):
     RESOLUCION_DETERMINACION = "resolucion_determinacion"
     COBRANZA_COACTIVA = "cobranza_coactiva"
     FRACCIONAMIENTO = "fraccionamiento"
+    PAGO = "pago"              # constancia de pago (no es deuda; zAlerta-69)
 
 
-# Mapa TipoDocumento (clasificación del buzón) → TipoValorado (deuda). Solo los
-# tipos con deuda están aquí; un tipo ausente NO se valora (no se baja 2º PDF).
+# Mapa TipoDocumento (clasificación del buzón) → TipoValorado. Los que llevan
+# 2º PDF permanente en GCS (velocidad rápida): deuda + PAGO (constancia de pago,
+# zAlerta-69). Un tipo ausente NO se valora (no se baja 2º PDF).
 TIPODOC_A_VALORADO: dict = {
     TipoDocumento.ORDEN_PAGO: TipoValorado.ORDEN_PAGO,
     TipoDocumento.MULTA: TipoValorado.RESOLUCION_MULTA,
     TipoDocumento.RESOLUCION_DETERMINACION: TipoValorado.RESOLUCION_DETERMINACION,
     TipoDocumento.COBRANZA_COACTIVA: TipoValorado.COBRANZA_COACTIVA,
     TipoDocumento.FRACCIONAMIENTO: TipoValorado.FRACCIONAMIENTO,
+    TipoDocumento.PAGO: TipoValorado.PAGO,
 }
 
 
@@ -483,6 +488,10 @@ class Notificacion(Base, TimestampMixin):
     # Enum para filtros fiables (zAlerta-01 A.4). Conserva el String libre de arriba.
     tipo_documento_enum: Mapped[TipoDocumento | None] = mapped_column(
         Enum(TipoDocumento), default=TipoDocumento.OTRO, nullable=True, index=True)
+    # Subtipo de resolución coactiva (zAlerta-70): ejecucion/retencion/
+    # levantamiento/reduccion/conclusion/fl. VARCHAR (sin enum pg → sin DDL de tipo).
+    # Determina grupo (riesgo/alivio/cierre/admin), color, etiqueta y si es deuda.
+    subtipo_coactivo: Mapped[str | None] = mapped_column(String(20))
     plazo_vencimiento: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     clasificado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resumen_ia: Mapped[str | None] = mapped_column(Text)  # insight del agente IA
@@ -638,6 +647,8 @@ class PushSuscripcion(Base):
     __tablename__ = "push_suscripciones"
     __table_args__ = (
         UniqueConstraint("usuario_id", "endpoint", name="uq_push_usuario_endpoint"),
+        # Suscripción ligada a la PERSONA (zAlerta-67): unicidad por persona+endpoint.
+        UniqueConstraint("persona_id", "endpoint", name="uq_push_persona_endpoint"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -645,9 +656,14 @@ class PushSuscripcion(Base):
     estudio_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
         nullable=False, index=True)
-    usuario_id: Mapped[uuid.UUID] = mapped_column(
+    # usuario_id: modelo viejo (nullable desde zAlerta-67; las personas nuevas no
+    # tienen fila en usuarios). persona_id: modelo nuevo (login por DNI).
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"),
-        nullable=False, index=True)
+        nullable=True, index=True)
+    persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=True, index=True)
 
     endpoint: Mapped[str] = mapped_column(Text, nullable=False)
     p256dh: Mapped[str] = mapped_column(Text, nullable=False)
@@ -1115,4 +1131,54 @@ class AuditoriaSoporte(Base):
         nullable=True)
     accion: Mapped[str] = mapped_column(String(20), default="VER", nullable=False)
     creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+class LecturaNotificacion(Base):
+    """Estado de lectura POR PERSONA de una notificación (zAlerta-61, Capa 1).
+    Una fila = esta persona vio esta notif. Su ausencia = "Nuevo" para ella.
+    Reemplaza a `notificaciones.leida` como fuente de verdad para personas
+    (el flag global queda como fallback del login viejo). El índice por
+    notificacion_id habilita la Capa 2 ("¿quiénes leyeron esta notif?")."""
+    __tablename__ = "lectura_notificacion"
+    __table_args__ = (
+        UniqueConstraint("persona_id", "notificacion_id",
+                         name="uq_lectura_persona_notif"),
+        Index("ix_lectura_notif", "notificacion_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+    notificacion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
+        nullable=False)
+    leida_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+class PushEnviado(Base):
+    """Registro de push ENVIADO por persona (zAlerta-67). Una fila = a esta
+    persona ya se le avisó de esta notif → no re-enviar a ELLA, pero SÍ a cada
+    otra persona del buzón. Reemplaza al flag global notificado_push como verdad
+    por-persona (el flag sigue como cierre del ciclo/legacy). Alimenta la Capa 3
+    ("avisar al que no vio") con el índice por notificacion_id."""
+    __tablename__ = "push_enviado"
+    __table_args__ = (
+        UniqueConstraint("persona_id", "notificacion_id",
+                         name="uq_push_enviado_persona_notif"),
+        Index("ix_push_enviado_notif", "notificacion_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+    notificacion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
+        nullable=False)
+    enviado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
