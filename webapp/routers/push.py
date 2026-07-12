@@ -15,12 +15,12 @@ import json
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 import asyncio
 
 from db import get_session
-from models import PushSuscripcion, Usuario, ahora_lima
+from models import PushSuscripcion, Usuario, Persona, ahora_lima
 from ..deps import UsuarioActual, usuario_actual, usuario_actual_opcional
 import push_service
 
@@ -69,15 +69,22 @@ async def admin_push_test(
     })
 
     async with get_session() as session:
-        uids = [str(u) for u in (await session.scalars(
+        uids = [u for u in (await session.scalars(
             select(Usuario.id).where(Usuario.dni == dni)))]
-        if not uids:
+        pids = [p for p in (await session.scalars(
+            select(Persona.id).where(Persona.dni == dni)))]
+        if not uids and not pids:
             return JSONResponse(
-                {"ok": False, "error": f"Sin usuario con dni={dni}."}, status_code=404)
+                {"ok": False, "error": f"Sin usuario/persona con dni={dni}."}, status_code=404)
+        # Suscripciones por usuario viejo O por persona (zAlerta-67).
+        cond = []
+        if uids:
+            cond.append(PushSuscripcion.usuario_id.in_(uids))
+        if pids:
+            cond.append(PushSuscripcion.persona_id.in_(pids))
         subs = list(await session.scalars(
             select(PushSuscripcion).where(
-                PushSuscripcion.usuario_id.in_(uids),
-                PushSuscripcion.activa.is_(True))))
+                or_(*cond), PushSuscripcion.activa.is_(True))))
         resultados = []
         for s in subs:
             status = await asyncio.to_thread(
@@ -114,23 +121,35 @@ async def suscribir(request: Request,
         return JSONResponse({"ok": False, "error": "Suscripción inválida."},
                             status_code=400)
 
+    # Ligar la suscripción a la PERSONA (zAlerta-67) y/o al usuario viejo.
+    usuario_id = user.id if user.tiene_usuario else None
+    persona_id = user.persona_id
     async with get_session() as session:
-        existente = await session.scalar(
-            select(PushSuscripcion).where(
-                PushSuscripcion.usuario_id == user.id,
-                PushSuscripcion.endpoint == endpoint))
+        # Buscar una fila existente por endpoint atribuible a este identidad
+        # (por persona_id o por usuario_id) — evita chocar con los unique.
+        ident = []
+        if usuario_id:
+            ident.append(PushSuscripcion.usuario_id == usuario_id)
+        if persona_id:
+            ident.append(PushSuscripcion.persona_id == persona_id)
+        existente = None
+        if ident:
+            existente = await session.scalar(
+                select(PushSuscripcion).where(
+                    PushSuscripcion.endpoint == endpoint, or_(*ident)))
         if existente:
-            # Reactivar/actualizar claves (pueden rotar al re-suscribirse).
             existente.p256dh = p256dh
             existente.auth = auth
             existente.activa = True
+            # Migración suave: completar el id que faltara (persona o usuario).
+            if persona_id and not existente.persona_id:
+                existente.persona_id = persona_id
+            if usuario_id and not existente.usuario_id:
+                existente.usuario_id = usuario_id
         else:
-            # Personas sin fila en `usuarios` (acceso institucional) no guardan
-            # suscripción push (FK usuario_id). No-op amable.
-            if not user.tiene_usuario:
-                return JSONResponse({"ok": True, "skip": True})
             session.add(PushSuscripcion(
-                estudio_id=user.estudio_id, usuario_id=user.id,
+                estudio_id=user.estudio_id,
+                usuario_id=usuario_id, persona_id=persona_id,
                 endpoint=endpoint, p256dh=p256dh, auth=auth, activa=True))
         await session.commit()
     return JSONResponse({"ok": True})
