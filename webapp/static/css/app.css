@@ -2095,3 +2095,12 @@ a.tarjeta-link { display:block; color:inherit; }
   border:1px solid var(--borde); white-space:nowrap; }
 .rsm-eq-m--si { color:var(--u-aldia); border-color:color-mix(in srgb,var(--u-aldia) 45%,transparent); }
 .rsm-eq-m--no { color:var(--texto-suave); }
+
+/* zAlerta-69 · Pago confirmado (constancia 1662) */
+.rsm-lbl--pago { color:var(--u-aldia); border:1px solid color-mix(in srgb,var(--u-aldia) 40%,transparent); }
+.rsm-pago-chip { display:flex; align-items:center; gap:6px; margin:6px 0 2px;
+  font-size:.8rem; color:var(--u-aldia); font-weight:600; }
+.rsm-pago-chip .material-symbols-outlined { font-size:18px; }
+.rsm-pago-datos { display:flex; flex-direction:column; gap:4px; margin:4px 0 10px;
+  font-size:.9rem; color:var(--texto); }
+.rsm-pago-datos span { padding:2px 0; border-bottom:1px dashed var(--borde); }
