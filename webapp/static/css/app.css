@@ -2084,3 +2084,14 @@ a.tarjeta-link { display:block; color:inherit; }
 .pwa-ios-hoja p { margin:6px 0; }
 .pwa-ios-ico { display:inline-block; padding:0 4px; }
 .pwa-ios-nota { font-size:.82rem; color:var(--texto-suave); }
+
+/* zAlerta-68 · Estado de lectura del EQUIPO por notificación (Capa 2) */
+.rsm-equipo { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  margin:8px 0 2px; padding-top:8px; border-top:1px dashed var(--borde); }
+.rsm-eq-n { font-size:.72rem; font-weight:700; color:var(--texto-suave);
+  white-space:nowrap; }
+.rsm-eq-lista { display:flex; gap:6px; flex-wrap:wrap; }
+.rsm-eq-m { font-size:.72rem; font-weight:600; padding:2px 8px; border-radius:999px;
+  border:1px solid var(--borde); white-space:nowrap; }
+.rsm-eq-m--si { color:var(--u-aldia); border-color:color-mix(in srgb,var(--u-aldia) 45%,transparent); }
+.rsm-eq-m--no { color:var(--texto-suave); }
