@@ -490,6 +490,34 @@ async def cred_guardar(contribuyente_id: uuid.UUID, request: Request,
     return JSONResponse({"ok": True})
 
 
+@router.get("/api/valor/{valorado_id}/asociados")
+async def api_valor_asociados(valorado_id: uuid.UUID,
+                              user: UsuarioActual = Depends(usuario_actual)):
+    """Documentos ASOCIADOS a un valor de deuda (zAlerta-73): pagos que lo pagan
+    + resoluciones coactivas que lo ejecutan. Al vuelo por número normalizado,
+    SIN calcular saldo (solo yuxtapone hechos). Multi-tenant."""
+    from ..deuda import asociados_de_valor
+    async with get_session() as session:
+        dv = await session.get(DocumentoValorado, valorado_id)
+        if not dv:
+            return JSONResponse({"ok": False}, status_code=404)
+        # Multi-tenant: el valor debe colgar de un contribuyente accesible.
+        if user.es_empresario:
+            cond = Contribuyente.cuenta_empresario_id == user.estudio_id
+        else:
+            cond = Contribuyente.estudio_id == user.estudio_id
+        ok = await session.scalar(
+            select(Contribuyente.id).where(
+                Contribuyente.id == dv.contribuyente_id, cond))
+        if not ok:
+            return JSONResponse({"ok": False}, status_code=404)
+        subs = {n: st for n, st in (await session.execute(
+            select(Notificacion.id, Notificacion.subtipo_coactivo)
+            .where(Notificacion.contribuyente_id == dv.contribuyente_id))).all()}
+        asoc = await asociados_de_valor(session, dv, subs)
+    return JSONResponse({"ok": True, "num_documento": dv.num_documento, **asoc})
+
+
 @router.post("/api/alerta/vista")
 async def api_alerta_vista(user: UsuarioActual = Depends(usuario_actual)):
     """Registra que el usuario confirmó la lectura del push (botón GRACIAS).
