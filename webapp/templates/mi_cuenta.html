@@ -27,6 +27,17 @@
         <div class="mc-estado-tit">{{ cx.titulo }}.</div>
         <p class="mc-estado-msg">{{ cx.mensaje }}</p>
         <div class="mc-estado-ruc">{{ r.razon_social }} · RUC {{ r.ruc }}</div>
+        {% if r.tiene_cred %}
+        <div class="mc-anio" data-cid="{{ r.id }}">
+          <label for="mc-anio-{{ r.id }}">Vigilar mi deuda desde el año:</label>
+          <select id="mc-anio-{{ r.id }}" class="mc-anio-sel">
+            {% for y in range(anio_actual, anio_min - 1, -1) %}
+            <option value="{{ y }}"{% if y == r.anio_deuda_desde %} selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+          <p class="mc-anio-msg" hidden></p>
+        </div>
+        {% endif %}
       </div>
       {% endfor %}
 
@@ -149,4 +160,28 @@
 
 {% block scripts %}
 <script src="/static/js/mi-cuenta.js"></script>
+<script>
+  // Filtro de años de deuda por buzón (zAlerta-72).
+  document.querySelectorAll('.mc-anio').forEach(function (box) {
+    var sel = box.querySelector('.mc-anio-sel');
+    var msg = box.querySelector('.mc-anio-msg');
+    if (!sel) return;
+    sel.addEventListener('change', function () {
+      var cid = box.dataset.cid;
+      var fd = new FormData(); fd.append('anio', sel.value);
+      sel.disabled = true;
+      fetch('/api/buzon/' + cid + '/anio-deuda', { method: 'POST', body: fd, credentials: 'include' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          sel.disabled = false;
+          if (d && d.ok) {
+            msg.textContent = d.mensaje;
+            msg.className = 'mc-anio-msg' + (d.ampliado ? ' mc-anio-msg--info' : ' mc-anio-msg--ok');
+            msg.hidden = false;
+          }
+        })
+        .catch(function () { sel.disabled = false; });
+    });
+  });
+</script>
 {% endblock %}
