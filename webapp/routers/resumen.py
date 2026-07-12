@@ -17,7 +17,7 @@ import re
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 
 import uuid
@@ -30,7 +30,7 @@ from models import (
     ETIQUETA_TIPO_DOCUMENTO, ahora_lima, Usuario, EstudioContable,
     Recordatorio, ModoRecordatorio,
     SolicitudValidacionCredencial, EstadoValidacion,
-    DocumentoValorado, LecturaNotificacion, Acceso,
+    DocumentoValorado, LecturaNotificacion, Acceso, Persona,
 )
 from cifrado import cifrar_clave_sol
 from ..core import templates, fecha_lima
@@ -39,6 +39,13 @@ from ..estados import estado_conexion
 from ..deuda import extraer_monto, fmt_soles
 
 router = APIRouter(tags=["resumen"])
+
+
+def _nombre_corto(nombre: str | None) -> str:
+    """'SANTANA SIFUENTES JORGE LUIS' → 'Santana' (apellido, legible en móvil)."""
+    if not nombre:
+        return "—"
+    return nombre.strip().split()[0].capitalize()
 
 
 def _periodo_de(asunto: str | None) -> str:
@@ -156,6 +163,26 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                 select(LecturaNotificacion.notificacion_id).where(
                     LecturaNotificacion.persona_id == user.persona_id,
                     LecturaNotificacion.notificacion_id.in_(notif_ids))))
+        # Estado de lectura de EQUIPO (Capa 2, zAlerta-68): personas del buzón
+        # (accesos nominales vigentes al estudio activo), SIN soporte. En lote.
+        equipo_personas: list = []
+        lecturas_equipo: set = set()
+        if notif_ids:
+            hoy = ahora_lima().date()
+            equipo_personas = (await session.execute(
+                select(Persona.id, Persona.nombre_completo)
+                .join(Acceso, Acceso.persona_id == Persona.id)
+                .where(Acceso.estudio_id == user.estudio_id,
+                       or_(Acceso.vigencia_fin.is_(None), Acceso.vigencia_fin >= hoy),
+                       Persona.rol_sistema.is_(None))   # excluir SOPORTE_GLOBAL
+                .distinct())).all()
+            if len(equipo_personas) >= 2:
+                lecturas_equipo = set((await session.execute(
+                    select(LecturaNotificacion.persona_id,
+                           LecturaNotificacion.notificacion_id)
+                    .where(LecturaNotificacion.persona_id.in_(
+                               [p.id for p in equipo_personas]),
+                           LecturaNotificacion.notificacion_id.in_(notif_ids)))).all())
         # Señal UNIFICADA de lectura activa (zAlerta-42/43): cubre la primera
         # lectura (ultimo_scrapeo_at NULL) Y las re-lecturas del botón "Actualizar
         # ahora" (actualizar_solicitado=True, que el worker baja al terminar). El
@@ -198,7 +225,7 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                 "monto_num": monto,
                 "gcs_disponible": bool(dv.gcs_key),
             }
-        filas.append({
+        fila = {
             "id": str(n.id),
             "documento": documento,
             "tipo": tipo_enum,
@@ -217,7 +244,18 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "razon_social": razon or ruc,
             "leida": (n.id in leidas_persona) if user.persona_id else bool(n.leida),
             **deuda,
-        })
+        }
+        # Estado de equipo (Capa 2): solo si el buzón tiene 2+ personas.
+        if len(equipo_personas) >= 2:
+            miembros, leidos = [], 0
+            for pid, nom in equipo_personas:
+                vio = (pid, n.id) in lecturas_equipo
+                if vio:
+                    leidos += 1
+                miembros.append({"nombre": _nombre_corto(nom), "leida": vio})
+            fila["equipo"] = {"total": len(equipo_personas),
+                              "leidos": leidos, "miembros": miembros}
+        filas.append(fila)
 
     return JSONResponse({
         "ok": True,
