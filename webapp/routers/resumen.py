@@ -36,7 +36,7 @@ from cifrado import cifrar_clave_sol
 from ..core import templates, fecha_lima
 from ..deps import UsuarioActual, usuario_actual
 from ..estados import estado_conexion
-from ..deuda import extraer_monto, fmt_soles
+from ..deuda import extraer_monto, fmt_soles, extraer_pago
 
 router = APIRouter(tags=["resumen"])
 
@@ -210,21 +210,32 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         adjuntos = [{"id": str(a.id), "nombre": a.nombre_archivo}
                     for a in (n.adjuntos or [])
                     if a.bytea_temporal is not None or a.gcs_key]
-        # Deuda (si esta notificación tiene un documento valorado).
+        # Documento valorado: DEUDA o PAGO confirmado (zAlerta-69).
         dv = vals.get(n.id)
         deuda = {"tiene_deuda": False}
+        pago = None
         if dv is not None:
-            monto = _monto_de_texto(dv.pdf_texto)
-            deuda = {
-                "tiene_deuda": True,
-                "valorado_id": str(dv.id),
-                "tipo_valorado": (dv.tipo_valorado.value
-                                  if hasattr(dv.tipo_valorado, "value") else dv.tipo_valorado),
-                "num_documento": dv.num_documento,
-                "monto": _monto_fmt(monto),
-                "monto_num": monto,
-                "gcs_disponible": bool(dv.gcs_key),
-            }
+            tv = (dv.tipo_valorado.value if hasattr(dv.tipo_valorado, "value")
+                  else dv.tipo_valorado)
+            if tv == "pago":
+                p = extraer_pago(dv.pdf_texto)
+                pago = {
+                    "valorado_id": str(dv.id),
+                    "gcs_disponible": bool(dv.gcs_key),
+                    "num_orden": p.get("n_orden") or dv.num_documento,
+                    **p,
+                }
+            else:
+                monto = _monto_de_texto(dv.pdf_texto)
+                deuda = {
+                    "tiene_deuda": True,
+                    "valorado_id": str(dv.id),
+                    "tipo_valorado": tv,
+                    "num_documento": dv.num_documento,
+                    "monto": _monto_fmt(monto),
+                    "monto_num": monto,
+                    "gcs_disponible": bool(dv.gcs_key),
+                }
         fila = {
             "id": str(n.id),
             "documento": documento,
@@ -243,6 +254,8 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "ruc": ruc,
             "razon_social": razon or ruc,
             "leida": (n.id in leidas_persona) if user.persona_id else bool(n.leida),
+            "es_pago": pago is not None,
+            "pago": pago,
             **deuda,
         }
         # Estado de equipo (Capa 2): solo si el buzón tiene 2+ personas.
