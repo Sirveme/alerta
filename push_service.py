@@ -23,9 +23,12 @@ import logging
 import os
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
-from models import PushSuscripcion, Usuario, Contribuyente, Notificacion, ahora_lima, TZ_LIMA
+from models import (
+    PushSuscripcion, Usuario, Contribuyente, Notificacion, ahora_lima, TZ_LIMA,
+    Acceso,
+)
 
 # Imagen FIJA del push expandido = leyenda del semáforo de colores (zAlerta-17).
 # La provee el fundador; si no existe, el navegador la ignora (degrada bien).
@@ -117,6 +120,25 @@ async def notificar_usuario(session, usuario_id, title: str, body: str,
     except Exception as e:
         logger.warning("push: notificar_usuario %s falló: %s", usuario_id, e)
         return 0
+
+
+async def personas_del_buzon(session, contrib: Contribuyente) -> list:
+    """persona_ids con acceso NOMINAL vigente al buzón (zAlerta-67).
+
+    Nominal = tiene una fila en `accesos` a la organización (estudio o cuenta
+    empresario) o al propio contribuyente, con vigencia vigente. Esto EXCLUYE al
+    SOPORTE_GLOBAL sobre buzones ajenos: soporte ve todo, pero no tiene acceso
+    nominal al CCPL, así que no aparece aquí → no recibe push del CCPL."""
+    hoy = ahora_lima().date()
+    orgs = [contrib.estudio_id]
+    if contrib.cuenta_empresario_id:
+        orgs.append(contrib.cuenta_empresario_id)
+    return list(await session.scalars(
+        select(Acceso.persona_id).where(
+            or_(Acceso.estudio_id.in_(orgs),
+                Acceso.contribuyente_id == contrib.id),
+            or_(Acceso.vigencia_fin.is_(None), Acceso.vigencia_fin >= hoy))
+        .distinct()))
 
 
 async def _usuarios_objetivo(session, contrib: Contribuyente) -> list:

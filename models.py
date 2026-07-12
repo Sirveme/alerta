@@ -638,6 +638,8 @@ class PushSuscripcion(Base):
     __tablename__ = "push_suscripciones"
     __table_args__ = (
         UniqueConstraint("usuario_id", "endpoint", name="uq_push_usuario_endpoint"),
+        # Suscripción ligada a la PERSONA (zAlerta-67): unicidad por persona+endpoint.
+        UniqueConstraint("persona_id", "endpoint", name="uq_push_persona_endpoint"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -645,9 +647,14 @@ class PushSuscripcion(Base):
     estudio_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
         nullable=False, index=True)
-    usuario_id: Mapped[uuid.UUID] = mapped_column(
+    # usuario_id: modelo viejo (nullable desde zAlerta-67; las personas nuevas no
+    # tienen fila en usuarios). persona_id: modelo nuevo (login por DNI).
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"),
-        nullable=False, index=True)
+        nullable=True, index=True)
+    persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=True, index=True)
 
     endpoint: Mapped[str] = mapped_column(Text, nullable=False)
     p256dh: Mapped[str] = mapped_column(Text, nullable=False)
@@ -1140,4 +1147,29 @@ class LecturaNotificacion(Base):
         UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
         nullable=False)
     leida_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+class PushEnviado(Base):
+    """Registro de push ENVIADO por persona (zAlerta-67). Una fila = a esta
+    persona ya se le avisó de esta notif → no re-enviar a ELLA, pero SÍ a cada
+    otra persona del buzón. Reemplaza al flag global notificado_push como verdad
+    por-persona (el flag sigue como cierre del ciclo/legacy). Alimenta la Capa 3
+    ("avisar al que no vio") con el índice por notificacion_id."""
+    __tablename__ = "push_enviado"
+    __table_args__ = (
+        UniqueConstraint("persona_id", "notificacion_id",
+                         name="uq_push_enviado_persona_notif"),
+        Index("ix_push_enviado_notif", "notificacion_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    persona_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+    notificacion_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
+        nullable=False)
+    enviado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)

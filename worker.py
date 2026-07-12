@@ -28,6 +28,7 @@ ENV opcionales:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections import defaultdict
 from datetime import datetime
@@ -44,7 +45,7 @@ from models import (
     SolicitudValidacionCredencial, EstadoValidacion, ahora_lima,
     EstudioContable, CredencialSol, EstadoSuscripcion, TipoCuenta,
     Recordatorio, ModoRecordatorio, Usuario, ETIQUETA_TIPO_DOCUMENTO,
-    TipoDocumento,
+    TipoDocumento, PushSuscripcion, PushEnviado,
 )
 
 # Horarios (hora Lima) en que se permiten los push de recordatorio (no spamear).
@@ -345,13 +346,16 @@ async def _procesar_fondo(session, full: bool = False) -> int:
 
 
 async def _enviar_push_agrupado(session) -> int:
-    """PUSH AGRUPADO por horarios fijos (zAlerta-48 FASE C).
+    """PUSH AGRUPADO por horarios fijos (zAlerta-48 FASE C + zAlerta-67).
 
-    Solo en HORAS_PUSH. Reúne las notificaciones NUEVAS aún no avisadas
-    (notificado_push=False), las agrupa por usuario y envía UN push por usuario
-    ("Tienes N avisos nuevos…", destacando deuda). Luego marca esas notificaciones
-    como avisadas → un solo push por notificación, sin repetir aunque el usuario no
-    lo abra. No depende de "¿vio el push?"."""
+    Solo en HORAS_PUSH. Reúne las notificaciones nuevas (notificado_push=False) y
+    las dirige a CADA DESTINATARIO del buzón — PERSONAS con acceso nominal vigente
+    (modelo nuevo) y USUARIOS viejos (respaldo dual) — enviando UN push por
+    destinatario ("Tienes N avisos nuevos…"). Deduplica por endpoint (un mismo
+    dispositivo suscrito en dos cuentas no recibe doble). Cada persona recibe lo
+    suyo aunque otra ya haya sido notificada; se registra en push_enviado para no
+    re-enviar a la MISMA persona (y alimenta la Capa 3). SOPORTE_GLOBAL no recibe
+    push de buzones ajenos (personas_del_buzon solo mira accesos nominales)."""
     ahora = ahora_lima()
     if ahora.hour not in HORAS_PUSH:
         return 0
@@ -366,42 +370,82 @@ async def _enviar_push_agrupado(session) -> int:
     contribs = {c.id: c for c in await session.scalars(
         select(Contribuyente).where(Contribuyente.id.in_(list(por_contrib.keys()))))}
 
-    # Acumular por usuario (un usuario puede vigilar varios RUCs).
-    por_usuario = defaultdict(lambda: {"total": 0, "deuda": 0})
+    # Destinatario = ("p", persona_id) | ("u", usuario_id) → sus notifs + deuda.
+    recip = defaultdict(lambda: {"notifs": [], "deuda": 0})
     for cid, lst in por_contrib.items():
         contrib = contribs.get(cid)
         if not contrib:
             continue
         deuda = sum(1 for n in lst if n.tipo_documento_enum in _DEUDA_TIPOS)
+        for pid in await push_service.personas_del_buzon(session, contrib):
+            recip[("p", pid)]["notifs"].extend(lst)
+            recip[("p", pid)]["deuda"] += deuda
         for uid in await _usuarios_de(session, contrib):
-            por_usuario[uid]["total"] += len(lst)
-            por_usuario[uid]["deuda"] += deuda
+            recip[("u", uid)]["notifs"].extend(lst)
+            recip[("u", uid)]["deuda"] += deuda
 
-    enviados = 0
-    for uid, d in por_usuario.items():
-        total, deuda = d["total"], d["deuda"]
+    enviados_endpoints = set()   # dedup global por endpoint (mismo device, 2 cuentas)
+    avisados = 0
+    for (kind, rid), d in recip.items():
+        lst = d["notifs"]
+        # Personas: excluir lo YA enviado a ELLA (no re-avisar a la misma persona).
+        if kind == "p":
+            ya = set(await session.scalars(
+                select(PushEnviado.notificacion_id).where(
+                    PushEnviado.persona_id == rid,
+                    PushEnviado.notificacion_id.in_([n.id for n in lst]))))
+            nuevos = [n for n in lst if n.id not in ya]
+        else:
+            nuevos = lst
+        if not nuevos:
+            continue
+        if kind == "p":
+            subs = list(await session.scalars(select(PushSuscripcion).where(
+                PushSuscripcion.persona_id == rid, PushSuscripcion.activa.is_(True))))
+        else:
+            subs = list(await session.scalars(select(PushSuscripcion).where(
+                PushSuscripcion.usuario_id == rid, PushSuscripcion.activa.is_(True))))
+        subs = [s for s in subs if s.endpoint not in enviados_endpoints]
+
+        total, deuda = len(nuevos), d["deuda"]
         if deuda > 0:
             body = (f"Tienes {total} aviso(s) nuevo(s), {deuda} con deuda por "
                     f"atender. Toca RESUMEN para revisarlos.")
         else:
             body = f"Tienes {total} aviso(s) nuevo(s) en tu Buzón SUNAT."
-        try:
-            await push_service.notificar_usuario(
-                session, uid, "Novedades en tu Buzón SUNAT", body,
-                url="/resumen?from=push", acciones=True,
-                tag="alertape-buzon", requiere=(deuda > 0))
-            enviados += 1
-        except Exception as e:
-            log(f"  push agrupado usuario {uid}: falló (sigo): {e}", "WARN")
+        payload = json.dumps({
+            "title": "Novedades en tu Buzón SUNAT", "body": body,
+            "url": "/resumen?from=push", "acciones": True,
+            "tag": "alertape-buzon", "requiere": (deuda > 0)})
 
-    # Marcar TODAS como avisadas (un push por notificación, próximo horario).
+        envio_ok = False
+        for s in subs:
+            try:
+                status = await asyncio.to_thread(
+                    push_service._enviar_webpush_sync, s, payload)
+            except Exception as e:
+                log(f"  push {kind}:{str(rid)[:8]} sub falló (sigo): {e}", "WARN")
+                continue
+            if status in (400, 404, 410):
+                s.activa = False
+            else:
+                enviados_endpoints.add(s.endpoint)
+                envio_ok = True
+        if envio_ok:
+            avisados += 1
+            # Ledger por-persona: solo lo REALMENTE avisado (verdad para Capa 3).
+            if kind == "p":
+                for n in nuevos:
+                    session.add(PushEnviado(persona_id=rid, notificacion_id=n.id))
+
+    # Cierre del ciclo (legacy): evita reprocesar las mismas en el próximo horario.
     for n in notifs:
         n.notificado_push = True
         n.notificado_push_at = ahora
     await session.commit()
     log(f"PUSH AGRUPADO ({ahora.hour}h): {len(notifs)} notif nuevas → "
-        f"{enviados} usuario(s).", "OK")
-    return enviados
+        f"{avisados} destinatario(s).", "OK")
+    return avisados
 
 
 async def ciclo() -> None:
