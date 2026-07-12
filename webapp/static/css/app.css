@@ -2112,3 +2112,13 @@ a.tarjeta-link { display:block; color:inherit; }
   border:1px solid color-mix(in srgb,var(--u-critica) 40%,transparent); }
 .rsm-coa-nota { margin:8px 0 2px; padding:8px 10px; border-radius:8px; font-size:.82rem;
   color:var(--texto-suave); background:var(--superficie-2); border:1px solid var(--borde); }
+
+/* zAlerta-72 · Selector de año-desde de deuda por buzón */
+.mc-anio { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px;
+  padding-top:10px; border-top:1px dashed var(--borde); }
+.mc-anio label { font-size:.82rem; color:var(--texto-suave); }
+.mc-anio-sel { padding:6px 10px; border-radius:8px; border:1px solid var(--borde);
+  background:var(--fondo); color:var(--texto); font:inherit; font-weight:700; }
+.mc-anio-msg { width:100%; margin:6px 0 0; font-size:.8rem; }
+.mc-anio-msg--ok { color:var(--u-aldia); }
+.mc-anio-msg--info { color:var(--u-importante); }
