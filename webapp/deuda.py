@@ -137,6 +137,66 @@ def deudor_de_retencion(texto: str | None) -> str | None:
     return m.group(1) if m else None
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Asociación valor ↔ pago ↔ coactiva (zAlerta-73). AL VUELO por número
+# normalizado. Diagnóstico (CCPL): el match por dígitos es FIABLE —
+#   · REC lista en su pdf_texto el nº de la OP que ejecuta (123-001-0700325).
+#   · El pago 1662 guarda `valor_pagado` (1230010700325 = ese mismo nº).
+# NO se inventan vínculos: solo si el núcleo de dígitos coincide.
+# ─────────────────────────────────────────────────────────────────────
+_RE_NUMDOC = re.compile(r"\d{3}-\d{3}-\d{6,7}")
+
+
+def _norm_doc(s: str | None) -> str:
+    """Núcleo comparable de un nº de documento: solo dígitos.
+    '123-001-0700325' → '1230010700325'; '1230010700325' → '1230010700325'."""
+    return re.sub(r"\D", "", s or "")
+
+
+def _nums_en_texto(texto: str | None) -> set[str]:
+    """Números de documento (formato 123-00X-XXXXXXX) hallados en un texto,
+    normalizados a solo dígitos."""
+    return {_norm_doc(x) for x in _RE_NUMDOC.findall(texto or "")}
+
+
+async def asociados_de_valor(session, dv, subtipo_de: dict | None = None) -> dict:
+    """Documentos ASOCIADOS a un valor de deuda (al vuelo, por número normalizado):
+    pagos que lo pagan + resoluciones coactivas que lo ejecutan/refieren. Mismo
+    contribuyente. Degrada con gracia: vínculo solo si el núcleo coincide.
+
+    subtipo_de: mapa opcional {notificacion_id: subtipo_coactivo} para etiquetar
+    las coactivas asociadas con su subtipo (zAlerta-70)."""
+    nucleo = _norm_doc(dv.num_documento)
+    if not nucleo:
+        return {"pagos": [], "coactivas": []}
+    otros = list(await session.scalars(
+        select(DocumentoValorado).where(
+            DocumentoValorado.contribuyente_id == dv.contribuyente_id,
+            DocumentoValorado.id != dv.id)))
+    pagos, coactivas = [], []
+    for o in otros:
+        tv = (o.tipo_valorado.value if hasattr(o.tipo_valorado, "value")
+              else o.tipo_valorado)
+        if tv == "pago":
+            p = extraer_pago(o.pdf_texto)
+            if p.get("valor_pagado") and _norm_doc(p["valor_pagado"]) == nucleo:
+                pagos.append({
+                    "valorado_id": str(o.id), "gcs": bool(o.gcs_key),
+                    "importe_fmt": p.get("importe_fmt"), "fecha": p.get("fecha"),
+                    "n_operacion": p.get("n_operacion"), "banco": p.get("banco"),
+                    "periodo": p.get("periodo"), "tributo": p.get("tributo"),
+                })
+        elif tv == "cobranza_coactiva" and o.notificacion_id != dv.notificacion_id:
+            # La coactiva ejecuta/menciona este valor si su texto trae el núcleo.
+            if nucleo in _nums_en_texto(o.pdf_texto):
+                sub = (subtipo_de or {}).get(o.notificacion_id)
+                coactivas.append({
+                    "valorado_id": str(o.id), "gcs": bool(o.gcs_key),
+                    "num_documento": o.num_documento, "subtipo": sub,
+                })
+    return {"pagos": pagos, "coactivas": coactivas}
+
+
 def extraer_pago(texto: str | None) -> dict:
     """Datos estructurados de una constancia de pago (Formulario 1662).
     Devuelve un dict con los campos detectados (None si no se hallan). El
