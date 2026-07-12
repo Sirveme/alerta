@@ -62,7 +62,14 @@ _ASUNTO_INFORMATIVO = (
     "certificado digital", "emision de certificado",
     "comunicacion informativa", "nuevos inscritos",
     "expediente mpv", "se registro expediente",
-    "formulario 1662", "pago de valores",
+)
+
+# PAGOS confirmados (zAlerta-69): constancias de pago con PDF de datos ricos.
+# Es categoría propia (ni deuda ni informativo) y entra en velocidad rápida
+# (se baja el PDF a GCS). No es urgente: es la confirmación de un pago hecho.
+_ASUNTO_PAGO = (
+    "formulario 1662", "pago de valores", "constancia de pago",
+    "pago de tributos", "pago de fraccionamiento", "pago de deuda",
 )
 
 
@@ -101,6 +108,11 @@ def _por_asunto(asunto: str | None) -> tuple[TipoDocumento, Urgencia, bool]:
         return TipoDocumento.FRACCIONAMIENTO, Urgencia.IMPORTANTE, True
     if "esquela" in a:
         return TipoDocumento.ESQUELA, Urgencia.IMPORTANTE, True
+
+    # 2.b) PAGO confirmado (constancia con PDF de datos ricos). Categoría propia,
+    #      no urgente. Va antes que los informativos: el 1662 NO es un aviso.
+    if any(k in a for k in _ASUNTO_PAGO):
+        return TipoDocumento.PAGO, Urgencia.INFORMATIVA, True
 
     # 3) Informativos conocidos → AVISO/INFORMATIVA (nunca escalan).
     if any(k in a for k in _ASUNTO_INFORMATIVO):

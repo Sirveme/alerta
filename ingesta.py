@@ -177,6 +177,15 @@ async def ingestar_resultado(
                 if cambio:
                     existe.clasificado_at = ahora_lima()
                     stats["reclasificados"] = stats.get("reclasificados", 0) + 1
+            # Upgrade a PAGO (zAlerta-69): los 1662 viejos quedaron como AVISO;
+            # al re-barrer se corrigen a PAGO (categoría propia). Solo sube a PAGO,
+            # nunca degrada una clasificación de deuda ya válida.
+            elif (tipo_doc == TipoDocumento.PAGO
+                  and existe.tipo_documento_enum != TipoDocumento.PAGO):
+                existe.tipo_documento_enum = TipoDocumento.PAGO
+                existe.urgencia = urgencia
+                existe.clasificado_at = ahora_lima()
+                stats["reclasificados"] = stats.get("reclasificados", 0) + 1
         else:
             notif = Notificacion(
                 estudio_id=estudio_id,

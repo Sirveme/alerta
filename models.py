@@ -108,6 +108,7 @@ class TipoDocumento(str, enum.Enum):
     FRACCIONAMIENTO = "fraccionamiento"
     ESQUELA = "esquela"
     COBRANZA_COACTIVA = "cobranza_coactiva"
+    PAGO = "pago"              # constancia de pago (Formulario 1662, zAlerta-69)
     AVISO = "aviso"
     OTRO = "otro"
 
@@ -120,6 +121,7 @@ ETIQUETA_TIPO_DOCUMENTO: dict[str, str] = {
     "fraccionamiento": "Fraccionamientos",
     "esquela": "Esquelas",
     "cobranza_coactiva": "Cobranza Coactiva",
+    "pago": "Pagos confirmados",
     "aviso": "Avisos",
     "otro": "Otros",
 }
@@ -133,16 +135,19 @@ class TipoValorado(str, enum.Enum):
     RESOLUCION_DETERMINACION = "resolucion_determinacion"
     COBRANZA_COACTIVA = "cobranza_coactiva"
     FRACCIONAMIENTO = "fraccionamiento"
+    PAGO = "pago"              # constancia de pago (no es deuda; zAlerta-69)
 
 
-# Mapa TipoDocumento (clasificación del buzón) → TipoValorado (deuda). Solo los
-# tipos con deuda están aquí; un tipo ausente NO se valora (no se baja 2º PDF).
+# Mapa TipoDocumento (clasificación del buzón) → TipoValorado. Los que llevan
+# 2º PDF permanente en GCS (velocidad rápida): deuda + PAGO (constancia de pago,
+# zAlerta-69). Un tipo ausente NO se valora (no se baja 2º PDF).
 TIPODOC_A_VALORADO: dict = {
     TipoDocumento.ORDEN_PAGO: TipoValorado.ORDEN_PAGO,
     TipoDocumento.MULTA: TipoValorado.RESOLUCION_MULTA,
     TipoDocumento.RESOLUCION_DETERMINACION: TipoValorado.RESOLUCION_DETERMINACION,
     TipoDocumento.COBRANZA_COACTIVA: TipoValorado.COBRANZA_COACTIVA,
     TipoDocumento.FRACCIONAMIENTO: TipoValorado.FRACCIONAMIENTO,
+    TipoDocumento.PAGO: TipoValorado.PAGO,
 }
 
 
