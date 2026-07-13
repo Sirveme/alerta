@@ -37,7 +37,7 @@ from ..core import templates, fecha_lima
 from ..deps import UsuarioActual, usuario_actual
 from ..estados import estado_conexion
 from ..deuda import (extraer_monto, fmt_soles, extraer_pago, deudor_de_retencion,
-                     anio_deuda_desde_default)
+                     anio_deuda_desde_default, resumen_cabecera)
 from clasificacion import COACTIVO_META, COACTIVO_NO_SUMA
 
 router = APIRouter(tags=["resumen"])
@@ -208,6 +208,8 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         ultima = await session.scalar(
             select(func.max(Contribuyente.ultimo_scrapeo_at)).where(cond))
         ultima_actualizacion = ultima.isoformat() if ultima else None
+        # Cabecera: 3 contadores honestos (zAlerta-76). Multi-tenant por estudio.
+        cabecera = await resumen_cabecera(session, user.estudio_id)
 
     filas = []
     for n, ruc, razon in rows:
@@ -310,6 +312,7 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
         "lectura_pendiente": hay_lectura_activa,   # alias compat (JS viejo en caché)
         "ultima_actualizacion": ultima_actualizacion,
         "no_leidas": sum(1 for f in filas if not f.get("leida")),
+        "cabecera": cabecera,
         "filas": filas,
     })
 
