@@ -14,6 +14,7 @@ Los documentos sin monto parseado cuentan como "por confirmar", no se omiten.
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 
 from sqlalchemy import select, func
 
@@ -233,6 +234,75 @@ ETIQUETA_VALORADO = {
 # Orden de presentación de los bloques (los 4 principales primero).
 ORDEN_TIPOS = ["cobranza_coactiva", "orden_pago", "resolucion_multa",
                "fraccionamiento", "resolucion_determinacion"]
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Cabecera del buzón: 3 contadores HONESTOS (zAlerta-76). Yuxtapone hechos,
+# NUNCA calcula saldo. Reusa los montos de este mismo módulo (fuente única).
+# ─────────────────────────────────────────────────────────────────────
+async def resumen_cabecera(session, estudio_id) -> dict:
+    """Devuelve los 3 contadores de la cabecera del buzón:
+      - notificadas: deuda que SUNAT notificó (docs + monto).
+      - con_pago:    deuda con ≥1 pago asociado (cruce por número; docs + monto).
+      - con_plazo:   docs con plazo próximo (≈ este mes).
+    Respeta el filtro de años por buzón y excluye las coactivas que no son deuda
+    (Retención/alivio/cierre/admin). SIN restar: notificadas y con-pago aparte."""
+    desde_default = anio_deuda_desde_default()
+    hoy = ahora_lima()
+
+    rows = (await session.execute(
+        select(DocumentoValorado, Contribuyente.anio_deuda_desde,
+               Notificacion.fecha_publica_sunat, Notificacion.subtipo_coactivo)
+        .join(Contribuyente, Contribuyente.id == DocumentoValorado.contribuyente_id)
+        .join(Notificacion, Notificacion.id == DocumentoValorado.notificacion_id,
+              isouter=True)
+        .where(Contribuyente.estudio_id == estudio_id,
+               DocumentoValorado.tipo_valorado != TipoValorado.PAGO))).all()
+
+    # Set de números de valor PAGADOS (normalizados) para el cruce doc↔pago.
+    pago_nums: set[str] = set()
+    for pg in (await session.scalars(
+            select(DocumentoValorado)
+            .join(Contribuyente, Contribuyente.id == DocumentoValorado.contribuyente_id)
+            .where(Contribuyente.estudio_id == estudio_id,
+                   DocumentoValorado.tipo_valorado == TipoValorado.PAGO))):
+        vp = extraer_pago(pg.pdf_texto).get("valor_pagado")
+        if vp:
+            pago_nums.add(_norm_doc(vp))
+
+    notif_n = pago_n = 0
+    notif_monto = pago_monto = 0.0
+    for dv, anio_desde, fecha_pub, subtipo in rows:
+        anio = _anio_de_valorado(dv, fecha_pub)
+        if anio is not None and anio < (anio_desde or desde_default):
+            continue
+        tv = (dv.tipo_valorado.value if hasattr(dv.tipo_valorado, "value")
+              else dv.tipo_valorado)
+        if tv == "cobranza_coactiva" and subtipo in COACTIVO_NO_SUMA:
+            continue
+        monto = monto_de_valorado(dv) or 0.0
+        notif_n += 1
+        notif_monto += monto
+        if dv.num_documento and _norm_doc(dv.num_documento) in pago_nums:
+            pago_n += 1
+            pago_monto += monto
+
+    # Con plazo próximo (≈ este mes): notifs del buzón con plazo futuro ≤ 35 días.
+    plazo_n = await session.scalar(
+        select(func.count(Notificacion.id))
+        .join(Contribuyente, Contribuyente.id == Notificacion.contribuyente_id)
+        .where(Contribuyente.estudio_id == estudio_id,
+               Notificacion.plazo_vencimiento.is_not(None),
+               Notificacion.plazo_vencimiento >= hoy,
+               Notificacion.plazo_vencimiento <= hoy + timedelta(days=35))) or 0
+
+    return {
+        "notificadas": {"n": notif_n,
+                        "monto_fmt": fmt_soles(notif_monto) if notif_monto else None},
+        "con_pago": {"n": pago_n,
+                     "monto_fmt": fmt_soles(pago_monto) if pago_monto else None},
+        "con_plazo": {"n": plazo_n},
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────
