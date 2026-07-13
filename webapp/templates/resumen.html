@@ -8,8 +8,10 @@
     <span class="rsm-estado" id="rsm-estado"></span>
   </div>
   {% if buzon_nombre %}
+  {% set _roles = {'institucion':'Institución','empresario':'Empresa','contador':'Estudio','asistente':'Asistente','soporte':'Soporte'} %}
   <p class="rsm-buzon"><span class="rsm-buzon-punto"></span>{{ buzon_nombre }}{% if buzon_ruc %}
-    <span class="rsm-buzon-ruc">RUC {{ buzon_ruc }}</span>{% endif %}</p>
+    <span class="rsm-buzon-ruc">RUC {{ buzon_ruc }}</span>{% endif %}
+    {% if user and _roles.get(user.rol_tema) %}<span class="rsm-rol-chip">{{ _roles[user.rol_tema] }}</span>{% endif %}</p>
   {% endif %}
   <p class="subtitulo">Lo que llegó a tu buzón. Queda <b>guardado en tu celular</b>:
     revisas la lista cuando quieras, incluso sin internet. Los documentos PDF sí
@@ -55,6 +57,8 @@
        Los IDs DEBEN coincidir con resumen.js (rsm-metricas/rsm-chips/rsm-lista). -->
   <div id="rsm-tabla-wrap">
     <div class="rsm-metricas" id="rsm-metricas"></div>
+    <p class="rsm-nota-editorial">Cifras notificadas por SUNAT. Verifica el estado
+      de la deuda con tu contador.</p>
     <div class="rsm-chips" id="rsm-chips"></div>
     <div class="rsm-lista" id="rsm-lista"></div>
   </div>
