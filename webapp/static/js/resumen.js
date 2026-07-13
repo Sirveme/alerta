@@ -264,11 +264,42 @@
   const TIPO_LBL = {
     cobranza_coactiva: 'Cobranza Coactiva', orden_pago: 'Orden de Pago',
     multa: 'Multa', fraccionamiento: 'Fraccionamiento',
-    resolucion_determinacion: 'Resolución', informativas: 'Informativas',
+    resolucion_determinacion: 'Resolución', pago: 'Pagos', informativas: 'Informativas',
   };
   const CHIPS_ORDEN = ['todo', 'cobranza_coactiva', 'orden_pago', 'multa',
-    'fraccionamiento', 'resolucion_determinacion', 'informativas'];
-  function grupoDe(f) { return DEUDA_TIPOS.indexOf(f.tipo) >= 0 ? f.tipo : 'informativas'; }
+    'fraccionamiento', 'resolucion_determinacion', 'pago', 'informativas'];
+  function grupoDe(f) {
+    if (f.es_pago || f.tipo === 'pago') return 'pago';   // filtro "Pagos" (zAlerta-77)
+    return DEUDA_TIPOS.indexOf(f.tipo) >= 0 ? f.tipo : 'informativas';
+  }
+
+  // ── Sistema de dos ejes por tarjeta (zAlerta-77): naturaleza (color) + estado
+  //    (estilo de línea) + ícono SVG (Material Symbols, sobrio; NO emojis). ──
+  function naturalezaDe(f) {
+    if (f.es_pago) return 'ok';                          // pago confirmado → verde
+    if (f.coactivo && f.coactivo.grupo) {
+      const g = f.coactivo.grupo;
+      if (g === 'alivio') return 'ok';                   // levantamiento/reducción → verde
+      if (g === 'cierre' || g === 'admin') return 'neutro';
+      return 'riesgo';                                   // ejecución/retención → rojo
+    }
+    const s = semColor(f);
+    if (s === 'rojo') return 'riesgo';
+    if (s === 'ambar') return 'aviso';
+    return f.tiene_deuda ? 'ok' : 'info';                // informativo → azul
+  }
+  function estadoDe(f) {
+    // Confirmado (sólido): hechos concretos (deuda notificada, pago, coactiva).
+    if (f.es_pago || f.tiene_deuda || f.coactivo) return 'confirmado';
+    return 'proceso';                                    // informativo/aviso → punteado
+  }
+  function iconoDe(f) {
+    if (f.es_pago) return 'check_circle';
+    if (f.coactivo || f.tipo === 'cobranza_coactiva') return 'gavel';   // mazo (Duilio)
+    return ({ orden_pago: 'receipt_long', multa: 'warning',
+      fraccionamiento: 'calendar_month', resolucion_determinacion: 'description',
+      aviso: 'notifications' })[f.tipo] || 'description';
+  }
   function tipoLegible(f) {
     // Subtipo coactivo (zAlerta-70): la etiqueta específica manda ("Embargo
     // levantado", "Retención a terceros", etc.) sobre el genérico "Cobranza Coactiva".
@@ -329,24 +360,23 @@
         : (sem === 'rojo' ? '<span class="rsm-c-tag rsm-lbl--rojo">Urgente</span>'
           : sem === 'ambar' ? '<span class="rsm-c-tag rsm-lbl--ambar">Importante</span>'
             : '<span class="rsm-c-tag">Informativo</span>'));
-    const badge = f.es_pago
-      ? '<span class="rsm-pdf-badge" title="Constancia de pago en PDF"><span class="material-symbols-outlined">receipt_long</span></span>'
-      : ((f.tiene_deuda && f.gcs_disponible)
-      ? '<span class="rsm-pdf-badge" title="Documento de deuda en PDF"><span class="material-symbols-outlined">request_quote</span></span>'
-      : ((f.adjuntos && f.adjuntos.length)
-        ? '<span class="rsm-pdf-badge" title="Tiene PDF"><span class="material-symbols-outlined">picture_as_pdf</span></span>' : ''));
     // Monto: si está, lo mostramos; si es deuda SIN monto parseado, NUNCA "S/ 0"
     // (engañoso) — un rótulo honesto (zAlerta-49). La deuda nunca se oculta.
     const monto = f.monto
       ? '<span class="rsm-c-monto">' + esc(f.monto) + '</span>'
       : (f.tiene_deuda ? '<span class="rsm-c-monto rsm-c-monto--rev">Ver monto en el PDF</span>' : '');
     const btnLabel = (f.coactivo && f.coactivo.accion) || BTN_LABEL[f.tipo] || BTN_LABEL.otro;
-    // NUEVO (zAlerta-47): sin leer (server-side, compartido entre equipos).
     const nueva = !f.leida;
     const badgeNuevo = nueva ? '<span class="rsm-nuevo">Nuevo</span>' : '';
-    return '<div class="rsm-card sem--' + sem + (nueva ? ' rsm-card--nueva' : '')
+    // Dos ejes (zAlerta-77): naturaleza (color) + estado (línea) + ícono.
+    const nat = naturalezaDe(f), est = estadoDe(f);
+    const ico = '<span class="rsm-c-ico"><span class="material-symbols-outlined">'
+      + iconoDe(f) + '</span></span>';
+    return '<div class="rsm-card bloque ' + nat + ' ' + est + (nueva ? ' rsm-card--nueva' : '')
       + '" data-i="' + i + '" title="' + esc(SEM_TXT[sem]) + '">'
-      + '<div class="rsm-c-top"><b class="rsm-c-tipo">' + esc(tipoLegible(f)) + '</b>' + badgeNuevo + badge + '</div>'
+      + '<div class="rsm-c-top">' + ico
+      + '<b class="rsm-c-tipo">' + esc(tipoLegible(f)) + '</b>'
+      + '<span class="rsm-c-top-r">' + badgeNuevo + '</span></div>'
       + '<div class="rsm-c-asunto">' + esc(f.detalle) + '</div>'
       + '<div class="rsm-c-meta">'
       + '<span class="rsm-c-fecha"><i class="ti ti-calendar"></i> ' + esc(f.fecha || '—') + '</span>'
@@ -354,7 +384,8 @@
       + coactivoChip(f)
       + pagoChip(f)
       + equipoHTML(f)
-      + '<div class="rsm-c-acc"><button class="rsm-b" data-i="' + i + '">' + esc(btnLabel) + '</button></div>'
+      + '<div class="rsm-c-acc"><button class="rsm-b rsm-b--' + nat + '" data-i="' + i + '">'
+      + esc(btnLabel) + '</button></div>'
       + '</div>';
   }
 
