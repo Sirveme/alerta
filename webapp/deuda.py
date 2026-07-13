@@ -99,18 +99,20 @@ def monto_de_valorado(dv) -> float | None:
 _RE_PG_PERIODO = re.compile(
     r"per[ií]odo\s*(?:tributario)?\s*:?\s*(\d{2}\s*[/-]\s*\d{4}|\d{4}\s*[-/]\s*\d{2}|\d{6})", re.I)
 _RE_PG_IMPORTE = re.compile(
-    r"(?:importe\s*(?:total|pagado)?|total\s*(?:pagado|a\s*pagar)?)\s*:?\s*S?\s*/?\s*([\d.,]+)", re.I)
+    r"(?:importe(?:\s*(?:total|pagado))?|total\s*(?:pagado|a\s*pagar)?)"
+    r"\s*:?\s*S?\s*/?\s*\.?\s*(\d[\d.,]*)", re.I)
 # Frontera: corta el capturado al llegar a la siguiente etiqueta del formulario
 # (o a 2+ espacios / salto de línea). Robusto aunque el pdf_texto venga en 1 línea.
 _PG_STOP = (r"(?=\s{2,}|\n|$|\bimporte\b|\bbanco\b|\bfecha\b|\bnumero\b|\bn[°ºo]\b|"
             r"\bc[oó]digo\b|\bruc\b|\bper[ií]odo\b|\bdocumento\b|\bvalor\b|\boperaci)")
 _RE_PG_TRIBUTO = re.compile(
-    r"(?:tributo|concepto|c[oó]digo\s*de\s*tributo)\s*:?\s*(?:\d{3,5}\s*[-–]\s*)?"
+    r"(?:tributo|concepto|c[oó]digo\s*de\s*tributo)\s*:?\s*(?:\d{3,6}\s*[-–\s]\s*)?"
     r"([A-Za-zÁÉÍÓÚÑáéíóúñ][A-Za-zÁÉÍÓÚÑáéíóúñ .]{3,55}?)" + _PG_STOP, re.I)
 _RE_PG_ORDEN = re.compile(
     r"(?:n[°ºo]?\s*(?:de\s*)?orden|n[uú]mero\s*de\s*orden)\s*:?\s*(\d{6,})", re.I)
 _RE_PG_OPERACION = re.compile(
-    r"(?:n[°ºo]?\s*(?:de\s*)?operaci[oó]n|n[uú]mero\s*de\s*operaci[oó]n)\s*:?\s*(\d{4,})", re.I)
+    r"(?:n[°ºo]?\s*(?:de\s*)?operaci[oó]n|n[uú]mero\s*de\s*operaci[oó]n)"
+    r"[^:\n]*:\s*(\d{4,})", re.I)
 _RE_PG_BANCO = re.compile(
     r"(?:banco|entidad(?:\s*(?:bancaria|financiera))?)\s*:?\s*"
     r"([A-Za-zÁÉÍÓÚÑ][\wÁÉÍÓÚÑáéíóúñ .]{1,28}?)" + _PG_STOP, re.I)
