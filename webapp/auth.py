@@ -118,6 +118,7 @@ def crear_token_persona(persona: "Persona", estudio: "EstudioContable",
         "tu": tiene_usuario,
         "sl": bool(acceso.es_solo_lectura) if acceso else True,
         "mc": multi,
+        "cg": (acceso.cargo.name if acceso and acceso.cargo else None),  # zAlerta-75
         "nombre": persona.nombre_completo or "",
         "exp": int(time.time()) + DURACION_SESION,
     })

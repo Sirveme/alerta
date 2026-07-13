@@ -39,6 +39,7 @@ class UsuarioActual:
     tiene_usuario: bool = True                # ¿hay fila en `usuarios`? (para FKs usuario_id)
     solo_lectura_ctx: bool = False            # es_solo_lectura del acceso activo
     multi_contexto: bool = False              # tiene >1 buzón → mostrar "cambiar buzón"
+    cargo: str | None = None                  # cargo del acceso activo (DECANO, DUENO, …)
 
     @property
     def es_admin(self) -> bool:
@@ -60,6 +61,22 @@ class UsuarioActual:
         return (self.rol == RolUsuario.ASISTENTE or self.es_empresario
                 or self.solo_lectura_ctx)
 
+    @property
+    def rol_tema(self) -> str:
+        """Rol de DISEÑO (zAlerta-75) → set de tokens (acento + radio) por
+        data-rol. institucion=ángulos rectos ámbar; empresario=redondeado azul;
+        contador=verde; asistente=violeta; soporte=gris."""
+        if self.es_soporte_global:
+            return "soporte"
+        # Cargo institucional (directivos de una institución: CCPL, colegios…).
+        if self.cargo in ("DECANO", "DIRECTOR", "ADMINISTRADOR", "CONTADOR"):
+            return "institucion"
+        if self.es_empresario:
+            return "empresario"
+        if self.rol == RolUsuario.ASISTENTE:
+            return "asistente"
+        return "contador"
+
 
 def _desde_sesion(sesion: dict) -> UsuarioActual:
     """Construye UsuarioActual desde el payload de la cookie. Tolera cookies
@@ -76,6 +93,7 @@ def _desde_sesion(sesion: dict) -> UsuarioActual:
         tiene_usuario=sesion.get("tu", True),
         solo_lectura_ctx=sesion.get("sl", False),
         multi_contexto=sesion.get("mc", False),
+        cargo=sesion.get("cg"),
     )
 
 
