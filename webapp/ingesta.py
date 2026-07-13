@@ -15,7 +15,9 @@ Async (SQLAlchemy 2.0 + asyncpg). Todo en hora Lima.
 
 from __future__ import annotations
 
+import io
 import os
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +37,17 @@ TZ_LIMA = ZoneInfo("America/Lima")
 
 def ahora_lima() -> datetime:
     return datetime.now(TZ_LIMA)
+
+
+def _texto_pdf(bytes_: bytes) -> str:
+    """Extrae el texto de un PDF (pypdf). Para la constancia de pago (zAlerta-74)."""
+    try:
+        import pypdf
+        rd = pypdf.PdfReader(io.BytesIO(bytes_))
+        return "\n".join((p.extract_text() or "") for p in rd.pages)
+    except Exception as e:
+        print(f"[ingesta] no se pudo extraer texto del PDF: {e}", flush=True)
+        return ""
 
 
 def _leer_pdf_local(pdfs, nombre_archivo: str) -> bytes | None:
@@ -227,12 +240,15 @@ async def ingestar_resultado(
         # ── Adjuntos (dedup por cod_archivo, desde listAttach del detalle) ──
         detalle = msg.get("detalle") or {}
         pdfs_locales = msg.get("pdfs") or []   # rutas que descargó el scraper
+        pago_bytes = None                       # constancia del 1662 (zAlerta-74)
         for att in (detalle.get("listAttach") or []):
             cod_arch = str(att.get("codArchivo") or "")
             nombre = att.get("nomArchivo") or ""
             if not cod_arch or not nombre:
                 continue
             pdf_bytes = _leer_pdf_local(pdfs_locales, nombre)
+            if pdf_bytes and pago_bytes is None:
+                pago_bytes = pdf_bytes   # la constancia del 1662 (zAlerta-74)
             dup = await session.scalar(
                 select(Adjunto).where(
                     Adjunto.notificacion_id == notif_id,
@@ -259,6 +275,28 @@ async def ingestar_resultado(
                 descargado_at=ahora_lima() if pdf_bytes else None,
             ))
             stats["adjuntos_nuevos"] += 1
+
+        # ── PAGO (1662): la constancia ES el adjunto, no un 2º PDF (zAlerta-74) ──
+        # Crea su DocumentoValorado(PAGO) desde los bytes del adjunto: extrae el
+        # texto (para asociar pago↔valor y mostrar los datos) y sube el PDF a GCS.
+        if tipo_doc == TipoDocumento.PAGO and pago_bytes:
+            ya_pago = await session.scalar(select(DocumentoValorado.id).where(
+                DocumentoValorado.notificacion_id == notif_id))
+            if not ya_pago:
+                try:
+                    texto = _texto_pdf(pago_bytes)
+                    m = re.search(r"orden\s*(\d{4,})", asunto_msg or "", re.I)
+                    num_doc = m.group(1) if m else None
+                    blob = f"{contribuyente_id}/valorados/pago_{num_doc or 'x'}_{cod}.pdf"
+                    gcs_key = gcs.subir_pdf(pago_bytes, blob)
+                    session.add(DocumentoValorado(
+                        contribuyente_id=contribuyente_id, notificacion_id=notif_id,
+                        estudio_id=estudio_id, tipo_valorado=TipoValorado.PAGO,
+                        num_documento=num_doc, pdf_texto=texto, gcs_key=gcs_key))
+                    stats["valorados_guardados"] = stats.get("valorados_guardados", 0) + 1
+                except Exception as e:
+                    print(f"[ingesta] valorado PAGO cod={cod} falló (sigo): "
+                          f"{type(e).__name__}: {e}", flush=True)
 
         # ── 2º PDF de DEUDA → GCS + documento_valorado (zAlerta-34) ──
         # zAlerta-37 BUG A: AISLADO en savepoint. Un fallo del valorado (GCS,
