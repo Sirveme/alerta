@@ -390,25 +390,26 @@
       return;
     }
 
-    const nAccion = _filas.filter((f) => semColor(f) === 'rojo').length;
-    const nInfo = _filas.length - nAccion;
-    const deudaTotal = _filas.reduce((s, f) =>
-      s + (f.tiene_deuda && typeof f.monto_num === 'number' ? f.monto_num : 0), 0);
-    // Deuda cuyo monto aún no se pudo leer (zAlerta-49): no falsear el total.
-    const deudaSinMonto = _filas.filter(
-      (f) => f.tiene_deuda && typeof f.monto_num !== 'number').length;
-
-    // Métricas
-    let metr = '<div class="rsm-card rsm-metr rsm-metr--rojo"><span class="rsm-metr-n">' + nAccion
-      + '</span><span class="rsm-metr-l">Necesitan acción</span></div>'
-      + '<div class="rsm-card rsm-metr rsm-metr--gris"><span class="rsm-metr-n">' + nInfo
-      + '</span><span class="rsm-metr-l">Informativas</span></div>';
-    if (deudaTotal > 0 || deudaSinMonto > 0) {
-      const cifra = deudaTotal > 0 ? montoSoles(deudaTotal) : '—';
-      const nota = deudaSinMonto > 0
-        ? '<span class="rsm-metr-sub">+ ' + deudaSinMonto + ' por confirmar</span>' : '';
-      metr += '<div class="rsm-card rsm-metr rsm-metr--deuda"><span class="rsm-metr-n">'
-        + cifra + '</span><span class="rsm-metr-l">Deuda total' + nota + '</span></div>';
+    // ── Cabecera: 3 contadores HONESTOS (zAlerta-76), del servidor (deuda.py) ──
+    // Yuxtapone hechos, NO calcula saldo: notificadas y con-pago por separado.
+    function kpi(cls, n, sub, label) {
+      return '<div class="rsm-kpi bloque ' + cls + ' confirmado">'
+        + '<span class="rsm-kpi-n">' + n + '</span>'
+        + '<span class="rsm-kpi-l">' + label + '</span>'
+        + (sub ? '<span class="rsm-kpi-m">' + esc(sub) + '</span>' : '')
+        + '</div>';
+    }
+    const cab = data && data.cabecera;
+    let metr;
+    if (cab) {
+      metr = kpi('riesgo', cab.notificadas.n, cab.notificadas.monto_fmt || '', 'Deudas notificadas')
+        + kpi('ok', cab.con_pago.n, cab.con_pago.monto_fmt || '', 'Con pago registrado')
+        + kpi('aviso', cab.con_plazo.n, cab.con_plazo.n ? 'este mes' : '', 'Con plazo próximo');
+    } else {
+      // Fallback (caché offline vieja, sin cabecera): métrica mínima honesta.
+      const nAccion = _filas.filter((f) => semColor(f) === 'rojo').length;
+      metr = kpi('riesgo', nAccion, '', 'Necesitan atención')
+        + kpi('neutro', _filas.length - nAccion, '', 'Informativas');
     }
 
     // Chips (solo los presentes; "Todo" siempre)
