@@ -64,6 +64,18 @@ html { font-size:16px; }
 [data-borde="punteado"]            { --radio:8px;  --franja-w:4px; }
 [data-borde="color-completo"]      { --radio:8px;  --franja-w:0px; }
 
+/* ── EJE ROL (zAlerta-75) · color de acento + FORMA por rol ─────────
+   El rol del usuario (data-rol en <html>, solo páginas internas) define su
+   identidad: color de acento + radio de esquina. Institución = ángulos rectos
+   ámbar; empresario = redondeado azul; contador = verde; asistente = violeta;
+   soporte = gris. Va DESPUÉS de data-borde para que el rol mande por defecto;
+   una futura preferencia del usuario podrá reintroducir data-borde. */
+[data-rol="institucion"] { --acento: var(--u-importante);  --radio:0px;  }
+[data-rol="empresario"]  { --acento: var(--marca);         --radio:12px; }
+[data-rol="contador"]    { --acento: var(--u-aldia);       --radio:12px; }
+[data-rol="asistente"]   { --acento: var(--u-vip);         --radio:12px; }
+[data-rol="soporte"]     { --acento: var(--u-informativa); --radio:10px; }
+
 /* ═══════════════════════════════════════════════════════════════ */
 * { box-sizing: border-box; }
 html, body { margin:0; padding:0; }
@@ -153,6 +165,35 @@ h1,h2,h3 { font-weight:600; }
 .acento--informativa   { --acento: var(--u-informativa); }
 .acento--sin_clasificar{ --acento: var(--borde-fuerte); }
 .acento--al_dia        { --acento: var(--u-aldia); }
+
+/* ── SISTEMA DE BLOQUES DE DOS EJES (zAlerta-75) ────────────────────
+   NATURALEZA (color) × ESTADO (estilo de línea). Borde fino uniforme (4 lados)
+   + fondo teñido (--fondo-tenido) + radio del rol (--radio). Reutilizable en
+   cualquier página. Ej: <div class="bloque riesgo confirmado"> = rojo sólido;
+   <div class="bloque info proceso"> = azul punteado;
+   <div class="bloque ayuda especial"> = violeta quebrado. */
+.bloque {
+  --bloque-color: var(--borde-fuerte);
+  --fondo-tenido: color-mix(in srgb, var(--bloque-color) 9%, var(--superficie));
+  border: 1px solid var(--bloque-color);
+  border-radius: var(--radio);
+  background: var(--fondo-tenido);
+  padding: 12px 14px;
+}
+/* EJE naturaleza → color */
+.bloque.riesgo  { --bloque-color: var(--u-critica); }
+.bloque.alerta  { --bloque-color: var(--u-urgente); }
+.bloque.aviso   { --bloque-color: var(--u-importante); }
+.bloque.info    { --bloque-color: var(--marca); }
+.bloque.ok      { --bloque-color: var(--u-aldia); }
+.bloque.ayuda   { --bloque-color: var(--u-vip); }
+.bloque.neutro  { --bloque-color: var(--u-informativa); }
+/* EJE estado → estilo de línea (sólido / punteado / quebrado) */
+.bloque.confirmado { border-style: solid; }
+.bloque.proceso    { border-style: dashed; }   /* punteado */
+.bloque.especial   { border-style: dotted; }   /* quebrado */
+/* Título/acento interno opcional del bloque, del color de la naturaleza. */
+.bloque-tit { color: var(--bloque-color); font-weight: 700; }
 
 a.tarjeta-link { display:block; color:inherit; }
 .tarjeta-link:hover { border-color: var(--borde-fuerte); transform: translateY(-1px); }
