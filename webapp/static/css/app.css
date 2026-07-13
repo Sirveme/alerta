@@ -1378,7 +1378,19 @@ a.tarjeta-link { display:block; color:inherit; }
 /* ══════════════════════════════════════════════════════════════════
    zAlerta-38 · Diseño C del buzón: métricas + chips + tarjetas
    ══════════════════════════════════════════════════════════════════ */
-.rsm-metricas { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0 14px; }
+.rsm-metricas { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0 6px; }
+
+/* zAlerta-76 · Contadores honestos de la cabecera (cantidad grande + monto) */
+.rsm-kpi { display:flex; flex-direction:column; gap:3px; align-items:flex-start; }
+.rsm-kpi-n { font-size:1.55rem; font-weight:800; line-height:1.05; color:var(--bloque-color); }
+.rsm-kpi-l { font-size:.72rem; color:var(--texto); font-weight:600; line-height:1.15; }
+.rsm-kpi-m { font-size:.72rem; color:var(--texto-suave); font-weight:600; }
+@media (max-width:380px) { .rsm-kpi-n { font-size:1.3rem; } .rsm-kpi-l { font-size:.66rem; } }
+/* Nota editorial (informa, no asesora) + chip de rol de la cabecera */
+.rsm-nota-editorial { font-size:.72rem; color:var(--texto-suave); margin:2px 0 14px; }
+.rsm-rol-chip { display:inline-flex; align-items:center; gap:5px; font-size:.7rem; font-weight:700;
+  padding:2px 10px; border-radius:var(--radio); border:1px solid var(--acento);
+  color:var(--acento); background:color-mix(in srgb,var(--acento) 12%,transparent); }
 .rsm-metr { display:flex; flex-direction:column; gap:2px; padding:14px 14px;
   border-radius:14px; background:var(--superficie); border:1px solid var(--borde);
   border-left:5px solid var(--borde); }
