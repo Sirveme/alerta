@@ -1258,9 +1258,17 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-tabla td { padding:10px 11px; border-top:1px solid var(--borde); vertical-align:top; }
 .rsm-row.estado--urgente td:first-child,
 .rsm-row.estado--critica td:first-child { border-left:4px solid var(--u-urgente); }
-.rsm-b { background:var(--marca); color:#fff; border:none; border-radius:8px;
-  padding:6px 11px; font-size:.78rem; font-weight:600; cursor:pointer; white-space:nowrap; }
-.rsm-b:hover { filter:brightness(1.06); }
+/* zAlerta-77 · Botón SOBRIO: borde del color de la naturaleza, texto del color,
+   fondo transparente (nada de morado relleno). Radio del rol. */
+.rsm-b { background:transparent; border:1px solid var(--borde-fuerte); color:var(--texto);
+  border-radius:var(--radio); padding:7px 13px; font-size:.8rem; font-weight:700;
+  cursor:pointer; white-space:nowrap; }
+.rsm-b:hover { background:color-mix(in srgb, var(--bloque-color, var(--borde-fuerte)) 10%, transparent); }
+.rsm-b--riesgo { border-color:var(--u-critica);    color:var(--u-urgente); }
+.rsm-b--aviso  { border-color:var(--u-importante); color:var(--u-importante); }
+.rsm-b--ok     { border-color:var(--u-aldia);      color:var(--u-aldia); }
+.rsm-b--info   { border-color:var(--marca);        color:var(--marca); }
+.rsm-b--neutro { border-color:var(--borde-fuerte); color:var(--texto-suave); }
 .rsm-orient-row td { padding-top:0; border-top:none; }
 .rsm-orient { padding:10px; border-radius:10px; font-size:.82rem; line-height:1.45;
   background:color-mix(in srgb,var(--u-importante) 12%,transparent);
@@ -1411,23 +1419,26 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-chip--on { background:var(--marca); color:#fff; border-color:var(--marca); }
 /* Tarjetas de la lista */
 .rsm-lista { display:flex; flex-direction:column; gap:10px; }
-.rsm-card { background:var(--superficie); border:1px solid var(--borde);
-  border-left:5px solid var(--borde); border-radius:12px; padding:12px 13px; cursor:pointer; }
-.rsm-card.sem--rojo { border-left-color:var(--u-urgente); }
-.rsm-card.sem--ambar { border-left-color:var(--u-importante); }
-.rsm-card.sem--verde { border-left-color:var(--u-aldia); }
-/* zAlerta-47 · NO leída: tinte suave de marca + badge "Nuevo" (conserva el
-   borde de urgencia; respeta el tema oscuro, sin chillar). */
-.rsm-card--nueva { background:color-mix(in srgb,var(--marca) 9%,var(--superficie));
-  border-color:color-mix(in srgb,var(--marca) 32%,var(--borde)); }
+/* zAlerta-77 · La tarjeta ES un bloque de dos ejes: el color de naturaleza, el
+   borde de estado (sólido/punteado/quebrado), el fondo teñido y el radio del rol
+   los da .bloque (motor de temas, zAlerta-75). Aquí solo el layout de la tarjeta. */
+.rsm-card { padding:13px 14px; cursor:pointer; }
+/* No leída: tinte un poco más marcado del color de naturaleza + badge "Nuevo". */
+.rsm-card--nueva { background:color-mix(in srgb,var(--bloque-color) 15%,var(--superficie)); }
+/* Ícono de tipo en círculo teñido con el color de la naturaleza (SVG sobrio). */
+.rsm-c-ico { flex:none; width:34px; height:34px; border-radius:999px;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:color-mix(in srgb,var(--bloque-color) 16%,transparent); color:var(--bloque-color); }
+.rsm-c-ico .material-symbols-outlined { font-size:20px; }
 .rsm-nuevo { font-size:.6rem; font-weight:800; text-transform:uppercase;
   letter-spacing:.05em; color:#fff; background:var(--marca); border-radius:999px;
   padding:2px 8px; margin-right:6px; vertical-align:middle; }
 /* zAlerta-48 · "Última actualización: HH:MM" */
 .rsm-actualizado { font-size:.8rem; color:var(--texto-suave); margin:-2px 0 10px;
   display:inline-flex; align-items:center; gap:5px; }
-.rsm-c-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.rsm-c-tipo { font-size:.95rem; color:var(--texto); }
+.rsm-c-top { display:flex; align-items:center; gap:9px; }
+.rsm-c-tipo { flex:1; font-size:.95rem; color:var(--texto); font-weight:700; }
+.rsm-c-top-r { margin-left:auto; display:inline-flex; align-items:center; gap:6px; }
 .rsm-c-asunto { font-size:.85rem; color:var(--texto-suave); margin:4px 0 8px;
   line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
   overflow:hidden; }
