@@ -202,6 +202,16 @@ async def ingestar_resultado(
                 existe.urgencia = urgencia
                 existe.clasificado_at = ahora_lima()
                 stats["reclasificados"] = stats.get("reclasificados", 0) + 1
+            # Upgrade AVISO/otro → COACTIVA (zAlerta-78): las coactivas SIN guiones
+            # (Retención, genérica, Conclusión, FL) caían como AVISO. Al re-barrer
+            # se corrigen a coactiva con su subtipo y color.
+            elif (tipo_doc == TipoDocumento.COBRANZA_COACTIVA
+                  and existe.tipo_documento_enum != TipoDocumento.COBRANZA_COACTIVA):
+                existe.tipo_documento_enum = TipoDocumento.COBRANZA_COACTIVA
+                existe.subtipo_coactivo = sub_coa
+                existe.urgencia = urgencia
+                existe.clasificado_at = ahora_lima()
+                stats["reclasificados"] = stats.get("reclasificados", 0) + 1
             # Backfill del SUBTIPO coactivo (zAlerta-70): las coactivas viejas no
             # tienen subtipo; al re-barrer se les asigna y se ajusta el color
             # (un Levantamiento deja de ser rojo).
