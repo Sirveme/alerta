@@ -91,10 +91,15 @@ def _por_asunto(asunto: str | None) -> tuple[TipoDocumento, Urgencia, bool]:
     #    coactiva, inicio de cobranza) → CRÍTICA, lleve o no la palabra "coactiv".
     if any(t in a for t in _EJECUTIVO_COACTIVA):
         return TipoDocumento.COBRANZA_COACTIVA, Urgencia.CRITICA, True
-    # Caso trampa: menciona "coactiv" SIN acción ejecutiva (conclusión/archivo/
-    #    levantamiento/solo informa) → INFORMATIVA, nunca rojo.
+    # zAlerta-78: TODA "Resolución Coactiva" es COACTIVA, aunque el número venga
+    # SIN guiones y el asunto no traiga término ejecutivo (Retención, Conclusión,
+    # FL, genérica…). El SUBTIPO (aplicado en clasificar) decide el color:
+    # alivio/cierre/admin → informativa; genérica o retención → riesgo. NUNCA
+    # ocultar una coactiva como aviso (una Retención a Terceros como "aviso" es
+    # un error grave). La urgencia CRÍTICA aquí es provisional: clasificar() la
+    # ajusta según el subtipo.
     if "coactiv" in a:
-        return TipoDocumento.AVISO, Urgencia.INFORMATIVA, True
+        return TipoDocumento.COBRANZA_COACTIVA, Urgencia.CRITICA, True
 
     # 2) Acciones inequívocas de cobranza/sanción (urgencia real).
     if "orden de pago" in a:
