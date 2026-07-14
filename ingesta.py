@@ -286,27 +286,42 @@ async def ingestar_resultado(
             ))
             stats["adjuntos_nuevos"] += 1
 
-        # ── PAGO (1662): la constancia ES el adjunto, no un 2º PDF (zAlerta-74) ──
-        # Crea su DocumentoValorado(PAGO) desde los bytes del adjunto: extrae el
-        # texto (para asociar pago↔valor y mostrar los datos) y sube el PDF a GCS.
-        if tipo_doc == TipoDocumento.PAGO and pago_bytes:
-            ya_pago = await session.scalar(select(DocumentoValorado.id).where(
-                DocumentoValorado.notificacion_id == notif_id))
-            if not ya_pago:
-                try:
-                    texto = _texto_pdf(pago_bytes)
+        # ── PAGO (1662): la constancia ES el ÚNICO PDF (el adjunto), no un 2º PDF ──
+        # zAlerta-80: la constancia va a GCS SIN esperar un segundo PDF que no
+        # existe. Los bytes salen del scrape fresco O, como respaldo, del adjunto
+        # ya guardado en BD (bytea_temporal) — igual que backfill_pago.py, para que
+        # un FULL SIEMPRE deje el pago con su PDF en GCS (idempotencia real, auto-
+        # sanable; nunca se pisa lo bueno).
+        if tipo_doc == TipoDocumento.PAGO:
+            try:
+                bytes_pago = pago_bytes
+                if bytes_pago is None:   # respaldo: el PDF ya guardado en BD
+                    adj_bd = await session.scalar(select(Adjunto).where(
+                        Adjunto.notificacion_id == notif_id,
+                        Adjunto.bytea_temporal.is_not(None)))
+                    if adj_bd and adj_bd.bytea_temporal:
+                        bytes_pago = bytes(adj_bd.bytea_temporal)
+                ex_pago = await session.scalar(select(DocumentoValorado).where(
+                    DocumentoValorado.notificacion_id == notif_id))
+                if bytes_pago:
                     m = re.search(r"orden\s*(\d{4,})", asunto_msg or "", re.I)
                     num_doc = m.group(1) if m else None
                     blob = f"{contribuyente_id}/valorados/pago_{num_doc or 'x'}_{cod}.pdf"
-                    gcs_key = gcs.subir_pdf(pago_bytes, blob)
-                    session.add(DocumentoValorado(
-                        contribuyente_id=contribuyente_id, notificacion_id=notif_id,
-                        estudio_id=estudio_id, tipo_valorado=TipoValorado.PAGO,
-                        num_documento=num_doc, pdf_texto=texto, gcs_key=gcs_key))
-                    stats["valorados_guardados"] = stats.get("valorados_guardados", 0) + 1
-                except Exception as e:
-                    print(f"[ingesta] valorado PAGO cod={cod} falló (sigo): "
-                          f"{type(e).__name__}: {e}", flush=True)
+                    if ex_pago is None:
+                        session.add(DocumentoValorado(
+                            contribuyente_id=contribuyente_id, notificacion_id=notif_id,
+                            estudio_id=estudio_id, tipo_valorado=TipoValorado.PAGO,
+                            num_documento=num_doc, pdf_texto=_texto_pdf(bytes_pago),
+                            gcs_key=gcs.subir_pdf(bytes_pago, blob)))
+                        stats["valorados_guardados"] = stats.get("valorados_guardados", 0) + 1
+                    else:
+                        if not ex_pago.gcs_key:     # auto-sanar el PDF en GCS
+                            ex_pago.gcs_key = gcs.subir_pdf(bytes_pago, blob)
+                        if not ex_pago.pdf_texto:
+                            ex_pago.pdf_texto = _texto_pdf(bytes_pago)
+            except Exception as e:
+                print(f"[ingesta] valorado PAGO cod={cod} falló (sigo): "
+                      f"{type(e).__name__}: {e}", flush=True)
 
         # ── 2º PDF de DEUDA → GCS + documento_valorado (zAlerta-34) ──
         # zAlerta-37 BUG A: AISLADO en savepoint. Un fallo del valorado (GCS,
