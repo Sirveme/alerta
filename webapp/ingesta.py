@@ -287,26 +287,33 @@ async def ingestar_resultado(
             stats["adjuntos_nuevos"] += 1
 
         # ── PAGO (1662): la constancia ES el adjunto, no un 2º PDF (zAlerta-74) ──
-        # Crea su DocumentoValorado(PAGO) desde los bytes del adjunto: extrae el
-        # texto (para asociar pago↔valor y mostrar los datos) y sube el PDF a GCS.
+        # Crea/COMPLETA su DocumentoValorado(PAGO) desde los bytes del adjunto.
+        # zAlerta-79 Problema B: IDEMPOTENCIA REAL — un FULL nunca deja un pago sin
+        # su PDF. Si el valorado ya existe pero le falta gcs_key o pdf_texto, se
+        # re-sube/completa desde el adjunto (auto-sanable). NUNCA se pisa lo bueno.
         if tipo_doc == TipoDocumento.PAGO and pago_bytes:
-            ya_pago = await session.scalar(select(DocumentoValorado.id).where(
-                DocumentoValorado.notificacion_id == notif_id))
-            if not ya_pago:
-                try:
-                    texto = _texto_pdf(pago_bytes)
-                    m = re.search(r"orden\s*(\d{4,})", asunto_msg or "", re.I)
-                    num_doc = m.group(1) if m else None
-                    blob = f"{contribuyente_id}/valorados/pago_{num_doc or 'x'}_{cod}.pdf"
-                    gcs_key = gcs.subir_pdf(pago_bytes, blob)
+            try:
+                m = re.search(r"orden\s*(\d{4,})", asunto_msg or "", re.I)
+                num_doc = m.group(1) if m else None
+                blob = f"{contribuyente_id}/valorados/pago_{num_doc or 'x'}_{cod}.pdf"
+                ex_pago = await session.scalar(select(DocumentoValorado).where(
+                    DocumentoValorado.notificacion_id == notif_id))
+                if ex_pago is None:
                     session.add(DocumentoValorado(
                         contribuyente_id=contribuyente_id, notificacion_id=notif_id,
                         estudio_id=estudio_id, tipo_valorado=TipoValorado.PAGO,
-                        num_documento=num_doc, pdf_texto=texto, gcs_key=gcs_key))
+                        num_documento=num_doc, pdf_texto=_texto_pdf(pago_bytes),
+                        gcs_key=gcs.subir_pdf(pago_bytes, blob)))
                     stats["valorados_guardados"] = stats.get("valorados_guardados", 0) + 1
-                except Exception as e:
-                    print(f"[ingesta] valorado PAGO cod={cod} falló (sigo): "
-                          f"{type(e).__name__}: {e}", flush=True)
+                else:
+                    # Completar lo que falte, sin pisar lo bueno (auto-sanar gcs_key).
+                    if not ex_pago.gcs_key:
+                        ex_pago.gcs_key = gcs.subir_pdf(pago_bytes, blob)
+                    if not ex_pago.pdf_texto:
+                        ex_pago.pdf_texto = _texto_pdf(pago_bytes)
+            except Exception as e:
+                print(f"[ingesta] valorado PAGO cod={cod} falló (sigo): "
+                      f"{type(e).__name__}: {e}", flush=True)
 
         # ── 2º PDF de DEUDA → GCS + documento_valorado (zAlerta-34) ──
         # zAlerta-37 BUG A: AISLADO en savepoint. Un fallo del valorado (GCS,
