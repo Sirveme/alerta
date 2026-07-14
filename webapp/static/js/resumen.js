@@ -300,6 +300,13 @@
       fraccionamiento: 'calendar_month', resolucion_determinacion: 'description',
       aviso: 'notifications' })[f.tipo] || 'description';
   }
+  // ¿la notificación tiene un documento PDF descargable? (zAlerta-79 Problema A)
+  function tienePdf(f) {
+    return !!((f.tiene_deuda && f.gcs_disponible)
+      || (f.pago && f.pago.gcs_disponible)
+      || (f.coactivo && f.coactivo.gcs_disponible)
+      || (f.adjuntos && f.adjuntos.length));
+  }
   function tipoLegible(f) {
     // Subtipo coactivo (zAlerta-70): la etiqueta específica manda ("Embargo
     // levantado", "Retención a terceros", etc.) sobre el genérico "Cobranza Coactiva".
@@ -376,7 +383,10 @@
       + '" data-i="' + i + '" title="' + esc(SEM_TXT[sem]) + '">'
       + '<div class="rsm-c-top">' + ico
       + '<b class="rsm-c-tipo">' + esc(tipoLegible(f)) + '</b>'
-      + '<span class="rsm-c-top-r">' + badgeNuevo + '</span></div>'
+      + '<span class="rsm-c-top-r">' + badgeNuevo
+      + (tienePdf(f) ? '<span class="rsm-pdf-badge" title="Tiene documento PDF">'
+          + '<span class="material-symbols-outlined">picture_as_pdf</span></span>' : '')
+      + '</span></div>'
       + '<div class="rsm-c-asunto">' + esc(f.detalle) + '</div>'
       + '<div class="rsm-c-meta">'
       + '<span class="rsm-c-fecha"><i class="ti ti-calendar"></i> ' + esc(f.fecha || '—') + '</span>'
