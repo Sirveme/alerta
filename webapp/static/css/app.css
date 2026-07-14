@@ -1343,7 +1343,8 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-info-lbl.rsm-lbl--rojo { color:var(--u-urgente); font-style:normal; font-weight:700; }
 .rsm-info-lbl.rsm-lbl--ambar { color:var(--u-importante); font-style:normal; font-weight:600; }
 /* zAlerta-32 · badge de PDF en la fila */
-.rsm-pdf-badge { display:inline-flex; vertical-align:middle; color:var(--u-urgente); }
+/* zAlerta-79 · Indicador PDF discreto (sobrio, neutro; no una alarma roja). */
+.rsm-pdf-badge { display:inline-flex; vertical-align:middle; color:var(--texto-suave); }
 .rsm-pdf-badge .material-symbols-outlined { font-size:18px; }
 /* zAlerta-36 · botón "Actualizar ahora" del buzón */
 .rsm-actualizar { display:inline-flex; align-items:center; gap:6px; margin:4px 0 12px;
