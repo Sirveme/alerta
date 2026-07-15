@@ -141,6 +141,48 @@ def deudor_de_retencion(texto: str | None) -> str | None:
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Esquela de Omiso (zAlerta-81): extrae período(s)+tributo(s) del PDF.
+# Best-effort sobre el pdf_texto del DOCUMENTO real de la esquela (2º PDF).
+# Puede haber VARIAS filas (varios período+tributo). Se afina contra el texto
+# real tras el primer FULL que capture la esquela. Degrada con gracia.
+# ─────────────────────────────────────────────────────────────────────
+_RE_ESQ_PERIODO = re.compile(r"\b(20\d{2})\s*[-/]?\s*(0[1-9]|1[0-2])\b")   # YYYYMM / YYYY-MM
+_RE_ESQ_TRIB_SANC = re.compile(r"tributo\s*sanci[oó]n\s*:?\s*(\d{3,5})", re.I)
+_RE_ESQ_TRIB_ASOC = re.compile(r"tributo\s*asociad[oa]\s*:?\s*(\d{3,5})", re.I)
+
+
+def _periodo_fmt(anio: str, mes: str) -> str:
+    return f"{mes}/{anio}"
+
+
+def extraer_esquela(texto: str | None) -> dict:
+    """Datos de una Esquela de Omiso: período(s) y tributo(s) omitidos.
+    Devuelve {periodos:[...], tributo_sancion, tributo_asociado, n_omisos,
+    resumen}. Indexable por período+tributo (llave de la cadena de cumplimiento).
+    Best-effort: si el texto real difiere, muestra lo que salga + link al PDF."""
+    t = texto or ""
+    periodos = []
+    vistos = set()
+    for anio, mes in _RE_ESQ_PERIODO.findall(t):
+        p = _periodo_fmt(anio, mes)
+        if p not in vistos:
+            vistos.add(p)
+            periodos.append(p)
+    sanc = _RE_ESQ_TRIB_SANC.search(t)
+    asoc = _RE_ESQ_TRIB_ASOC.search(t)
+    resumen = None
+    if periodos:
+        resumen = "Período(s): " + ", ".join(periodos[:6])
+    return {
+        "periodos": periodos,
+        "tributo_sancion": sanc.group(1) if sanc else None,
+        "tributo_asociado": asoc.group(1) if asoc else None,
+        "n_omisos": len(periodos),
+        "resumen": resumen,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Asociación valor ↔ pago ↔ coactiva (zAlerta-73). AL VUELO por número
 # normalizado. Diagnóstico (CCPL): el match por dígitos es FIABLE —
 #   · REC lista en su pdf_texto el nº de la OP que ejecuta (123-001-0700325).
@@ -257,7 +299,8 @@ async def resumen_cabecera(session, estudio_id) -> dict:
         .join(Notificacion, Notificacion.id == DocumentoValorado.notificacion_id,
               isouter=True)
         .where(Contribuyente.estudio_id == estudio_id,
-               DocumentoValorado.tipo_valorado != TipoValorado.PAGO))).all()
+               DocumentoValorado.tipo_valorado.not_in(
+                   [TipoValorado.PAGO, TipoValorado.ESQUELA_OMISO])))).all()
 
     # Set de números de valor PAGADOS (normalizados) para el cruce doc↔pago.
     pago_nums: set[str] = set()
@@ -325,7 +368,8 @@ async def deuda_estudio(session, estudio_id) -> dict:
               isouter=True)
         .where(Contribuyente.estudio_id == estudio_id,
                # PAGO no es deuda (zAlerta-69): fuera del panel de deuda.
-               DocumentoValorado.tipo_valorado != TipoValorado.PAGO))).all()
+               DocumentoValorado.tipo_valorado.not_in(
+                   [TipoValorado.PAGO, TipoValorado.ESQUELA_OMISO])))).all()
 
     desde_default = anio_deuda_desde_default()
     # Estructura intermedia: tipo → ruc → {razon, docs[], total, por_confirmar}
