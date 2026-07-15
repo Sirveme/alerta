@@ -27,7 +27,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from db import get_session
-from models import Contribuyente, CredencialSol, EstadoContribuyente, Notificacion
+from models import (Contribuyente, CredencialSol, EstadoContribuyente,
+                    Notificacion, BarridoMetrica)
 from cifrado import descifrar_clave_sol
 from ingesta import ingestar_resultado
 
@@ -125,10 +126,27 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
 
     stats = await ingestar_resultado(
         session, contrib.estudio_id, contrib.id, resultado)
+    # ── Métricas de barrido + censo (zAlerta-83): tablero de riesgo de ban ──
+    met = resultado.get("metricas") or {}
+    session.add(BarridoMetrica(
+        contribuyente_id=contrib.id, estudio_id=contrib.estudio_id,
+        modo=("full" if hacer_full else "incremental"),
+        peticiones=met.get("peticiones", 0),
+        duracion_seg=met.get("duracion_seg"),
+        docs_procesados=met.get("docs_procesados", 0),
+        pdfs_descargados=met.get("pdfs_descargados", 0),
+        limite_alcanzado=bool(met.get("limite_alcanzado")),
+        exito=True))
+    # Censo del buzón: solo en FULL es completo. El incremental salta los
+    # conocidos ANTES de contar, así que su censo es parcial → no sobrescribir.
+    censo = resultado.get("censo")
+    if censo and hacer_full:   # mapa {año: nº docs} — tamaño del buzón, sin descargar
+        contrib.censo_json = {str(k): v for k, v in censo.items()}
+        contrib.censo_at = datetime.now(TZ_LIMA)
     # Un FULL exitoso sella la base contra la que compara el incremental.
     if hacer_full:
         contrib.ultimo_barrido_full_at = datetime.now(TZ_LIMA)
-        await session.commit()
+    await session.commit()
     log(f"  {contrib.ruc}: OK [{modo}] — {stats['mensajes_nuevos']} nuevos, "
         f"{stats['mensajes_duplicados']} duplicados, "
         f"{stats['adjuntos_nuevos']} adjuntos nuevos.", "OK")

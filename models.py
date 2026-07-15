@@ -381,6 +381,10 @@ class Contribuyente(Base, TimestampMixin):
     # decrece al ampliar). NULL en ambos → default año_actual − 2.
     anio_deuda_desde: Mapped[int | None] = mapped_column(Integer)
     anio_deuda_cubierto_desde: Mapped[int | None] = mapped_column(Integer)
+    # Censo del buzón (zAlerta-83): mapa {año: nº documentos} SIN descargar (solo
+    # índice). Dice el tamaño del trabajo antes de hacerlo. + fecha del censo.
+    censo_json: Mapped[dict | None] = mapped_column(JSONB)
+    censo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Aviso (push) "tu credencial dejó de servir" enviado UNA vez al entrar en
     # ERROR_CREDENCIAL (zAlerta-13 P2). Se limpia al reconectar.
     credencial_error_avisada: Mapped[bool] = mapped_column(
@@ -551,6 +555,10 @@ class Adjunto(Base, TimestampMixin):
 
     descargado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     descargado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Custodia (zAlerta-83): 'activo' (en la nube) | 'liberable' (viejo, se puede
+    # descargar y liberar) | 'archivado' (bytea liberado; el usuario lo custodia).
+    # La antigüedad sale de creado_at. NULL = activo por defecto.
+    custodia_estado: Mapped[str | None] = mapped_column(String(20))
 
     notificacion: Mapped["Notificacion"] = relationship(back_populates="adjuntos")
 
@@ -1190,4 +1198,32 @@ class PushEnviado(Base):
         UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
         nullable=False)
     enviado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+class BarridoMetrica(Base):
+    """Tablero de riesgo de ban (zAlerta-83): una fila por barrido a SUNAT.
+    Registra peticiones, duración, PDFs bajados y señales de límite para decidir
+    con DATOS si es seguro escalar la descarga (no a ciegas)."""
+    __tablename__ = "barrido_metricas"
+    __table_args__ = (
+        Index("ix_barrido_contrib_at", "contribuyente_id", "creado_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False)
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="SET NULL"))
+    modo: Mapped[str | None] = mapped_column(String(20))          # full | incremental
+    peticiones: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duracion_seg: Mapped[int | None] = mapped_column(Integer)
+    docs_procesados: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pdfs_descargados: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    senales_limite: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    limite_alcanzado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    exito: Mapped[bool | None] = mapped_column(Boolean)
+    creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)

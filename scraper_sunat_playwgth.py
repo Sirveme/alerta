@@ -114,6 +114,15 @@ DESCARGAS = Path("./descargas")
 # (dos velocidades, zAlerta-45). Configurable por env; default 2019.
 ANIO_DEUDA_DESDE = int(os.getenv("ANIO_DEUDA_DESDE", "2019"))
 
+# ── Descarga CONTROLADA (zAlerta-83): gestión del riesgo de ban ──
+# THROTTLE: pausa entre peticiones a SUNAT (detalle/adjuntos). El histórico va a
+# ritmo seguro; los incrementales (pocos) casi no lo notan. Configurable por env.
+DESCARGA_PAUSA_S = float(os.getenv("SCRAPER_PAUSA_S", "0.4"))
+# LÍMITE de documentos con descarga (detalle+PDF) por barrido. Si el rango pide
+# más, se descarga hasta el límite (recientes primero) y se marca para que la UI
+# ofrezca "reduce años". Los buzones chicos quedan debajo → sin restricción.
+MAX_DOCS_BARRIDO = int(os.getenv("SCRAPER_MAX_DOCS", "150"))
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Login
@@ -817,6 +826,10 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
             resultado["valorados_descargados"] = 0
             resultado["valorados_pendientes"] = []      # carátula sin goArchivoDescarga / sin PDF
             resultado["valorados_integridad_error"] = []  # numdoc del PDF ≠ numdoc de la fila
+            # ── Descarga CONTROLADA (zAlerta-83): censo + límite + throttle ──
+            _t0 = time.time()
+            ctrl = {"censo": {}, "docs_bajados": 0, "peticiones": 0,
+                    "senales_limite": 0, "limite_alcanzado": False}
 
             # ── Barrido AUTORITATIVO por bandeja (cod_carpeta=00 = todas) ──
             # Igual que antes: garantiza que NO se pierde ningún mensaje. Cada uno
@@ -825,6 +838,7 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
             for tipo_msj in (1, 2):
                 mensajes = listar_mensajes(api, visor_base, tipo_msj,
                                            cod_carpeta="00", conocidos=conocidos)
+                ctrl["peticiones"] += 1   # listar el índice (zAlerta-83 métricas)
                 for msg in mensajes:
                     if not isinstance(msg, dict):
                         continue
@@ -843,6 +857,10 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                     fecha_env = (msg.get("fecEnvio") or msg.get("fechaEnvio")
                                  or msg.get("fecPublica"))
                     n_adj = msg.get("cantidadArchAdj", 0)
+                    # Censo (zAlerta-83): cuenta docs por año SIN descargar.
+                    _anio = _anio_de(fecha_pub or fecha_env)
+                    if _anio:
+                        ctrl["censo"][_anio] = ctrl["censo"].get(_anio, 0) + 1
 
                     # ── FASE 1 (zAlerta-45): DOS VELOCIDADES ──
                     # Clasificamos con el índice (carpeta+asunto), SIN abrir detalle.
@@ -858,17 +876,27 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                             valorado_tipo = vt
                     es_deuda = valorado_tipo is not None and not self_check["abortado"]
 
-                    # zAlerta-82: DESCARGAR TODO. Se abre el detalle (cuerpo fiel
-                    # msjMensaje) y se bajan los adjuntos (PDF) de TODO mensaje, no
-                    # solo la deuda. El 2º PDF (goArchivoDescarga) sigue SOLO para
-                    # valorados (deuda/pago/esquela), más abajo.
-                    # NOTA de rendimiento: esto revierte la optimización de zAlerta-45
-                    # (dos velocidades). El FULL de un buzón grande será más lento y
-                    # hará más peticiones a SUNAT — validar/monitorear el ban.
-                    detalle = obtener_detalle(api, visor_base, cod_msg, tipo_msj)
+                    # zAlerta-82/83: DESCARGAR TODO, pero CONTROLADO. Se baja el
+                    # detalle (cuerpo fiel) + adjuntos SOLO si: (a) el año está en el
+                    # rango cubierto del buzón (recientes primero) y (b) no se superó
+                    # el límite de docs por barrido. Con THROTTLE entre peticiones.
+                    # Lo que queda fuera → pdf_pendiente (se trae al ampliar el rango).
+                    en_rango = (_anio is None) or (_anio in anios_descarga)
+                    bajo_limite = ctrl["docs_bajados"] < MAX_DOCS_BARRIDO
+                    puede_bajar = en_rango and (bajo_limite or es_deuda)
+                    if en_rango and not bajo_limite and not es_deuda:
+                        ctrl["limite_alcanzado"] = True   # UI: "reduce años"
+                    detalle = None
                     pdfs = []
-                    if detalle:
-                        pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
+                    if puede_bajar:
+                        if DESCARGA_PAUSA_S > 0:
+                            time.sleep(DESCARGA_PAUSA_S)   # throttle anti-ban
+                        detalle = obtener_detalle(api, visor_base, cod_msg, tipo_msj)
+                        ctrl["peticiones"] += 1
+                        if detalle:
+                            pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
+                            ctrl["peticiones"] += 1
+                            ctrl["docs_bajados"] += 1
 
                     item = {
                         "tipo_msj": tipo_msj,
@@ -897,6 +925,7 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                         num_doc = _num_documento_de(asunto)
                         body, motivo = descargar_documento_real(
                             api, visor_base, cod_msg, detalle)
+                        ctrl["peticiones"] += 1
                         if not body:
                             # Sin PDF: NO adivinar. Marcar pendiente y seguir.
                             resultado["valorados_pendientes"].append(
@@ -948,7 +977,20 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                         time.sleep(random.uniform(0.5, 1.5))
 
             resultado["exito"] = True
-            log(f"Scraping completo: {len(resultado['mensajes'])} mensajes capturados.", "OK")
+            # ── Métricas del barrido + censo (zAlerta-83) ──
+            resultado["censo"] = {int(a): n for a, n in ctrl["censo"].items()}
+            resultado["metricas"] = {
+                "peticiones": ctrl["peticiones"],
+                "duracion_seg": int(time.time() - _t0),
+                "docs_procesados": len(resultado["mensajes"]),
+                "pdfs_descargados": ctrl["docs_bajados"],
+                "senales_limite": ctrl["senales_limite"],
+                "limite_alcanzado": ctrl["limite_alcanzado"],
+            }
+            log(f"Scraping completo: {len(resultado['mensajes'])} mensajes; "
+                f"{ctrl['docs_bajados']} PDF, {ctrl['peticiones']} peticiones, "
+                f"{resultado['metricas']['duracion_seg']}s"
+                f"{' [LÍMITE alcanzado]' if ctrl['limite_alcanzado'] else ''}.", "OK")
 
         finally:
             contexto.close()
