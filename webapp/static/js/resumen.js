@@ -137,6 +137,7 @@
         + '</div>' + cons + '</div>';
     }
     if (f.es_pago && f.pago) pdfHtml = pagoModal(f.pago) + pdfHtml;
+    if (f.es_esquela && f.esquela) pdfHtml = esquelaModal(f.esquela) + pdfHtml;
     if (f.coactivo) pdfHtml = coactivoChip(f) + coactivoPDF(f.coactivo) + pdfHtml;
     if (!pdfHtml) pdfHtml = '<div class="rsm-mod-sinpdf">Esta notificación no tiene PDF.</div>';
 
@@ -277,6 +278,7 @@
   //    (estilo de línea) + ícono SVG (Material Symbols, sobrio; NO emojis). ──
   function naturalezaDe(f) {
     if (f.es_pago) return 'ok';                          // pago confirmado → verde
+    if (f.es_esquela) return 'aviso';                    // omiso → ámbar (atención)
     if (f.coactivo && f.coactivo.grupo) {
       const g = f.coactivo.grupo;
       if (g === 'alivio') return 'ok';                   // levantamiento/reducción → verde
@@ -295,19 +297,48 @@
   }
   function iconoDe(f) {
     if (f.es_pago) return 'check_circle';
+    if (f.es_esquela || f.tipo === 'esquela') return 'assignment_late';   // omiso
     if (f.coactivo || f.tipo === 'cobranza_coactiva') return 'gavel';   // mazo (Duilio)
     return ({ orden_pago: 'receipt_long', multa: 'warning',
       fraccionamiento: 'calendar_month', resolucion_determinacion: 'description',
       aviso: 'notifications' })[f.tipo] || 'description';
+  }
+  // Chip + datos de una Esquela de Omiso en la tarjeta (zAlerta-81).
+  function esquelaChip(f) {
+    if (!f.es_esquela || !f.esquela) return '';
+    const e = f.esquela, bits = [];
+    if (e.resumen) bits.push(esc(e.resumen));
+    if (e.tributo_sancion) bits.push('Tributo ' + esc(e.tributo_sancion));
+    return '<div class="rsm-pago-chip rsm-omiso-chip">'
+      + '<span class="material-symbols-outlined">assignment_late</span>'
+      + '<span>Omiso' + (bits.length ? ': ' + bits.join(' · ') : ' — declaración no presentada') + '</span></div>';
+  }
+  function esquelaModal(e) {
+    const datos = [];
+    if (e.periodos && e.periodos.length) datos.push('Período(s): <b>' + esc(e.periodos.join(', ')) + '</b>');
+    if (e.tributo_sancion) datos.push('Tributo sanción: ' + esc(e.tributo_sancion));
+    if (e.tributo_asociado) datos.push('Tributo asociado: ' + esc(e.tributo_asociado));
+    const pdf = e.gcs_disponible
+      ? '<div class="rsm-mod-pdf"><span class="material-symbols-outlined">assignment_late</span>'
+        + '<span class="rsm-mod-pdf-nom">Esquela de Omiso</span>'
+        + '<a class="rsm-mod-btn" href="/valorados/' + esc(e.valorado_id) + '/ver" target="_blank" rel="noopener">Ver esquela</a>'
+        + '<a class="rsm-mod-btn rsm-mod-btn--sec" href="/valorados/' + esc(e.valorado_id) + '/descargar">Descargar</a></div>'
+      : '';
+    return '<div class="rsm-mod-pdfs"><div class="rsm-mod-lbl">Omiso — declaración no presentada</div>'
+      + (datos.length ? '<div class="rsm-pago-datos">' + datos.map((d) => '<span>' + d + '</span>').join('') + '</div>'
+          : '<div class="rsm-pago-datos"><span class="muted">Abre la esquela para ver el período y tributo omitidos.</span></div>')
+      + pdf + '</div>';
   }
   // ¿la notificación tiene un documento PDF descargable? (zAlerta-79 Problema A)
   function tienePdf(f) {
     return !!((f.tiene_deuda && f.gcs_disponible)
       || (f.pago && f.pago.gcs_disponible)
       || (f.coactivo && f.coactivo.gcs_disponible)
+      || (f.esquela && f.esquela.gcs_disponible)
       || (f.adjuntos && f.adjuntos.length));
   }
   function tipoLegible(f) {
+    if (f.es_esquela) return 'Esquela de Omiso';         // zAlerta-81
     // Subtipo coactivo (zAlerta-70): la etiqueta específica manda ("Embargo
     // levantado", "Retención a terceros", etc.) sobre el genérico "Cobranza Coactiva".
     if (f.coactivo && f.coactivo.etiqueta) return f.coactivo.etiqueta;
@@ -393,6 +424,7 @@
       + monto + venceTxt + '</div>'
       + coactivoChip(f)
       + pagoChip(f)
+      + esquelaChip(f)
       + equipoHTML(f)
       + '<div class="rsm-c-acc"><button class="rsm-b rsm-b--' + nat + '" data-i="' + i + '">'
       + esc(btnLabel) + '</button></div>'
