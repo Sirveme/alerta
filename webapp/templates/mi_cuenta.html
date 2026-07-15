@@ -35,6 +35,9 @@
             <option value="{{ y }}"{% if y == r.anio_deuda_desde %} selected{% endif %}>{{ y }}</option>
             {% endfor %}
           </select>
+          {% if r.censo_total %}
+          <span class="mc-censo">Tu buzón: {{ r.censo_total }} documento(s) en {{ r.censo_anios }} año(s).</span>
+          {% endif %}
           <p class="mc-anio-msg" hidden></p>
         </div>
         {% endif %}
@@ -176,7 +179,9 @@
           sel.disabled = false;
           if (d && d.ok) {
             msg.textContent = d.mensaje;
-            msg.className = 'mc-anio-msg' + (d.ampliado ? ' mc-anio-msg--info' : ' mc-anio-msg--ok');
+            var tono = d.mucho ? ' mc-anio-msg--aviso'
+                     : (d.ampliado ? ' mc-anio-msg--info' : ' mc-anio-msg--ok');
+            msg.className = 'mc-anio-msg' + tono;
             msg.hidden = false;
           }
         })
