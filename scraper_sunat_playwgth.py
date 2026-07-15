@@ -900,8 +900,13 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                                  "motivo": motivo})
                         else:
                             txt = texto_pdf(body)
-                            # SELF-CHECK obligatorio en el PRIMER documento del lote.
-                            if not self_check["hecho"]:
+                            # SELF-CHECK: solo para DEUDA con monto (OP/Multa/REC/
+                            # Fracc/Determ). PAGO y ESQUELA no traen "monto de deuda"
+                            # y NO deben abortar el lote (zAlerta-81).
+                            _es_deuda_monto = valorado_tipo.value not in (
+                                "pago", "esquela_omiso")
+                            # SELF-CHECK obligatorio en el PRIMER documento de DEUDA.
+                            if _es_deuda_monto and not self_check["hecho"]:
                                 self_check["hecho"] = True
                                 self_check["ok"] = _tiene_monto(txt)
                                 resultado["self_check"] = {
