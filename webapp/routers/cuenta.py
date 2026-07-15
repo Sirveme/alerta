@@ -36,6 +36,8 @@ router = APIRouter(tags=["cuenta"])
 
 # Umbral para "prueba por vencer" (días).
 DIAS_AVISO_VENCE = 3
+# Límite de documentos del rango elegido antes de avisar "es mucho" (zAlerta-83).
+LIMITE_DOCS_AVISO = 150
 
 
 def _accion_dominante(estado_clave: str, estudio) -> dict:
@@ -87,6 +89,7 @@ async def mi_cuenta(request: Request,
             cred = await session.scalar(
                 select(CredencialSol).where(CredencialSol.contribuyente_id == ct.id))
             cx = estado_conexion(ct, cred)
+            censo = ct.censo_json or {}
             rucs.append({
                 "id": str(ct.id), "ruc": ct.ruc,
                 "razon_social": ct.razon_social or ct.ruc,
@@ -94,6 +97,9 @@ async def mi_cuenta(request: Request,
                 "tiene_cred": cred is not None,
                 # Filtro de años de deuda por buzón (zAlerta-72).
                 "anio_deuda_desde": ct.anio_deuda_desde or anio_deuda_desde_default(),
+                # Censo del buzón (zAlerta-83): tamaño del trabajo sin descargar.
+                "censo_total": sum(int(v) for v in censo.values()) if censo else None,
+                "censo_anios": len(censo) if censo else None,
             })
         # Historial de pagos (simple).
         pagos = list(await session.scalars(
@@ -153,8 +159,18 @@ async def set_anio_deuda(contribuyente_id: uuid.UUID, request: Request,
             contrib.ultimo_barrido_full_at = None
         elif contrib.anio_deuda_cubierto_desde is None:
             contrib.anio_deuda_cubierto_desde = cubierto
+        # ¿El rango pedido es MUCHO? (zAlerta-83) Estima docs [nuevo..actual] del censo.
+        censo = contrib.censo_json or {}
+        en_rango = sum(int(v) for a, v in censo.items()
+                       if str(a).isdigit() and nuevo <= int(a) <= ahora.year) if censo else 0
         await session.commit()
 
+    if en_rango > LIMITE_DOCS_AVISO:
+        msg = (f"Traer todo desde {nuevo} son ~{en_rango} documentos: es mucho y "
+               f"puede tardar. Se traerá por tandas (años recientes primero). "
+               f"¿Prefieres reducir a los últimos años?")
+        return JSONResponse({"ok": True, "anio": nuevo, "ampliado": ampliado,
+                             "mucho": True, "docs_estimados": en_rango, "mensaje": msg})
     if ampliado:
         msg = (f"Estamos trayendo tu historial de deuda desde {nuevo}. "
                f"Puede tardar unos minutos; se irá completando solo.")

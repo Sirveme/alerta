@@ -37,7 +37,8 @@ from ..core import templates, fecha_lima
 from ..deps import UsuarioActual, usuario_actual
 from ..estados import estado_conexion
 from ..deuda import (extraer_monto, fmt_soles, extraer_pago, deudor_de_retencion,
-                     anio_deuda_desde_default, resumen_cabecera, extraer_esquela)
+                     anio_deuda_desde_default, resumen_cabecera, extraer_esquela,
+                     cuerpo_fiel)
 from clasificacion import COACTIVO_META, COACTIVO_NO_SUMA
 
 router = APIRouter(tags=["resumen"])
@@ -300,6 +301,8 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "coactivo": coactivo,
             "es_esquela": esquela is not None,
             "esquela": esquela,
+            # Cuerpo FIEL del mensaje SUNAT (zAlerta-82): literal, sin resumir.
+            "cuerpo": cuerpo_fiel(n.texto_html),
             **deuda,
         }
         # Estado de equipo (Capa 2): solo si el buzón tiene 2+ personas.
