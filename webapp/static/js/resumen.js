@@ -92,7 +92,22 @@
       + '<a class="rsm-mod-btn rsm-mod-btn--sec" href="/valorados/' + esc(c.valorado_id) + '/descargar">Descargar</a></div></div>';
   }
 
-  // ── Modal custom (sin diálogos nativos): detalle + orientación + PDFs ──
+  // Cuerpo FIEL del mensaje SUNAT (zAlerta-82): primer párrafo visible, el resto
+  // en un desplegable. LITERAL — no se resume ni interpreta.
+  function cuerpoFielHTML(f) {
+    const c = f.cuerpo;
+    if (!c || !c.length) return '';
+    const p = (s) => '<p class="rsm-mod-cuerpo-p">' + esc(s) + '</p>';
+    let html = '<div class="rsm-mod-cuerpo"><div class="rsm-mod-lbl">Mensaje de SUNAT</div>'
+      + p(c[0]);
+    if (c.length > 1) {
+      html += '<details class="rsm-mod-cuerpo-mas"><summary>Ver mensaje completo</summary>'
+        + c.slice(1).map(p).join('') + '</details>';
+    }
+    return html + '</div>';
+  }
+
+  // ── Modal custom (sin diálogos nativos): detalle + cuerpo fiel + PDFs ──
   function abrirModal(f) {
     if (!f) return;
     // Marcar como LEÍDA al abrir el modal (zAlerta-47): server-side (compartido
@@ -104,8 +119,10 @@
       pintarLista();
     }
     const sem = semColor(f);
-    const orienta = (f.coactivo && coactivoOrienta(f.coactivo))
-      || ORIENTA[f.tipo] || ORIENTA.otro;
+    // Cuerpo FIEL de SUNAT (zAlerta-82): literal, sin resumir. Sustituye a las
+    // orientaciones interpretativas. La alerta de tercero-retenedor (factual) se
+    // conserva vía coactivoChip.
+    const cuerpo = cuerpoFielHTML(f);
     const meta = [];
     meta.push('<span class="rsm-mod-chip sem-bg--' + sem + '">' + esc(URG_LBL[f.urgencia] || 'Informativa') + '</span>');
     if (f.monto) meta.push('<span class="rsm-mod-chip rsm-mod-chip--deuda">' + esc(f.monto) + '</span>');
@@ -139,7 +156,7 @@
     if (f.es_pago && f.pago) pdfHtml = pagoModal(f.pago) + pdfHtml;
     if (f.es_esquela && f.esquela) pdfHtml = esquelaModal(f.esquela) + pdfHtml;
     if (f.coactivo) pdfHtml = coactivoChip(f) + coactivoPDF(f.coactivo) + pdfHtml;
-    if (!pdfHtml) pdfHtml = '<div class="rsm-mod-sinpdf">Esta notificación no tiene PDF.</div>';
+    if (!pdfHtml) pdfHtml = '<div class="rsm-mod-sinpdf">Sin documento adjunto.</div>';
 
     const ov = document.createElement('div');
     ov.className = 'rsm-mod-ov';
@@ -149,7 +166,7 @@
       + '<div class="rsm-mod-tipo">' + esc(f.documento) + '</div>'
       + '<h3 class="rsm-mod-asunto">' + esc(f.asunto || f.detalle || 'Notificación') + '</h3>'
       + '<div class="rsm-mod-meta">' + meta.join('') + '</div>'
-      + '<p class="rsm-mod-orienta">' + esc(orienta) + '</p>'
+      + cuerpo
       + pdfHtml
       + '</div>';
 
