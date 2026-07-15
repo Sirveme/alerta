@@ -13,8 +13,10 @@ Los documentos sin monto parseado cuentan como "por confirmar", no se omiten.
 
 from __future__ import annotations
 
+import html as _html
 import re
 from datetime import timedelta
+from urllib.parse import unquote
 
 from sqlalchemy import select, func
 
@@ -26,6 +28,49 @@ from clasificacion import COACTIVO_NO_SUMA
 def anio_deuda_desde_default() -> int:
     """Año-desde por defecto (zAlerta-72): año actual − 2 (arranque rápido)."""
     return ahora_lima().year - 2
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Cuerpo FIEL del mensaje SUNAT (zAlerta-82). Se muestra LITERAL, sin resumir
+# ni interpretar (la fidelidad literal ES la forma de no asesorar).
+# ─────────────────────────────────────────────────────────────────────
+_RE_TAG = re.compile(r"<[^>]+>")
+
+
+def cuerpo_fiel(texto_html: str | None) -> list[str]:
+    """Cuerpo del mensaje SUNAT como lista de PÁRRAFOS, literal. Limpia el HTML
+    (<br>→salto, entidades) y, si existe, recorta al bloque 'Estimado…Atentamente,
+    SUNAT'. Devuelve [] si no hay cuerpo (p. ej. metadata JSON). NO resume."""
+    if not texto_html:
+        return []
+    t = texto_html
+    t = re.sub(r"(?i)<\s*br\s*/?\s*>", "\n", t)
+    t = re.sub(r"(?i)</\s*p\s*>", "\n\n", t)
+    t = _RE_TAG.sub("", t)
+    # Entidades: %26%23243; (url-encoded) → &#243; → ó
+    try:
+        t = _html.unescape(unquote(t))
+    except Exception:
+        t = _html.unescape(t)
+    low = t.lower()
+    if not low.strip() or low.strip().startswith("{"):
+        return []   # metadata JSON u otro no-cuerpo → sin cuerpo fiel
+    i = low.find("estimado")
+    if i >= 0:
+        t = t[i:]
+        low = t.lower()
+        j = low.rfind("atentamente")
+        if j >= 0:
+            k = low.find("sunat", j)
+            t = t[:(k + 5)] if k >= 0 else t[:j].rstrip()
+    # Párrafos: bloques separados por línea(s) en blanco; dentro, une saltos simples.
+    paras = []
+    for bloque in re.split(r"\n\s*\n", t):
+        p = " ".join(x.strip() for x in bloque.splitlines() if x.strip()).strip()
+        if p:
+            paras.append(p)
+    # Si no hubo marcador "Estimado" y quedó una sola línea corta, no forzar.
+    return paras if (i >= 0 or len("".join(paras)) > 40) else []
 
 
 def _anio_de_valorado(dv, fecha_pub) -> int | None:
