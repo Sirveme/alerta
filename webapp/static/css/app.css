@@ -1372,6 +1372,15 @@ a.tarjeta-link { display:block; color:inherit; }
 .rsm-mod-tag { font-size:.74rem; color:var(--texto-suave); background:color-mix(in srgb,var(--texto) 8%,transparent);
   border-radius:999px; padding:3px 9px; }
 .rsm-mod-orienta { margin:0 0 14px; font-size:.9rem; line-height:1.5; color:var(--texto); }
+/* zAlerta-82 · Cuerpo FIEL de SUNAT (literal) + 2º+ párrafo colapsable */
+.rsm-mod-cuerpo { margin:0 0 14px; }
+.rsm-mod-cuerpo-p { margin:0 0 8px; font-size:.9rem; line-height:1.55; color:var(--texto);
+  white-space:pre-line; }
+.rsm-mod-cuerpo-mas { margin-top:2px; }
+.rsm-mod-cuerpo-mas > summary { cursor:pointer; font-size:.82rem; font-weight:700;
+  color:var(--marca); list-style:none; padding:2px 0; }
+.rsm-mod-cuerpo-mas > summary::-webkit-details-marker { display:none; }
+.rsm-mod-cuerpo-mas[open] > summary { color:var(--texto-suave); }
 .rsm-mod-lbl { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
   color:var(--texto-suave); margin-bottom:8px; }
 .rsm-mod-pdf { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 0;
@@ -2189,3 +2198,5 @@ a.tarjeta-link { display:block; color:inherit; }
 .mc-anio-msg { width:100%; margin:6px 0 0; font-size:.8rem; }
 .mc-anio-msg--ok { color:var(--u-aldia); }
 .mc-anio-msg--info { color:var(--u-importante); }
+.mc-anio-msg--aviso { color:var(--u-urgente); font-weight:700; }
+.mc-censo { font-size:.78rem; color:var(--texto-suave); }
