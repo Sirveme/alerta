@@ -858,13 +858,17 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                             valorado_tipo = vt
                     es_deuda = valorado_tipo is not None and not self_check["abortado"]
 
-                    detalle = None
+                    # zAlerta-82: DESCARGAR TODO. Se abre el detalle (cuerpo fiel
+                    # msjMensaje) y se bajan los adjuntos (PDF) de TODO mensaje, no
+                    # solo la deuda. El 2º PDF (goArchivoDescarga) sigue SOLO para
+                    # valorados (deuda/pago/esquela), más abajo.
+                    # NOTA de rendimiento: esto revierte la optimización de zAlerta-45
+                    # (dos velocidades). El FULL de un buzón grande será más lento y
+                    # hará más peticiones a SUNAT — validar/monitorear el ban.
+                    detalle = obtener_detalle(api, visor_base, cod_msg, tipo_msj)
                     pdfs = []
-                    if es_deuda:
-                        # Deuda: abrir detalle + constancia (permanente). Con pausa.
-                        detalle = obtener_detalle(api, visor_base, cod_msg, tipo_msj)
-                        if detalle:
-                            pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
+                    if detalle:
+                        pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
 
                     item = {
                         "tipo_msj": tipo_msj,
@@ -881,9 +885,9 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                         "raw": msg,
                         "detalle": detalle,
                         "pdfs": pdfs,
-                        # Informativo con adjunto aún NO descargado (FASE 2/3 bajo demanda):
-                        # se puede traer luego con cod_mensaje + tipo_msj.
-                        "pdf_pendiente": (not es_deuda) and bool(n_adj),
+                        # Adjunto que existe pero NO se pudo bajar (zAlerta-82: se
+                        # intenta bajar TODO; pendiente solo si falló la descarga).
+                        "pdf_pendiente": bool(n_adj) and not pdfs,
                         "capturado_at": ahora_lima().isoformat(),
                     }
 

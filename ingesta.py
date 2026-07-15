@@ -265,13 +265,19 @@ async def ingestar_resultado(
                     Adjunto.cod_archivo_sunat == cod_arch,
                 )
             )
+            # GCS permanente (zAlerta-82): TODO adjunto va a GCS, no solo bytea.
+            blob_adj = f"{contribuyente_id}/adjuntos/{cod_arch}_{cod}.pdf"
             if dup:
                 stats["adjuntos_duplicados"] += 1
-                # Backfill: si el PDF no estaba en BD y ahora lo tenemos, guardarlo.
+                # Backfill/self-heal: completar lo que falte (bytes, gcs_key).
                 if dup.bytea_temporal is None and pdf_bytes:
                     dup.bytea_temporal = pdf_bytes
                     dup.descargado = True
                     dup.descargado_at = ahora_lima()
+                if dup.gcs_key is None:
+                    _b = pdf_bytes or (bytes(dup.bytea_temporal) if dup.bytea_temporal else None)
+                    if _b:
+                        dup.gcs_key = gcs.subir_pdf(_b, blob_adj)
                 continue
             session.add(Adjunto(
                 notificacion_id=notif_id,
@@ -279,8 +285,9 @@ async def ingestar_resultado(
                 cod_archivo_sunat=cod_arch,
                 nombre_archivo=nombre,
                 tamano_bytes=att.get("cntTamarch"),
-                # PDF persistido en BD para que la WEB lo sirva (zAlerta-08 #4).
+                # PDF persistido en BD (zAlerta-08 #4) Y en GCS permanente (zAlerta-82).
                 bytea_temporal=pdf_bytes,
+                gcs_key=gcs.subir_pdf(pdf_bytes, blob_adj) if pdf_bytes else None,
                 descargado=bool(pdf_bytes),
                 descargado_at=ahora_lima() if pdf_bytes else None,
             ))
