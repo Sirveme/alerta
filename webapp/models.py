@@ -136,6 +136,7 @@ class TipoValorado(str, enum.Enum):
     COBRANZA_COACTIVA = "cobranza_coactiva"
     FRACCIONAMIENTO = "fraccionamiento"
     PAGO = "pago"              # constancia de pago (no es deuda; zAlerta-69)
+    ESQUELA_OMISO = "esquela_omiso"   # esquela de omiso (aviso; zAlerta-81)
 
 
 # Mapa TipoDocumento (clasificación del buzón) → TipoValorado. Los que llevan
@@ -148,6 +149,8 @@ TIPODOC_A_VALORADO: dict = {
     TipoDocumento.COBRANZA_COACTIVA: TipoValorado.COBRANZA_COACTIVA,
     TipoDocumento.FRACCIONAMIENTO: TipoValorado.FRACCIONAMIENTO,
     TipoDocumento.PAGO: TipoValorado.PAGO,
+    # Esquela de Omiso (zAlerta-81): baja su documento (2º PDF) con período+tributo.
+    TipoDocumento.ESQUELA: TipoValorado.ESQUELA_OMISO,
 }
 
 
