@@ -679,10 +679,13 @@ def _tiene_monto(texto: str) -> bool:
 # Orquestación
 # ─────────────────────────────────────────────────────────────────────
 def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
-                 anio_desde: int | None = None) -> dict:
+                 anio_desde: int | None = None,
+                 solo_censo: bool = False) -> dict:
     # conocidos (zAlerta-46): set de cod_mensaje ya en BD. Si se pasa → lectura
     # INCREMENTAL (para cuando una página completa ya es conocida y salta los
     # mensajes ya vistos). Si es None → barrido COMPLETO.
+    # solo_censo (zAlerta-83 / Tandas CCPL): lista y CUENTA por año SIN descargar
+    # nada (ni detalle ni PDFs). Es la "foto" barata previa a decidir las tandas.
     resultado = {
         "ruc": cfg.ruc,
         "scrapeado_at": ahora_lima().isoformat(),
@@ -883,8 +886,9 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                     # Lo que queda fuera → pdf_pendiente (se trae al ampliar el rango).
                     en_rango = (_anio is None) or (_anio in anios_descarga)
                     bajo_limite = ctrl["docs_bajados"] < MAX_DOCS_BARRIDO
-                    puede_bajar = en_rango and (bajo_limite or es_deuda)
-                    if en_rango and not bajo_limite and not es_deuda:
+                    # solo_censo: NADA se baja (ni deuda); solo se lista y cuenta.
+                    puede_bajar = (not solo_censo) and en_rango and (bajo_limite or es_deuda)
+                    if not solo_censo and en_rango and not bajo_limite and not es_deuda:
                         ctrl["limite_alcanzado"] = True   # UI: "reduce años"
                     detalle = None
                     pdfs = []

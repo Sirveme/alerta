@@ -59,20 +59,24 @@ async def _contribuyentes_a_scrapear(session, ruc_filtro: str | None):
 
 def _scrapear_sync(ruc: str, usuario_sol: str, clave_sol: str,
                    conocidos: set | None = None,
-                   anio_desde: int | None = None) -> dict:
+                   anio_desde: int | None = None,
+                   solo_censo: bool = False) -> dict:
     """Llama al scraper Playwright (sync) con las credenciales descifradas.
     conocidos (zAlerta-46): set de cod_mensaje ya en BD → lectura incremental.
-    anio_desde (zAlerta-72): año más antiguo de deuda a descargar (por buzón)."""
+    anio_desde (zAlerta-72): año más antiguo de deuda a descargar (por buzón).
+    solo_censo (Tandas CCPL): lista y cuenta por año SIN descargar nada."""
     cfg = scraper.SunatConfig(
         ruc=ruc, usuario_sol=usuario_sol, clave_sol=clave_sol,
         headless=True,
     )
-    return scraper.scrapear_ruc(cfg, conocidos=conocidos, anio_desde=anio_desde)
+    return scraper.scrapear_ruc(cfg, conocidos=conocidos, anio_desde=anio_desde,
+                                solo_censo=solo_censo)
 
 
 async def procesar_contribuyente(session, contrib: Contribuyente,
                                  frescura_horas: int, forzar: bool,
-                                 full: bool = False) -> None:
+                                 full: bool = False,
+                                 solo_censo: bool = False) -> None:
     # ── Control de frescura: ¿hace falta tocar SUNAT? ──
     if not forzar and contrib.ultimo_scrapeo_ok and contrib.ultimo_scrapeo_at:
         antiguedad = datetime.now(TZ_LIMA) - contrib.ultimo_scrapeo_at
@@ -96,14 +100,21 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
     # ── Decidir FULL vs INCREMENTAL (zAlerta-46) ──
     # Full si: se pidió (barrido nocturno de seguridad) o NUNCA hubo un full
     # exitoso (primer scan = base). Si no, incremental: solo lo nuevo.
-    hacer_full = full or (contrib.ultimo_barrido_full_at is None)
-    conocidos = None
-    if not hacer_full:
-        cods = await session.scalars(
-            select(Notificacion.cod_mensaje_sunat).where(
-                Notificacion.contribuyente_id == contrib.id))
-        conocidos = {str(c) for c in cods}
-    modo = "FULL" if hacer_full else f"incremental ({len(conocidos)} conocidos)"
+    # solo_censo (Tandas CCPL): lista TODO (conocidos=None) para contar por año,
+    # pero NO es un full de descarga y NO sella base.
+    if solo_censo:
+        hacer_full = False
+        conocidos = None
+    else:
+        hacer_full = full or (contrib.ultimo_barrido_full_at is None)
+        conocidos = None
+        if not hacer_full:
+            cods = await session.scalars(
+                select(Notificacion.cod_mensaje_sunat).where(
+                    Notificacion.contribuyente_id == contrib.id))
+            conocidos = {str(c) for c in cods}
+    modo = ("CENSO" if solo_censo else
+            "FULL" if hacer_full else f"incremental ({len(conocidos)} conocidos)")
     log(f"  {contrib.ruc}: scrapeando [{modo}]...")
 
     # Año-desde de deuda POR BUZÓN (zAlerta-72): el scraper baja desde el año
@@ -115,13 +126,35 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
     # El scraper es sync (Playwright sync_api); lo corremos en un thread
     # para no bloquear el loop async.
     resultado = await asyncio.to_thread(
-        _scrapear_sync, contrib.ruc, cred.usuario_sol, clave, conocidos, anio_desde)
+        _scrapear_sync, contrib.ruc, cred.usuario_sol, clave, conocidos,
+        anio_desde, solo_censo)
 
     if not resultado.get("exito"):
         log(f"  {contrib.ruc}: scraping falló.", "ERROR")
         contrib.ultimo_scrapeo_at = datetime.now(TZ_LIMA)
         contrib.ultimo_scrapeo_ok = False
         await session.commit()
+        return
+
+    # ── CENSO puro (Tandas CCPL): NO se ingesta (registrar notifs volvería a
+    # TODO "conocido" y las tandas incrementales saltarían todo → nunca bajarían
+    # PDFs). Solo se guarda la foto por año + una métrica, y se sale. ──
+    if solo_censo:
+        censo = resultado.get("censo") or {}
+        contrib.censo_json = {str(k): v for k, v in censo.items()}
+        contrib.censo_at = datetime.now(TZ_LIMA)
+        met = resultado.get("metricas") or {}
+        session.add(BarridoMetrica(
+            contribuyente_id=contrib.id, estudio_id=contrib.estudio_id,
+            modo="censo", peticiones=met.get("peticiones", 0),
+            duracion_seg=met.get("duracion_seg"),
+            docs_procesados=met.get("docs_procesados", 0),
+            pdfs_descargados=0, limite_alcanzado=False, exito=True))
+        await session.commit()
+        total = sum(int(v) for v in censo.values()) if censo else 0
+        log(f"  {contrib.ruc}: CENSO — {total} docs en {len(censo)} año(s), "
+            f"{met.get('peticiones', 0)} peticiones, "
+            f"{met.get('duracion_seg', 0)}s. (sin descargar)", "OK")
         return
 
     stats = await ingestar_resultado(
@@ -153,9 +186,12 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
 
 
 async def main(ruc_filtro: str | None = None, forzar: bool = False,
-               frescura_horas: int = FRESCURA_HORAS_DEFAULT) -> None:
+               frescura_horas: int = FRESCURA_HORAS_DEFAULT,
+               solo_censo: bool = False) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
-    if forzar:
+    if solo_censo:
+        log("modo CENSO: lista y cuenta por año SIN descargar (foto previa).", "WARN")
+    elif forzar:
         log("modo FORZAR: se scrapea aunque esté fresco.", "WARN")
     async with get_session() as session:
         contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
@@ -163,7 +199,8 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
         for contrib in contribs:
             try:
                 await procesar_contribuyente(
-                    session, contrib, frescura_horas, forzar)
+                    session, contrib, frescura_horas,
+                    forzar=(forzar or solo_censo), solo_censo=solo_censo)
             except Exception as e:
                 log(f"  {contrib.ruc}: error inesperado: {e}", "ERROR")
     log("Orquestación completa.", "OK")
@@ -174,11 +211,15 @@ if __name__ == "__main__":
     #   python run_scraper.py                → todos, respeta frescura 12h
     #   python run_scraper.py <RUC>          → solo ese RUC, respeta frescura
     #   python run_scraper.py <RUC> forzar   → ignora frescura, scrapea sí o sí
+    #   python run_scraper.py <RUC> censo    → foto por año SIN descargar (Tandas)
     ruc = None
     forzar = False
+    solo_censo = False
     for arg in sys.argv[1:]:
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
+        elif arg.lower() in ("censo", "--censo", "-c"):
+            solo_censo = True
         else:
             ruc = arg
-    asyncio.run(main(ruc, forzar))
+    asyncio.run(main(ruc, forzar, solo_censo=solo_censo))
