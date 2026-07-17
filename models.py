@@ -73,6 +73,12 @@ class RolUsuario(str, enum.Enum):
     ADMIN = "admin"          # dueño del estudio: todo
     CONTADOR = "contador"    # opera, ve notificaciones, gestiona RUCs
     ASISTENTE = "asistente"  # solo lectura / carga
+    # ── Acceso para ESTUDIOS (zAlerta-89): jerarquía de 4 niveles ──
+    # Se usan en Acceso.rol (VARCHAR, native_enum=False) para vincular una PERSONA
+    # a un estudio/contribuyente. Los institucionales de arriba NO cambian.
+    CONTADOR_DUENO = "contador_dueno"          # administra su estudio (todo lo suyo)
+    SUPERVISOR = "supervisor"                  # ve TODO su estudio; no lo estructural
+    EMPRESARIO_LECTURA = "empresario_lectura"  # solo-lectura a SU RUC
 
 
 class EstadoContribuyente(str, enum.Enum):
@@ -269,6 +275,22 @@ class EstudioContable(Base, TimestampMixin):
         UUID(as_uuid=True),
         ForeignKey("estudios_contables.id", ondelete="SET NULL"), nullable=True)
 
+    # ── Acceso para ESTUDIOS (zAlerta-89) ──
+    # El estudio ES este mismo tenant (no se duplica). Persona DUEÑA (contador)
+    # que lo administra — reusa `personas` (identidad por DNI). El resto del equipo
+    # (supervisor/asistentes) se vincula por Acceso, no aquí.
+    contador_dueno_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"),
+        nullable=True)
+    # Estado operativo del estudio (distinto de `activo`/suscripción): 'activo' |
+    # 'suspendido' | 'baja'. VARCHAR para no requerir tipo pg.
+    estado: Mapped[str] = mapped_column(String(20), default="activo", nullable=False)
+    # MARCA BLANCA (reservado, zAlerta-89): solo el espacio; NO se desarrolla aún.
+    # La arquitectura no debe impedir marca blanca luego.
+    marca_nombre: Mapped[str | None] = mapped_column(String(120))
+    marca_logo_url: Mapped[str | None] = mapped_column(String(500))
+    marca_colores_json: Mapped[dict | None] = mapped_column(JSONB)
+
     usuarios: Mapped[list["Usuario"]] = relationship(
         back_populates="estudio", cascade="all, delete-orphan")
     # foreign_keys explícito: Contribuyente tiene 2 FKs a estudios_contables
@@ -367,6 +389,12 @@ class Contribuyente(Base, TimestampMixin):
         UUID(as_uuid=True),
         ForeignKey("estudios_contables.id", ondelete="SET NULL"),
         nullable=True, index=True)
+    # Acceso-empresario habilitado (zAlerta-89): el CONTADOR_DUENO permitió que el
+    # empresario-cliente vea SU RUC (solo lectura). La identidad va por
+    # cuenta_empresario_id + un Acceso con rol EMPRESARIO_LECTURA; este flag es el
+    # interruptor rápido por RUC.
+    acceso_empresario_habilitado: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False)
 
     # Control de scraping
     ultimo_scrapeo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -1135,6 +1163,41 @@ class Acceso(Base, TimestampMixin):
         foreign_keys=[estudio_id])
     contribuyente: Mapped["Contribuyente | None"] = relationship(
         foreign_keys=[contribuyente_id])
+
+
+class Asignacion(Base):
+    """Asignación RUC → ASISTENTE dentro de un estudio (zAlerta-89).
+
+    M2M AUNQUE HOY SEA 1-A-1: tabla intermedia a propósito, para permitir varios
+    asistentes por RUC mañana sin rehacer estructura. Hoy: una fila por RUC (un
+    sectorista, es_principal=True). El SUPERVISOR ve TODO su estudio SIN asignación
+    (su rol ya lo habilita); esta tabla ACOTA qué ve el ASISTENTE. Reusa
+    `personas` (persona_asistente_id) y `contribuyentes` — no duplica identidad."""
+    __tablename__ = "asignaciones"
+    __table_args__ = (
+        # Un asistente no se asigna dos veces al mismo RUC (idempotente).
+        UniqueConstraint("contribuyente_id", "persona_asistente_id",
+                         name="uq_asignacion_ruc_asistente"),
+        Index("ix_asignacion_estudio", "estudio_id"),
+        Index("ix_asignacion_asistente", "persona_asistente_id"),
+        Index("ix_asignacion_contribuyente", "contribuyente_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    estudio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=False)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False)
+    persona_asistente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+    # Sectorista principal del RUC (hoy siempre True; útil cuando haya varios).
+    es_principal: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
 
 
 class AuditoriaSoporte(Base):
