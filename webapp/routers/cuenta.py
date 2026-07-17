@@ -40,6 +40,37 @@ DIAS_AVISO_VENCE = 3
 LIMITE_DOCS_AVISO = 150
 
 
+def _celda_censo(v) -> tuple[int, int, int]:
+    """Normaliza una celda de censo_json a (total, con_pdf, pendientes).
+    Acepta el formato detallado (dict, zAlerta-85) y el viejo plano (int, z-83)."""
+    if isinstance(v, dict):
+        return (int(v.get("total", 0)), int(v.get("con_pdf", 0)),
+                int(v.get("pendientes", 0)))
+    return (int(v or 0), 0, 0)
+
+
+def _desglose_censo(censo_json) -> tuple[list, int, int, int]:
+    """Filas por año (desc) + totales del buzón, desde censo_json (zAlerta-85)."""
+    censo = censo_json or {}
+    filas, t_tot, t_cp, t_pend = [], 0, 0, 0
+    for anio in sorted((a for a in censo if str(a).isdigit()),
+                       key=int, reverse=True):
+        total, con_pdf, pend = _celda_censo(censo[anio])
+        filas.append({"anio": int(anio), "total": total,
+                      "con_pdf": con_pdf, "pendientes": pend})
+        t_tot += total; t_cp += con_pdf; t_pend += pend
+    return filas, t_tot, t_cp, t_pend
+
+
+def _docs_en_rango(censo_json, y0: int, y1: int) -> int:
+    """Total de docs del censo en [y0..y1] (tolera detallado o plano)."""
+    tot = 0
+    for a, v in (censo_json or {}).items():
+        if str(a).isdigit() and y0 <= int(a) <= y1:
+            tot += _celda_censo(v)[0]
+    return tot
+
+
 def _accion_dominante(estado_clave: str, estudio) -> dict:
     """UNA acción contextual al estado (zAlerta-22 sección 2). El sistema indica
     qué toca ahora; no se muestran muchos botones de igual peso."""
@@ -89,7 +120,9 @@ async def mi_cuenta(request: Request,
             cred = await session.scalar(
                 select(CredencialSol).where(CredencialSol.contribuyente_id == ct.id))
             cx = estado_conexion(ct, cred)
-            censo = ct.censo_json or {}
+            # Censo por año: detallado {año:{total,con_pdf,pendientes}} (zAlerta-85)
+            # o el viejo plano {año:int} (zAlerta-83). Normalizamos a filas.
+            filas_censo, c_total, c_conpdf, c_pend = _desglose_censo(ct.censo_json)
             rucs.append({
                 "id": str(ct.id), "ruc": ct.ruc,
                 "razon_social": ct.razon_social or ct.ruc,
@@ -97,9 +130,12 @@ async def mi_cuenta(request: Request,
                 "tiene_cred": cred is not None,
                 # Filtro de años de deuda por buzón (zAlerta-72).
                 "anio_deuda_desde": ct.anio_deuda_desde or anio_deuda_desde_default(),
-                # Censo del buzón (zAlerta-83): tamaño del trabajo sin descargar.
-                "censo_total": sum(int(v) for v in censo.values()) if censo else None,
-                "censo_anios": len(censo) if censo else None,
+                # Censo del buzón (zAlerta-83/85): desglose por año sin descargar.
+                "censo_total": c_total or None,
+                "censo_anios": len(filas_censo) or None,
+                "censo_con_pdf": c_conpdf,
+                "censo_pendientes": c_pend,
+                "censo_filas": filas_censo,
             })
         # Historial de pagos (simple).
         pagos = list(await session.scalars(
@@ -159,10 +195,8 @@ async def set_anio_deuda(contribuyente_id: uuid.UUID, request: Request,
             contrib.ultimo_barrido_full_at = None
         elif contrib.anio_deuda_cubierto_desde is None:
             contrib.anio_deuda_cubierto_desde = cubierto
-        # ¿El rango pedido es MUCHO? (zAlerta-83) Estima docs [nuevo..actual] del censo.
-        censo = contrib.censo_json or {}
-        en_rango = sum(int(v) for a, v in censo.items()
-                       if str(a).isdigit() and nuevo <= int(a) <= ahora.year) if censo else 0
+        # ¿El rango pedido es MUCHO? (zAlerta-83/85) Estima docs [nuevo..actual].
+        en_rango = _docs_en_rango(contrib.censo_json, nuevo, ahora.year)
         await session.commit()
 
     if en_rango > LIMITE_DOCS_AVISO:
