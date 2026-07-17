@@ -36,7 +36,18 @@
             {% endfor %}
           </select>
           {% if r.censo_total %}
-          <span class="mc-censo">Tu buzón: {{ r.censo_total }} documento(s) en {{ r.censo_anios }} año(s).</span>
+          <details class="mc-censo">
+            <summary>Tu buzón: {{ r.censo_total }} documento(s) en {{ r.censo_anios }} año(s){% if r.censo_pendientes %} · <b>{{ r.censo_pendientes }} sin PDF</b>{% endif %}</summary>
+            <table class="mc-censo-tabla">
+              <thead><tr><th>Año</th><th>Total</th><th>Con PDF</th><th>Sin PDF</th></tr></thead>
+              <tbody>
+                {% for f in r.censo_filas %}
+                <tr><td>{{ f.anio }}</td><td>{{ f.total }}</td><td>{{ f.con_pdf }}</td>
+                  <td>{% if f.pendientes %}<b class="mc-censo-pend">{{ f.pendientes }}</b>{% else %}0{% endif %}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </details>
           {% endif %}
           <p class="mc-anio-msg" hidden></p>
         </div>
