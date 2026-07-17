@@ -176,6 +176,15 @@ async def ingestar_resultado(
         if existe is not None:
             stats["mensajes_duplicados"] += 1
             notif_id = existe.id
+            # Backfill (zAlerta-85): al re-abrir el detalle capturamos el cuerpo
+            # fiel que faltaba y marcamos "revisado sin adjunto" (SUNAT no da PDF)
+            # para que el backlog NO re-visite este mensaje en la próxima corrida.
+            if not existe.texto_html and msg.get("texto_html"):
+                existe.texto_html = msg.get("texto_html")
+                if msg.get("detalle") and not existe.raw_detalle:
+                    existe.raw_detalle = msg.get("detalle")
+            if msg.get("revisado_sin_adjunto") and not existe.revisado_sin_adjunto:
+                existe.revisado_sin_adjunto = True
             # Reclasificar EN SITIO los mensajes viejos SIN clasificar (OTRO/None).
             # Usa carpeta+asunto: la capa de asunto rescata los carpeta-NULL viejos
             # sin re-descargar PDFs (asunto/texto ya están en BD). No degrada:
@@ -241,6 +250,8 @@ async def ingestar_resultado(
                 subtipo_coactivo=sub_coa,
                 urgencia=urgencia,
                 clasificado_at=ahora_lima(),
+                # zAlerta-85: se abrió el detalle y SUNAT no da adjunto → marcado.
+                revisado_sin_adjunto=bool(msg.get("revisado_sin_adjunto")),
             )
             session.add(notif)
             await session.flush()   # para obtener notif.id
