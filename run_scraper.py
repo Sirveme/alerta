@@ -28,9 +28,10 @@ from sqlalchemy.orm import selectinload
 
 from db import get_session
 from models import (Contribuyente, CredencialSol, EstadoContribuyente,
-                    Notificacion, BarridoMetrica)
+                    Notificacion, Adjunto, BarridoMetrica)
 from cifrado import descifrar_clave_sol
 from ingesta import ingestar_resultado
+import gcs
 
 # El scraper validado (Playwright puro). Ajustar al nombre real del archivo.
 import scraper_sunat_playwgth as scraper
@@ -60,23 +61,51 @@ async def _contribuyentes_a_scrapear(session, ruc_filtro: str | None):
 def _scrapear_sync(ruc: str, usuario_sol: str, clave_sol: str,
                    conocidos: set | None = None,
                    anio_desde: int | None = None,
-                   solo_censo: bool = False) -> dict:
+                   solo_censo: bool = False,
+                   backfill: bool = False) -> dict:
     """Llama al scraper Playwright (sync) con las credenciales descifradas.
     conocidos (zAlerta-46): set de cod_mensaje ya en BD → lectura incremental.
     anio_desde (zAlerta-72): año más antiguo de deuda a descargar (por buzón).
-    solo_censo (Tandas CCPL): lista y cuenta por año SIN descargar nada."""
+    solo_censo (Tandas CCPL): lista y cuenta por año SIN descargar nada.
+    backfill (zAlerta-84): baja el histórico pendiente (sin filtro de año)."""
     cfg = scraper.SunatConfig(
         ruc=ruc, usuario_sol=usuario_sol, clave_sol=clave_sol,
         headless=True,
     )
     return scraper.scrapear_ruc(cfg, conocidos=conocidos, anio_desde=anio_desde,
-                                solo_censo=solo_censo)
+                                solo_censo=solo_censo, backfill=backfill)
+
+
+async def _sanar_gcs_desde_bytea(session, contrib: Contribuyente) -> int:
+    """Sube a GCS los adjuntos que YA tienen bytes en BD (bytea_temporal) pero
+    NO gcs_key, SIN tocar SUNAT (zAlerta-84). Es la mitad barata del backfill:
+    los PDF bajados en la PC local quedaron sin subir; aquí se suben con los
+    bytes que ya tenemos. Worker-only (si GCS no está, no hace nada)."""
+    if not gcs.gcs_disponible():
+        return 0
+    filas = list(await session.execute(
+        select(Adjunto, Notificacion.cod_mensaje_sunat)
+        .join(Notificacion, Notificacion.id == Adjunto.notificacion_id)
+        .where(Notificacion.contribuyente_id == contrib.id,
+               Adjunto.gcs_key.is_(None),
+               Adjunto.bytea_temporal.is_not(None))))
+    n = 0
+    for adj, cod_msg in filas:
+        blob = f"{contrib.id}/adjuntos/{adj.cod_archivo_sunat}_{cod_msg}.pdf"
+        key = gcs.subir_pdf(bytes(adj.bytea_temporal), blob)
+        if key:
+            adj.gcs_key = key
+            n += 1
+    if n:
+        await session.commit()
+    return n
 
 
 async def procesar_contribuyente(session, contrib: Contribuyente,
                                  frescura_horas: int, forzar: bool,
                                  full: bool = False,
-                                 solo_censo: bool = False) -> None:
+                                 solo_censo: bool = False,
+                                 backfill: bool = False) -> None:
     # ── Control de frescura: ¿hace falta tocar SUNAT? ──
     if not forzar and contrib.ultimo_scrapeo_ok and contrib.ultimo_scrapeo_at:
         antiguedad = datetime.now(TZ_LIMA) - contrib.ultimo_scrapeo_at
@@ -97,14 +126,32 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
         return
 
+    # ── Backfill (zAlerta-84): antes de tocar SUNAT, sanar barato lo que ya
+    # tenemos en BD — subir a GCS los adjuntos con bytea pero sin gcs_key. ──
+    if backfill:
+        sanados = await _sanar_gcs_desde_bytea(session, contrib)
+        if sanados:
+            log(f"  {contrib.ruc}: self-heal GCS — {sanados} adjunto(s) "
+                f"subido(s) desde bytea (sin tocar SUNAT).", "OK")
+
     # ── Decidir FULL vs INCREMENTAL (zAlerta-46) ──
     # Full si: se pidió (barrido nocturno de seguridad) o NUNCA hubo un full
     # exitoso (primer scan = base). Si no, incremental: solo lo nuevo.
     # solo_censo (Tandas CCPL): lista TODO (conocidos=None) para contar por año,
     # pero NO es un full de descarga y NO sella base.
+    # backfill (zAlerta-84): "conocidos" = lo que YA está COMPLETO en GCS (adjunto
+    # con gcs_key); se salta eso y se baja el resto de a MAX_DOCS, sin filtro año.
     if solo_censo:
         hacer_full = False
         conocidos = None
+    elif backfill:
+        hacer_full = False
+        cods = await session.scalars(
+            select(Notificacion.cod_mensaje_sunat)
+            .join(Adjunto, Adjunto.notificacion_id == Notificacion.id)
+            .where(Notificacion.contribuyente_id == contrib.id,
+                   Adjunto.gcs_key.is_not(None)))
+        conocidos = {str(c) for c in cods}
     else:
         hacer_full = full or (contrib.ultimo_barrido_full_at is None)
         conocidos = None
@@ -114,6 +161,7 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
                     Notificacion.contribuyente_id == contrib.id))
             conocidos = {str(c) for c in cods}
     modo = ("CENSO" if solo_censo else
+            f"BACKFILL ({len(conocidos)} completos en GCS)" if backfill else
             "FULL" if hacer_full else f"incremental ({len(conocidos)} conocidos)")
     log(f"  {contrib.ruc}: scrapeando [{modo}]...")
 
@@ -127,7 +175,7 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
     # para no bloquear el loop async.
     resultado = await asyncio.to_thread(
         _scrapear_sync, contrib.ruc, cred.usuario_sol, clave, conocidos,
-        anio_desde, solo_censo)
+        anio_desde, solo_censo, backfill)
 
     if not resultado.get("exito"):
         log(f"  {contrib.ruc}: scraping falló.", "ERROR")
@@ -163,7 +211,7 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
     met = resultado.get("metricas") or {}
     session.add(BarridoMetrica(
         contribuyente_id=contrib.id, estudio_id=contrib.estudio_id,
-        modo=("full" if hacer_full else "incremental"),
+        modo=("backfill" if backfill else "full" if hacer_full else "incremental"),
         peticiones=met.get("peticiones", 0),
         duracion_seg=met.get("duracion_seg"),
         docs_procesados=met.get("docs_procesados", 0),
@@ -187,10 +235,13 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
 
 async def main(ruc_filtro: str | None = None, forzar: bool = False,
                frescura_horas: int = FRESCURA_HORAS_DEFAULT,
-               solo_censo: bool = False) -> None:
+               solo_censo: bool = False, backfill: bool = False) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
     if solo_censo:
         log("modo CENSO: lista y cuenta por año SIN descargar (foto previa).", "WARN")
+    elif backfill:
+        log("modo BACKFILL: baja el histórico pendiente de a MAX_DOCS, "
+            "salta lo ya completo en GCS. Correr con throttle alto.", "WARN")
     elif forzar:
         log("modo FORZAR: se scrapea aunque esté fresco.", "WARN")
     async with get_session() as session:
@@ -200,7 +251,8 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
             try:
                 await procesar_contribuyente(
                     session, contrib, frescura_horas,
-                    forzar=(forzar or solo_censo), solo_censo=solo_censo)
+                    forzar=(forzar or solo_censo or backfill),
+                    solo_censo=solo_censo, backfill=backfill)
             except Exception as e:
                 log(f"  {contrib.ruc}: error inesperado: {e}", "ERROR")
     log("Orquestación completa.", "OK")
@@ -212,14 +264,18 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC>          → solo ese RUC, respeta frescura
     #   python run_scraper.py <RUC> forzar   → ignora frescura, scrapea sí o sí
     #   python run_scraper.py <RUC> censo    → foto por año SIN descargar (Tandas)
+    #   python run_scraper.py <RUC> backfill → baja histórico pendiente de a MAX_DOCS
     ruc = None
     forzar = False
     solo_censo = False
+    backfill = False
     for arg in sys.argv[1:]:
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
         elif arg.lower() in ("censo", "--censo", "-c"):
             solo_censo = True
+        elif arg.lower() in ("backfill", "--backfill", "-b"):
+            backfill = True
         else:
             ruc = arg
-    asyncio.run(main(ruc, forzar, solo_censo=solo_censo))
+    asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill))

@@ -680,12 +680,16 @@ def _tiene_monto(texto: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────
 def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                  anio_desde: int | None = None,
-                 solo_censo: bool = False) -> dict:
+                 solo_censo: bool = False,
+                 backfill: bool = False) -> dict:
     # conocidos (zAlerta-46): set de cod_mensaje ya en BD. Si se pasa → lectura
     # INCREMENTAL (para cuando una página completa ya es conocida y salta los
     # mensajes ya vistos). Si es None → barrido COMPLETO.
     # solo_censo (zAlerta-83 / Tandas CCPL): lista y CUENTA por año SIN descargar
     # nada (ni detalle ni PDFs). Es la "foto" barata previa a decidir las tandas.
+    # backfill (zAlerta-84): trae el histórico pendiente sin filtro de año (el
+    # filtro real es "conocidos" = lo que YA está completo en GCS, que se salta).
+    # Cada corrida avanza de a MAX_DOCS docs (recientes primero) con throttle.
     resultado = {
         "ruc": cfg.ruc,
         "scrapeado_at": ahora_lima().isoformat(),
@@ -875,7 +879,10 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                     if _clasificar:
                         tipo_doc, _u, _f = _clasificar(carp.get("nom"), asunto, urgente)
                         vt = _TIPODOC_A_VALORADO.get(tipo_doc)
-                        if vt and _anio_de(fecha_pub or fecha_env) in anios_descarga:
+                        # backfill: la deuda de CUALQUIER año merece su 2º PDF
+                        # (valorado); en barrido normal, solo la del rango cubierto.
+                        if vt and (backfill
+                                   or _anio_de(fecha_pub or fecha_env) in anios_descarga):
                             valorado_tipo = vt
                     es_deuda = valorado_tipo is not None and not self_check["abortado"]
 
@@ -884,12 +891,19 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                     # rango cubierto del buzón (recientes primero) y (b) no se superó
                     # el límite de docs por barrido. Con THROTTLE entre peticiones.
                     # Lo que queda fuera → pdf_pendiente (se trae al ampliar el rango).
-                    en_rango = (_anio is None) or (_anio in anios_descarga)
+                    # backfill: sin filtro de año (todo el histórico pendiente);
+                    # el skip lo hace "conocidos" (lo ya completo en GCS).
+                    en_rango = backfill or (_anio is None) or (_anio in anios_descarga)
                     bajo_limite = ctrl["docs_bajados"] < MAX_DOCS_BARRIDO
+                    # En barrido normal la DEUDA está exenta del límite (siempre
+                    # baja; los informativos esperan). En backfill el límite es
+                    # ESTRICTO para todos → avanza en tandas parejas de MAX_DOCS.
+                    deuda_exenta = es_deuda and not backfill
                     # solo_censo: NADA se baja (ni deuda); solo se lista y cuenta.
-                    puede_bajar = (not solo_censo) and en_rango and (bajo_limite or es_deuda)
-                    if not solo_censo and en_rango and not bajo_limite and not es_deuda:
-                        ctrl["limite_alcanzado"] = True   # UI: "reduce años"
+                    puede_bajar = (not solo_censo) and en_rango and (bajo_limite or deuda_exenta)
+                    if not solo_censo and en_rango and not bajo_limite and not deuda_exenta:
+                        ctrl["limite_alcanzado"] = True   # UI: "reduce años" / otra corrida
+
                     detalle = None
                     pdfs = []
                     if puede_bajar:
