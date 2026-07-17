@@ -14,6 +14,7 @@ Los documentos sin monto parseado cuentan como "por confirmar", no se omiten.
 from __future__ import annotations
 
 import html as _html
+import json as _json
 import re
 from datetime import timedelta
 from urllib.parse import unquote
@@ -71,6 +72,169 @@ def cuerpo_fiel(texto_html: str | None) -> list[str]:
             paras.append(p)
     # Si no hubo marcador "Estimado" y quedó una sola línea corta, no forzar.
     return paras if (i >= 0 or len("".join(paras)) > 40) else []
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Cuerpo de AVISOS cuyo texto_html es JSON (zAlerta-92). SUNAT guarda estos
+# informativos como JSON estructurado con DOBLE codificación: URL-encode
+# (%22→", %26%23243;→&#243;) y luego entidades HTML (&#243;→ó). Orden: primero
+# URL-decode (unquote) del TODO → el JSON queda plano y válido; luego json.loads;
+# luego HTML-unescape por campo. Se renderiza FIEL a lo que SUNAT muestra.
+# ─────────────────────────────────────────────────────────────────────
+def _esc(s) -> str:
+    """Texto plano seguro: HTML-unescape (decodifica entidades) + escape."""
+    return _html.escape(_html.unescape(str(s or "")))
+
+
+def _san_html(h: str) -> str:
+    """Deja pasar el HTML de tabla/lista que SUNAT ya trae (<tr><td><li><br><b>),
+    pero quita lo peligroso (script/style/handlers/js:). Decodifica entidades."""
+    h = _html.unescape(str(h or ""))
+    h = re.sub(r"(?is)<\s*(script|style)[^>]*>.*?<\s*/\s*\1\s*>", "", h)
+    h = re.sub(r"(?i)\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", h)
+    h = re.sub(r"(?i)javascript:", "", h)
+    return h
+
+
+# RHE/FE: columnas por estado (orden fiel a SUNAT) y filas por comprobante.
+_RHE_ESTADOS = [("pend", "Pendiente"), ("rein", "Reinicio"), ("sub", "Subsanado"),
+                ("conf", "Conforme"), ("disc", "Disconforme"), ("nval", "No Válido")]
+_RHE_COMPROB = [("fa", "Factura Electrónica"), ("rxh", "Recibo por Honorarios")]
+
+
+def _tabla_rhe(d: dict, pre: str) -> str:
+    filas = ""
+    for cc, cl in _RHE_COMPROB:
+        celdas = "".join(
+            f"<td>{_esc(d.get(f'{pre}_{cc}_{ee}', '0'))}</td>" for ee, _ in _RHE_ESTADOS)
+        filas += f"<tr><th>{cl}</th>{celdas}</tr>"
+    heads = "".join(f"<th>{el}</th>" for _, el in _RHE_ESTADOS)
+    return (f"<table class='rsm-json-t'><thead><tr><th></th>{heads}</tr></thead>"
+            f"<tbody>{filas}</tbody></table>")
+
+
+def _render_rhe_fe(d: dict) -> str:
+    enc = ""
+    if d.get("fecha"):
+        enc += f"<div class='rsm-json-sub'>Fecha: {_esc(d.get('fecha'))}</div>"
+    return (
+        "<div class='rsm-json'>"
+        f"{enc}"
+        "<div class='rsm-json-tit'>Adquirente (Mis Compras)</div>"
+        "<div class='rsm-json-scroll'>" + _tabla_rhe(d, "adq") + "</div>"
+        "<div class='rsm-json-tit'>Proveedor (Mis Ventas)</div>"
+        "<div class='rsm-json-scroll'>" + _tabla_rhe(d, "pro") + "</div>"
+        "</div>")
+
+
+def _render_registro_cv(d: dict, asunto: str | None) -> str:
+    def _bloque(titulo, tbody):
+        if not tbody:
+            return ""
+        return (f"<div class='rsm-json-tit'>{titulo}</div>"
+                "<div class='rsm-json-scroll'><table class='rsm-json-t'><tbody>"
+                f"{_san_html(tbody)}</tbody></table></div>")
+    per = d.get("periodo") or ""
+    enc = f"<div class='rsm-json-sub'>Periodo: {_esc(per)}</div>" if per else ""
+    return ("<div class='rsm-json'>" + enc
+            + _bloque("Compras", d.get("tbodyCompras"))
+            + _bloque("Ventas", d.get("tbodyVentas")) + "</div>")
+
+
+def _render_rvie_rce(d: dict) -> str:
+    partes = ["<div class='rsm-json'>"]
+    tipo = _esc(d.get("tipoRegistro", "")).strip()
+    partes.append("<p class='rsm-json-p'>Se generó el registro"
+                  + (f" {tipo}" if tipo and tipo != '-' else "") + ".</p>")
+    if d.get("numTicket"):
+        partes.append(f"<div class='rsm-json-sub'>N° de ticket: <b>{_esc(d.get('numTicket'))}</b></div>")
+    lst = d.get("listaDocumentos")
+    if lst:
+        partes.append("<div class='rsm-json-sub'>Documentos:</div>"
+                      f"<div class='rsm-json-lista'>{_san_html(lst)}</div>")
+    # Plazo SIRE fiel (zAlerta-92): SOLO se muestra lo que el mensaje dice; NO se
+    # calcula cuándo vence (eso sería asesorar). Naranja = identidad SIRE.
+    horas = str(d.get("tiempoVerArchivo") or "").strip()
+    if horas.isdigit():
+        partes.append(
+            "<div class='rsm-json-plazo'>"
+            "<span class='material-symbols-outlined'>schedule</span>"
+            f"Dispones de <b>{_esc(horas)} horas</b> para visualizar/descargar "
+            "estos documentos desde el módulo SIRE.</div>")
+    partes.append("</div>")
+    return "".join(partes)
+
+
+def _render_autorizacion(d: dict) -> str:
+    enc = ""
+    if d.get("numAutorizacion"):
+        enc += f"<div class='rsm-json-sub'>N° de autorización: {_esc(d.get('numAutorizacion'))}</div>"
+    if d.get("fecIni_formateado") or d.get("fecFin_formateado"):
+        enc += (f"<div class='rsm-json-sub'>Vigencia: {_esc(d.get('fecIni_formateado',''))}"
+                f" — {_esc(d.get('fecFin_formateado',''))}</div>")
+    return ("<div class='rsm-json'>" + enc
+            + "<div class='rsm-json-tit'>Trámites autorizados</div>"
+            f"<ul class='rsm-json-lista'>{_san_html(d.get('lstTramEspecif',''))}</ul>"
+            "</div>")
+
+
+# Claves de ruido que el fallback no muestra (metadata interna de SUNAT).
+_JSON_RUIDO = {"sistema", "dependencia", "numDoc", "numruc", "numRuc", "num_doc",
+               "num_ruc", "otrosCorreos", "nombre"}
+_JSON_ETIQ = {
+    "razonSocial": "Razón social", "razon_social": "Razón social",
+    "fecha": "Fecha", "periodo": "Periodo", "perPeriodoTributario": "Periodo",
+    "fecPresentacion": "Fecha de presentación", "nroOrden": "N° de orden",
+    "numTicket": "N° de ticket", "fechaDesc": "Fecha", "horaDesc": "Hora",
+}
+
+
+def _render_fallback(d: dict) -> str:
+    """JSON no reconocido → pares clave-valor legibles. NUNCA ocultar el cuerpo."""
+    filas = []
+    for k, v in d.items():
+        if k in _JSON_RUIDO or v in (None, "", "-"):
+            continue
+        if isinstance(v, (dict, list)):
+            continue
+        etq = _JSON_ETIQ.get(k, k)
+        val = _san_html(v) if re.search(r"<\w+", str(v)) else _esc(v)
+        filas.append(f"<div class='rsm-json-kv'><span>{_esc(etq)}</span><div>{val}</div></div>")
+    if not filas:
+        return ""
+    return "<div class='rsm-json'>" + "".join(filas) + "</div>"
+
+
+def cuerpo_json_html(asunto: str | None, texto_html: str | None) -> str | None:
+    """Si texto_html es JSON (avisos SUNAT), lo renderiza FIEL por subtipo y
+    devuelve HTML seguro; None si no es JSON. Detecta por las claves presentes
+    (robusto al asunto). Fallback legible para JSON desconocido (zAlerta-92)."""
+    if not texto_html:
+        return None
+    t = texto_html.strip()
+    if not t.startswith("{"):
+        return None
+    d = None
+    for intento in (lambda: _json.loads(unquote(t)), lambda: _json.loads(t)):
+        try:
+            d = intento()
+            break
+        except Exception:
+            continue
+    if not isinstance(d, dict) or not d:
+        return None
+    try:
+        if any(k.startswith("adq_") or k.startswith("pro_") for k in d):
+            return _render_rhe_fe(d)
+        if "tbodyCompras" in d or "tbodyVentas" in d:
+            return _render_registro_cv(d, asunto)
+        if "listaDocumentos" in d or "numTicket" in d:
+            return _render_rvie_rce(d)
+        if "lstTramEspecif" in d:
+            return _render_autorizacion(d)
+        return _render_fallback(d)
+    except Exception:
+        return _render_fallback(d)
 
 
 def _anio_de_valorado(dv, fecha_pub) -> int | None:
