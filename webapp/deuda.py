@@ -205,6 +205,27 @@ def _render_fallback(d: dict) -> str:
     return "<div class='rsm-json'>" + "".join(filas) + "</div>"
 
 
+def cuerpo_texto_plano(texto_html: str | None) -> str | None:
+    """Último recurso (zAlerta-93): cuerpo NO-JSON que `cuerpo_fiel` no rescató
+    (sin 'Estimado', corto). Limpia HTML + doble-decode y devuelve un párrafo, o
+    None si tras limpiar no queda texto real. Garantiza que NUNCA quede mudo un
+    mensaje que SÍ tiene cuerpo (el flag revisado_sin_adjunto es solo de scraping)."""
+    if not texto_html:
+        return None
+    t = re.sub(r"(?i)<\s*br\s*/?\s*>", "\n", texto_html)
+    t = _RE_TAG.sub(" ", t)
+    try:
+        t = _html.unescape(unquote(t))
+    except Exception:
+        t = _html.unescape(t)
+    t = re.sub(r"[ \t]+", " ", t).strip()
+    if len(t) < 3:
+        return None
+    partes = [f"<p class='rsm-json-p'>{_html.escape(x.strip())}</p>"
+              for x in t.split("\n") if x.strip()]
+    return "<div class='rsm-json'>" + "".join(partes) + "</div>" if partes else None
+
+
 def cuerpo_json_html(asunto: str | None, texto_html: str | None) -> str | None:
     """Si texto_html es JSON (avisos SUNAT), lo renderiza FIEL por subtipo y
     devuelve HTML seguro; None si no es JSON. Detecta por las claves presentes
