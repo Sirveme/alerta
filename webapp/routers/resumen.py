@@ -38,7 +38,7 @@ from ..deps import UsuarioActual, usuario_actual
 from ..estados import estado_conexion
 from ..deuda import (extraer_monto, fmt_soles, extraer_pago, deudor_de_retencion,
                      anio_deuda_desde_default, resumen_cabecera, extraer_esquela,
-                     cuerpo_fiel, cuerpo_json_html)
+                     cuerpo_fiel, cuerpo_json_html, cuerpo_texto_plano)
 from clasificacion import COACTIVO_META, COACTIVO_NO_SUMA
 
 router = APIRouter(tags=["resumen"])
@@ -278,6 +278,13 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                 if deudor and deudor != ruc:
                     coactivo["tercero_retenedor"] = True
                     coactivo["deudor_ruc"] = deudor
+        # Cuerpo del mensaje (zAlerta-92/93): SIEMPRE que texto_html tenga
+        # contenido. (1) literal 'Estimado…' → lista de párrafos; (2) JSON de
+        # avisos → render por subtipo; (3) fallback de texto plano. Nunca mudo.
+        _cuerpo_lista = cuerpo_fiel(n.texto_html)
+        _cuerpo_html = cuerpo_json_html(n.asunto, n.texto_html)
+        if not _cuerpo_lista and not _cuerpo_html:
+            _cuerpo_html = cuerpo_texto_plano(n.texto_html)
         fila = {
             "id": str(n.id),
             "documento": documento,
@@ -302,10 +309,12 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "es_esquela": esquela is not None,
             "esquela": esquela,
             # Cuerpo FIEL del mensaje SUNAT (zAlerta-82): literal, sin resumir.
-            "cuerpo": cuerpo_fiel(n.texto_html),
-            # Cuerpo de AVISOS con texto_html JSON (zAlerta-92): render fiel por
-            # subtipo (RHE/FE, Registro C/V, RVIE/RCE, Autorización) o fallback.
-            "cuerpo_html": cuerpo_json_html(n.asunto, n.texto_html),
+            "cuerpo": _cuerpo_lista,
+            # Cuerpo renderizado (zAlerta-92/93): JSON por subtipo o, si no lo
+            # rescató `cuerpo`, un fallback de texto plano. El cuerpo se muestra
+            # SIEMPRE que exista; los flags cant_adjuntos/revisado_sin_adjunto NO
+            # gobiernan la visibilidad del cuerpo (son solo de scraping).
+            "cuerpo_html": _cuerpo_html,
             **deuda,
         }
         # Estado de equipo (Capa 2): solo si el buzón tiene 2+ personas.
