@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block titulo %}Mi cartera · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="cartera" id="cartera">
+
+  <!-- ══ Encabezado: estudio + orden + buscar (con voz) ══ -->
+  <header class="cra-head">
+    <div class="cra-head-tit">
+      <h1 class="titulo-pagina">{{ estudio_nombre }}</h1>
+      <span class="cra-sub">{{ total_clientes }} cliente(s) en tu cartera</span>
+    </div>
+    <div class="cra-tools">
+      <label class="cra-orden">
+        <span>Ordenar</span>
+        <select id="cra-orden">
+          <option value="razon">Razón Social</option>
+          <option value="responsable">Responsable</option>
+        </select>
+      </label>
+      <div class="cra-buscar">
+        <span class="material-symbols-outlined cra-lupa">search</span>
+        <input id="cra-q" type="search" inputmode="search" autocomplete="off"
+               placeholder="Buscar por RUC, razón social o responsable…"
+               aria-label="Buscar en la cartera">
+        <button id="cra-voz" class="cra-voz" type="button"
+                title="Buscar por voz" aria-label="Buscar por voz">🎤</button>
+      </div>
+    </div>
+  </header>
+
+  {% if not clientes %}
+  <div class="cra-vacio">
+    <span class="material-symbols-outlined">group</span>
+    <p>Aún no tienes clientes en tu cartera. Agrégalos desde <b>Clientes</b>.</p>
+  </div>
+  {% endif %}
+
+  <!-- ══ Grilla de tarjetas (una por cliente) ══ -->
+  <div class="cra-grid" id="cra-grid" aria-live="polite">
+    {% for c in clientes %}
+    <a class="cra-card acento" href="/resumen"
+       data-razon="{{ c.razon_social|lower }}" data-ruc="{{ c.ruc }}"
+       data-responsable="{{ (c.responsable or 'zzz sin asignar')|lower }}">
+      <div class="cra-card-top">
+        <div class="cra-ident">
+          <div class="cra-razon">{{ c.razon_social }}</div>
+          <div class="cra-meta">RUC {{ c.ruc }}{% if c.whatsapp %} · <span class="cra-wh">📱 {{ c.whatsapp }}</span>{% endif %}</div>
+        </div>
+        <div class="cra-resp" title="Responsable">
+          {% if c.responsable %}
+          <span class="cra-avatar">{{ c.responsable[:1]|upper }}</span>
+          <span class="cra-resp-txt"><b>{{ c.responsable }}</b>{% if c.responsable_tel %}<span>{{ c.responsable_tel }}</span>{% endif %}</span>
+          {% else %}
+          <span class="cra-avatar cra-avatar--sin">–</span>
+          <span class="cra-resp-txt cra-resp--sin">Sin asignar</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="cra-conteos">
+        {% for g in c.grupos %}
+        <span class="cra-cnt cra-cnt--{{ g.naturaleza }}{% if not g.n %} cra-cnt--cero{% endif %}">
+          <b class="cra-cnt-n">{{ g.n }}</b>
+          <span class="cra-cnt-l">{{ g.label }}</span>
+        </span>
+        {% endfor %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="cra-nores" id="cra-nores" hidden>Ningún cliente coincide con tu búsqueda.</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/cartera.js"></script>
+{% endblock %}
