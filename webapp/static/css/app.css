@@ -2286,3 +2286,35 @@ a.tarjeta-link { display:block; color:inherit; }
   .cra-grid { grid-template-columns:1fr; }
   .cra-resp-txt span { display:none; }   /* en móvil, solo el nombre del responsable */
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   CUERPO DE AVISOS JSON (zAlerta-92) — render fiel de los informativos
+   SUNAT (RHE/FE, Registro C/V, RVIE/RCE, Autorización). Sobrio, escaneable,
+   móvil (tablas con scroll propio). Plazo SIRE en naranja (fiel, no calcula).
+   ══════════════════════════════════════════════════════════════════ */
+.rsm-json { display:flex; flex-direction:column; gap:8px; font-size:.86rem; }
+.rsm-json-tit { font-weight:700; font-size:.82rem; margin-top:4px; }
+.rsm-json-sub { font-size:.82rem; color:var(--texto-suave); }
+.rsm-json-sub b { color:var(--texto); }
+.rsm-json-p { margin:0; line-height:1.5; }
+.rsm-json-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.rsm-json-t { border-collapse:collapse; width:100%; font-size:.8rem;
+  min-width:max-content; }
+.rsm-json-t th, .rsm-json-t td { padding:5px 9px; text-align:right; white-space:nowrap;
+  border-bottom:1px solid var(--borde); }
+.rsm-json-t thead th { color:var(--texto-suave); font-weight:600; font-size:.74rem; }
+.rsm-json-t tbody th, .rsm-json-t td:first-child { text-align:left; font-weight:600; }
+.rsm-json-t tbody th { color:var(--texto); font-weight:600; }
+.rsm-json-lista { line-height:1.7; }
+.rsm-json-lista li { margin-left:2px; }
+ul.rsm-json-lista { margin:0; padding-left:18px; }
+.rsm-json-kv { display:flex; gap:10px; padding:4px 0; border-bottom:1px solid var(--borde); }
+.rsm-json-kv > span { color:var(--texto-suave); min-width:120px; font-size:.8rem; }
+.rsm-json-kv > div { flex:1; }
+/* Plazo SIRE (48h): fiel a lo que dice SUNAT, naranja de identidad SIRE. */
+.rsm-json-plazo { display:flex; align-items:center; gap:8px; margin-top:4px;
+  padding:9px 12px; border-radius:10px; line-height:1.4;
+  color:#F0863B; background:color-mix(in srgb, #F0863B 12%, transparent);
+  border:1px solid color-mix(in srgb, #F0863B 34%, transparent); }
+.rsm-json-plazo b { color:#F0863B; }
+.rsm-json-plazo .material-symbols-outlined { font-size:20px; flex-shrink:0; }
