@@ -2199,4 +2199,12 @@ a.tarjeta-link { display:block; color:inherit; }
 .mc-anio-msg--ok { color:var(--u-aldia); }
 .mc-anio-msg--info { color:var(--u-importante); }
 .mc-anio-msg--aviso { color:var(--u-urgente); font-weight:700; }
-.mc-censo { font-size:.78rem; color:var(--texto-suave); }
+.mc-censo { width:100%; font-size:.78rem; color:var(--texto-suave); }
+.mc-censo > summary { cursor:pointer; padding:2px 0; }
+.mc-censo-tabla { width:100%; margin-top:8px; border-collapse:collapse;
+  font-size:.76rem; }
+.mc-censo-tabla th, .mc-censo-tabla td { padding:4px 8px; text-align:right;
+  border-bottom:1px solid var(--borde); }
+.mc-censo-tabla th:first-child, .mc-censo-tabla td:first-child { text-align:left; }
+.mc-censo-tabla th { color:var(--texto-suave); font-weight:600; }
+.mc-censo-pend { color:var(--u-importante); }
