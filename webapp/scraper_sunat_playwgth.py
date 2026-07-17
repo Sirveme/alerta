@@ -618,27 +618,49 @@ def _num_documento_de(asunto: str) -> str | None:
 
 _RE_GOARCHIVO = re.compile(
     r"goArchivoDescarga\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
+# zAlerta-88: el propio 'datos' de la URL de la carátula trae id_archivo/sistema/
+# cod_mensaje. Las coactivas "fisca..." (iddoc=211, números SIN guiones) NO exponen
+# goArchivoDescarga en el HTML, pero SÍ traen estos campos en la URL.
+_RE_DATOS_IDARCH = re.compile(r'"id_archivo":"(\d+)"')
+_RE_DATOS_SIS = re.compile(r'"sistema":"(\d+)"')
+_RE_DATOS_CMSG = re.compile(r'"cod_mensaje":"(\d+)"')
+
+
+def _id_deuda_de_url(car: str | None):
+    """Extrae (idArchivo, sistema, codMensaje) del parámetro `datos` de la URL de
+    la carátula (zAlerta-88). Fuente para el flujo "fisca..." que no expone
+    goArchivoDescarga. Devuelve (idar, sis, cmsg) o (None, None, None)."""
+    ida = _RE_DATOS_IDARCH.search(car or "")
+    sis = _RE_DATOS_SIS.search(car or "")
+    cm = _RE_DATOS_CMSG.search(car or "")
+    if ida and sis and cm:
+        return ida.group(1), sis.group(1), cm.group(1)
+    return None, None, None
 
 
 def _id_deuda_de_caratula(api: APIRequestContext, host: str, detalle: dict):
     """Obtiene (idArchivo, sistema, codMensaje) del documento de DEUDA desde la
-    CARÁTULA (zAlerta-35). ÚNICA fuente: el `goArchivoDescarga(idArchivo, sistema,
-    codMensaje)` que SUNAT pone en la carátula. SIN offset (el offset NO es
-    constante: Multas −1, Órdenes de Pago −2, etc. → restar daría el archivo
-    EQUIVOCADO). Devuelve (idar, sis, cmsg) o (None, motivo, None)."""
+    CARÁTULA. Fuente principal: el `goArchivoDescarga(idArchivo, sistema,
+    codMensaje)` del HTML (zAlerta-35, SIN offset). Fallback (zAlerta-88): si el
+    HTML NO lo expone (plantilla "fisca..." iddoc=211), se usa el id_archivo del
+    propio `datos` de la URL de la carátula. Devuelve (idar, sis, cmsg) o
+    (None, motivo, None)."""
     car = detalle.get("url")
     if not car:
         return None, "sin_caratula", None
     url = car if car.startswith("http") else host + ("" if car.startswith("/") else "/") + car
     try:
         html = api.get(url, timeout=40_000).text()
+        m = _RE_GOARCHIVO.search(html or "")
+        if m:
+            return m.group(1), m.group(2), m.group(3)
     except Exception as e:
-        log(f"    carátula no cargó: {e}", "WARN")
-        return None, "caratula_error", None
-    m = _RE_GOARCHIVO.search(html or "")
-    if not m:
-        return None, "sin_goarchivo", None
-    return m.group(1), m.group(2), m.group(3)
+        log(f"    carátula no cargó: {e} (intento fallback datos-URL)", "WARN")
+    # Fallback zAlerta-88: id_archivo del datos de la URL (flujo "fisca...").
+    idar, sis, cmsg = _id_deuda_de_url(car)
+    if idar:
+        return idar, sis, cmsg
+    return None, "sin_goarchivo", None
 
 
 def descargar_documento_real(api: APIRequestContext, visor_base: str,
