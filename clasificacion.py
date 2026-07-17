@@ -21,6 +21,7 @@ menciones de expediente → INFORMATIVA.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 
 from models import TipoDocumento, Urgencia
@@ -31,6 +32,14 @@ def _norm(texto: str | None) -> str:
     base = (texto or "").lower().strip()
     return "".join(c for c in unicodedata.normalize("NFD", base)
                    if unicodedata.category(c) != "Mn")
+
+
+def solo_digitos(s: str | None) -> str:
+    """Núcleo comparable de un nº SUNAT: SOLO dígitos (tolera guiones/espacios).
+    FUENTE ÚNICA (zAlerta-78/87): SUNAT usa el mismo número con y sin guiones
+    inconsistentemente. '124-002-0011643' → '1240020011643' → comparar así los
+    hace iguales SIN debilitar el chequeo (mismos dígitos = mismo documento)."""
+    return re.sub(r"\D", "", s or "")
 
 
 # ─────────────────────────────────────────────────────────────────────

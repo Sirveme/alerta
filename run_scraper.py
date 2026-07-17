@@ -123,6 +123,21 @@ async def _premarcar_cuerpo_solo(session, contrib: Contribuyente) -> int:
     return res.rowcount or 0
 
 
+async def _reset_valorado_recuperable(session, contrib: Contribuyente) -> int:
+    """zAlerta-87: quita el falso 'no disponible' de deudas cuya carátula SÍ ofrece
+    la resolución (id_archivo/goArchivo presente) — recuperables. El backfill las
+    reintenta con el chequeo de integridad YA corregido (guiones normalizados). Las
+    que de verdad no tienen carátula quedan marcadas (no-disponible honesto)."""
+    res = await session.execute(
+        update(Notificacion)
+        .where(Notificacion.contribuyente_id == contrib.id,
+               Notificacion.valorado_no_disponible.is_(True),
+               Notificacion.raw_detalle["url"].astext.like("%id_archivo%"))
+        .values(valorado_no_disponible=False))
+    await session.commit()
+    return res.rowcount or 0
+
+
 async def _cods_backfill_skip(session, contrib: Contribuyente) -> set:
     """Skip set del backfill DEUDA-AWARE (zAlerta-86). Un mensaje está COMPLETO
     (se salta) si:
@@ -225,6 +240,10 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         if premarcados:
             log(f"  {contrib.ruc}: pre-marca — {premarcados} informativo(s) "
                 f"sin adjunto marcado(s) revisado (sin tocar SUNAT).", "OK")
+        recuperables = await _reset_valorado_recuperable(session, contrib)
+        if recuperables:
+            log(f"  {contrib.ruc}: reset — {recuperables} deuda(s) con resolución "
+                f"disponible reactivada(s) para reintentar (zAlerta-87).", "OK")
 
     # ── Decidir FULL vs INCREMENTAL (zAlerta-46) ──
     # Full si: se pidió (barrido nocturno de seguridad) o NUNCA hubo un full
