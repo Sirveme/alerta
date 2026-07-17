@@ -95,6 +95,12 @@
   // Cuerpo FIEL del mensaje SUNAT (zAlerta-82): primer párrafo visible, el resto
   // en un desplegable. LITERAL — no se resume ni interpreta.
   function cuerpoFielHTML(f) {
+    // AVISO con cuerpo JSON (zAlerta-92): el servidor ya lo renderizó fiel y
+    // seguro (doble-decode + tablas por subtipo). Se inyecta tal cual.
+    if (f.cuerpo_html) {
+      return '<div class="rsm-mod-cuerpo"><div class="rsm-mod-lbl">Mensaje de SUNAT</div>'
+        + f.cuerpo_html + '</div>';
+    }
     const c = f.cuerpo;
     if (!c || !c.length) return '';
     const p = (s) => '<p class="rsm-mod-cuerpo-p">' + esc(s) + '</p>';
