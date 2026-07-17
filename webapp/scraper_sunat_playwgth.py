@@ -514,8 +514,13 @@ def obtener_detalle(api: APIRequestContext, visor_base: str,
 # Descarga de PDFs
 # ─────────────────────────────────────────────────────────────────────
 def descargar_adjuntos(api: APIRequestContext, visor_base: str, detalle: dict,
-                       cod_mensaje: str, ruc: str) -> list:
-    """Descarga los adjuntos de un mensaje.
+                       cod_mensaje: str, ruc: str) -> tuple[list, bool]:
+    """Descarga los adjuntos de un mensaje. Devuelve (guardados, sunat_vacio).
+
+    sunat_vacio (zAlerta-86): True si HABÍA adjuntos declarados y SUNAT los sirvió
+    TODOS vacíos (status 200, 0 bytes) — señal honesta de "no disponible", NO un
+    error transitorio. Sirve para marcar sin re-intentar en loop. Si algún fallo
+    fue por error/timeout (no 200-vacío), NO se marca vacío → se reintenta.
 
     Estructura real (confirmada): detalle['listAttach'] = [
        {'codArchivo': 1078219469, 'nomArchivo': '..._CRONOGRAMA.pdf',
@@ -527,11 +532,13 @@ def descargar_adjuntos(api: APIRequestContext, visor_base: str, detalle: dict,
     # Filtrar solo los que tienen archivo real
     attachs = [a for a in attachs if a.get("codArchivo") and a.get("nomArchivo")]
     if not attachs:
-        return guardados
+        return guardados, False
 
     destino = DESCARGAS / ruc / str(cod_mensaje)
     destino.mkdir(parents=True, exist_ok=True)
 
+    n_ok = 0
+    n_vacio_200 = 0   # SUNAT respondió 200 pero con 0/casi 0 bytes (no-disponible)
     for a in attachs:
         cod_archivo = a["codArchivo"]
         nombre = a["nomArchivo"]
@@ -565,19 +572,19 @@ def descargar_adjuntos(api: APIRequestContext, visor_base: str, detalle: dict,
                     break
             except Exception:
                 continue
-        if not descargado:
+        if descargado:
+            n_ok += 1
+        else:
             log(f"    No se pudo descargar {nombre} (codArchivo={cod_archivo}) — "
                 f"status={ultimo_status} ct={ultimo_ct} bytes={ultimo_len}", "WARN")
-            # Guardar la respuesta cruda para diagnosticar (¿HTML? ¿generador?)
-            try:
-                if ultimo_len:
-                    raw_resp = api.get(urls[0], timeout=30_000).body()
-                    (destino / f"RAW_{cod_archivo}.bin").write_bytes(raw_resp)
-                    log(f"    Respuesta cruda guardada: RAW_{cod_archivo}.bin", "INFO")
-            except Exception:
-                pass
+            # 200 con 0/casi 0 bytes = SUNAT sirve vacío (no-disponible honesto).
+            # status != 200 o excepción = fallo transitorio → NO cuenta como vacío.
+            if ultimo_status == 200 and ultimo_len <= 1000:
+                n_vacio_200 += 1
             guardados.append(f"PENDIENTE:codArchivo={cod_archivo}:{nombre}")
-    return guardados
+    # sunat_vacio: había adjuntos, ninguno bajó, y TODOS los fallos fueron 200-vacío.
+    sunat_vacio = bool(attachs) and n_ok == 0 and n_vacio_200 == len(attachs)
+    return guardados, sunat_vacio
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -926,13 +933,14 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
 
                     detalle = None
                     pdfs = []
+                    adj_vacio = False   # SUNAT sirvió los adjuntos vacíos (zAlerta-86)
                     if puede_bajar:
                         if DESCARGA_PAUSA_S > 0:
                             time.sleep(DESCARGA_PAUSA_S)   # throttle anti-ban
                         detalle = obtener_detalle(api, visor_base, cod_msg, tipo_msj)
                         ctrl["peticiones"] += 1
                         if detalle:
-                            pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
+                            pdfs, adj_vacio = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
                             ctrl["peticiones"] += 1
                             ctrl["docs_bajados"] += 1
                             if backfill:
@@ -974,6 +982,11 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                             resultado["valorados_pendientes"].append(
                                 {"cod_mensaje": cod_msg, "num_documento": num_doc,
                                  "motivo": motivo})
+                            # zAlerta-86: distinguir NO-DISPONIBLE (carátula sin
+                            # goArchivo → SUNAT no ofrece la resolución) de fallo
+                            # transitorio (caratula_error/post_sin_pdf → reintentar).
+                            if motivo in ("sin_caratula", "sin_goarchivo"):
+                                item["valorado_no_disponible"] = True
                         else:
                             txt = texto_pdf(body)
                             # SELF-CHECK: solo para DEUDA con monto (OP/Multa/REC/
@@ -1017,9 +1030,12 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                     # hay nada más que bajar (SUNAT declara 0 adjuntos, no es deuda
                     # con 2º PDF pendiente). Se marca para que el backfill NO lo
                     # re-visite; el cuerpo fiel ya quedó capturado (texto_html).
+                    # Marca si: no es deuda, se abrió el detalle, no hubo PDF, y
+                    # SUNAT no tiene adjunto (n_adj=0) O lo sirvió vacío (adj_vacio).
                     item["revisado_sin_adjunto"] = bool(
                         detalle is not None and not pdfs and not item.get("valorado")
-                        and not (n_adj and int(n_adj) > 0) and not es_deuda)
+                        and not es_deuda
+                        and (not (n_adj and int(n_adj) > 0) or adj_vacio))
 
                     resultado["mensajes"].append(item)
                     # Pausa SOLO tras descargas de deuda (no martillear). Los

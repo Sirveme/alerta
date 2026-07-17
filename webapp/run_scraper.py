@@ -28,7 +28,8 @@ from sqlalchemy.orm import selectinload
 
 from db import get_session
 from models import (Contribuyente, CredencialSol, EstadoContribuyente,
-                    Notificacion, Adjunto, BarridoMetrica, TIPODOC_A_VALORADO)
+                    Notificacion, Adjunto, DocumentoValorado, BarridoMetrica,
+                    TIPODOC_A_VALORADO)
 from cifrado import descifrar_clave_sol
 from ingesta import ingestar_resultado
 import gcs
@@ -122,6 +123,35 @@ async def _premarcar_cuerpo_solo(session, contrib: Contribuyente) -> int:
     return res.rowcount or 0
 
 
+async def _cods_backfill_skip(session, contrib: Contribuyente) -> set:
+    """Skip set del backfill DEUDA-AWARE (zAlerta-86). Un mensaje está COMPLETO
+    (se salta) si:
+      · tiene su documento_valorado (deuda: la RESOLUCIÓN ya está), o
+      · es NO-deuda y tiene adjunto en GCS (constancia/informativo ya está), o
+      · está revisado_sin_adjunto o valorado_no_disponible (SUNAT no lo ofrece).
+    CLAVE: una DEUDA con solo su constancia en GCS pero SIN valorado NO está
+    completa → se reintenta. (Ese era el bug: se saltaba y nunca traía la
+    resolución del embargo/coactiva.)"""
+    deuda_types = list(TIPODOC_A_VALORADO.keys())
+    val_done = {str(c) for c in await session.scalars(
+        select(Notificacion.cod_mensaje_sunat)
+        .join(DocumentoValorado, DocumentoValorado.notificacion_id == Notificacion.id)
+        .where(Notificacion.contribuyente_id == contrib.id))}
+    nd_gcs = {str(c) for c in await session.scalars(
+        select(Notificacion.cod_mensaje_sunat)
+        .join(Adjunto, Adjunto.notificacion_id == Notificacion.id)
+        .where(Notificacion.contribuyente_id == contrib.id,
+               Adjunto.gcs_key.is_not(None),
+               or_(Notificacion.tipo_documento_enum.is_(None),
+                   Notificacion.tipo_documento_enum.not_in(deuda_types))))}
+    marcados = {str(c) for c in await session.scalars(
+        select(Notificacion.cod_mensaje_sunat)
+        .where(Notificacion.contribuyente_id == contrib.id,
+               or_(Notificacion.revisado_sin_adjunto.is_(True),
+                   Notificacion.valorado_no_disponible.is_(True))))}
+    return val_done | nd_gcs | marcados
+
+
 async def _cods_completos(session, contrib: Contribuyente) -> tuple[set, set]:
     """Devuelve (con_gcs, revisados): cod_mensaje que ya están COMPLETOS —
     con PDF en GCS, o revisados sin adjunto (SUNAT no da PDF). El backfill los
@@ -208,10 +238,10 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         conocidos = None
     elif backfill:
         hacer_full = False
-        # "conocidos" (se saltan) = lo YA COMPLETO: con PDF en GCS o revisado sin
-        # adjunto. El resto son los pendientes REALES → el backlog converge.
-        con_gcs, revisados = await _cods_completos(session, contrib)
-        conocidos = con_gcs | revisados
+        # "conocidos" (se saltan) = lo YA COMPLETO, deuda-aware (zAlerta-86): una
+        # coactiva con solo su constancia NO cuenta como completa → se reintenta
+        # su resolución. El resto son pendientes REALES → el backlog converge.
+        conocidos = await _cods_backfill_skip(session, contrib)
     else:
         hacer_full = full or (contrib.ultimo_barrido_full_at is None)
         conocidos = None

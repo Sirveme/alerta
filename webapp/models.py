@@ -518,9 +518,15 @@ class Notificacion(Base, TimestampMixin):
     notificado_push_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Backfill (zAlerta-85): se abrió el detalle y SUNAT NO entrega adjunto (solo
-    # cuerpo). Marca para que el backfill NO lo re-visite en cada corrida y el
-    # backlog converja de verdad. El cuerpo fiel se captura igual (texto_html).
+    # cuerpo, o los archivos declarados vienen vacíos). Marca para que el backfill
+    # NO re-visite y el backlog converja. El cuerpo fiel se captura igual.
     revisado_sin_adjunto: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False)
+    # zAlerta-86: la RESOLUCIÓN de deuda (2º PDF vía goArchivoDescarga) no está
+    # disponible en SUNAT (carátula sin goArchivo). Distinto de "aún no bajada":
+    # esto es NO-DISPONIBLE honesto (no reintentar). Si SÍ está y falló → NO se
+    # marca, se reintenta.
+    valorado_no_disponible: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False)
 
     contribuyente: Mapped["Contribuyente"] = relationship(back_populates="notificaciones")
