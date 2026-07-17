@@ -122,6 +122,12 @@ DESCARGA_PAUSA_S = float(os.getenv("SCRAPER_PAUSA_S", "0.4"))
 # más, se descarga hasta el límite (recientes primero) y se marca para que la UI
 # ofrezca "reduce años". Los buzones chicos quedan debajo → sin restricción.
 MAX_DOCS_BARRIDO = int(os.getenv("SCRAPER_MAX_DOCS", "150"))
+# Límites SEPARADOS del backfill (zAlerta-85): las descargas reales de PDF son
+# caras (2-3 peticiones c/u) y las cuidamos; abrir un detalle sin adjunto es
+# barato (1 petición), así que su tope puede ser mayor. Convergen el backlog:
+# los "con PDF" bajan y ganan gcs_key; los "sin adjunto" se marcan y no vuelven.
+MAX_PDF_POR_CORRIDA = int(os.getenv("SCRAPER_MAX_PDF", str(MAX_DOCS_BARRIDO)))
+MAX_SINPDF_POR_CORRIDA = int(os.getenv("SCRAPER_MAX_SINPDF", "300"))
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -835,7 +841,8 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
             resultado["valorados_integridad_error"] = []  # numdoc del PDF ≠ numdoc de la fila
             # ── Descarga CONTROLADA (zAlerta-83): censo + límite + throttle ──
             _t0 = time.time()
-            ctrl = {"censo": {}, "docs_bajados": 0, "peticiones": 0,
+            ctrl = {"censo": {}, "censo_cods": {}, "docs_bajados": 0,
+                    "pdf_bajados": 0, "sinpdf_marcados": 0, "peticiones": 0,
                     "senales_limite": 0, "limite_alcanzado": False}
 
             # ── Barrido AUTORITATIVO por bandeja (cod_carpeta=00 = todas) ──
@@ -865,9 +872,12 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                                  or msg.get("fecPublica"))
                     n_adj = msg.get("cantidadArchAdj", 0)
                     # Censo (zAlerta-83): cuenta docs por año SIN descargar.
+                    # zAlerta-85: además guarda los cod_mensaje por año, para que
+                    # run_scraper cruce el índice contra BD/GCS (con/sin PDF).
                     _anio = _anio_de(fecha_pub or fecha_env)
                     if _anio:
                         ctrl["censo"][_anio] = ctrl["censo"].get(_anio, 0) + 1
+                        ctrl["censo_cods"].setdefault(_anio, []).append(str(cod_msg))
 
                     # ── FASE 1 (zAlerta-45): DOS VELOCIDADES ──
                     # Clasificamos con el índice (carpeta+asunto), SIN abrir detalle.
@@ -894,15 +904,25 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                     # backfill: sin filtro de año (todo el histórico pendiente);
                     # el skip lo hace "conocidos" (lo ya completo en GCS).
                     en_rango = backfill or (_anio is None) or (_anio in anios_descarga)
-                    bajo_limite = ctrl["docs_bajados"] < MAX_DOCS_BARRIDO
-                    # En barrido normal la DEUDA está exenta del límite (siempre
-                    # baja; los informativos esperan). En backfill el límite es
-                    # ESTRICTO para todos → avanza en tandas parejas de MAX_DOCS.
-                    deuda_exenta = es_deuda and not backfill
-                    # solo_censo: NADA se baja (ni deuda); solo se lista y cuenta.
-                    puede_bajar = (not solo_censo) and en_rango and (bajo_limite or deuda_exenta)
-                    if not solo_censo and en_rango and not bajo_limite and not deuda_exenta:
-                        ctrl["limite_alcanzado"] = True   # UI: "reduce años" / otra corrida
+                    # ¿espera un PDF real (caro) o es solo cuerpo (barato)?
+                    espera_pdf = bool((n_adj and int(n_adj) > 0) or es_deuda)
+                    if backfill:
+                        # Límites SEPARADOS (zAlerta-85): los PDF caros y el marcar
+                        # "sin adjunto" barato avanzan su propio backlog por corrida.
+                        if espera_pdf:
+                            puede_bajar = ctrl["pdf_bajados"] < MAX_PDF_POR_CORRIDA
+                        else:
+                            puede_bajar = ctrl["sinpdf_marcados"] < MAX_SINPDF_POR_CORRIDA
+                        if not puede_bajar:
+                            ctrl["limite_alcanzado"] = True   # queda para otra corrida
+                    else:
+                        bajo_limite = ctrl["docs_bajados"] < MAX_DOCS_BARRIDO
+                        # En barrido normal la DEUDA está exenta del límite (siempre
+                        # baja; los informativos esperan). solo_censo: nada baja.
+                        deuda_exenta = es_deuda
+                        puede_bajar = (not solo_censo) and en_rango and (bajo_limite or deuda_exenta)
+                        if not solo_censo and en_rango and not bajo_limite and not deuda_exenta:
+                            ctrl["limite_alcanzado"] = True   # UI: "reduce años"
 
                     detalle = None
                     pdfs = []
@@ -915,6 +935,11 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                             pdfs = descargar_adjuntos(api, visor_base, detalle, cod_msg, cfg.ruc)
                             ctrl["peticiones"] += 1
                             ctrl["docs_bajados"] += 1
+                            if backfill:
+                                if espera_pdf:
+                                    ctrl["pdf_bajados"] += 1
+                                else:
+                                    ctrl["sinpdf_marcados"] += 1
 
                     item = {
                         "tipo_msj": tipo_msj,
@@ -988,6 +1013,14 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                                 }
                                 resultado["valorados_descargados"] += 1
 
+                    # Revisado SIN adjunto (zAlerta-85): se abrió el detalle y no
+                    # hay nada más que bajar (SUNAT declara 0 adjuntos, no es deuda
+                    # con 2º PDF pendiente). Se marca para que el backfill NO lo
+                    # re-visite; el cuerpo fiel ya quedó capturado (texto_html).
+                    item["revisado_sin_adjunto"] = bool(
+                        detalle is not None and not pdfs and not item.get("valorado")
+                        and not (n_adj and int(n_adj) > 0) and not es_deuda)
+
                     resultado["mensajes"].append(item)
                     # Pausa SOLO tras descargas de deuda (no martillear). Los
                     # informativos no bajan binario → sin pausa → buzón rápido.
@@ -995,18 +1028,24 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                         time.sleep(random.uniform(0.5, 1.5))
 
             resultado["exito"] = True
-            # ── Métricas del barrido + censo (zAlerta-83) ──
+            # ── Métricas del barrido + censo (zAlerta-83/85) ──
             resultado["censo"] = {int(a): n for a, n in ctrl["censo"].items()}
+            # cod_mensaje por año (para el censo detallado: cruce índice × BD/GCS).
+            resultado["censo_cods"] = {int(a): c for a, c in ctrl["censo_cods"].items()}
             resultado["metricas"] = {
                 "peticiones": ctrl["peticiones"],
                 "duracion_seg": int(time.time() - _t0),
                 "docs_procesados": len(resultado["mensajes"]),
                 "pdfs_descargados": ctrl["docs_bajados"],
+                # zAlerta-85: desglose PDF caro vs "sin adjunto" barato (backfill).
+                "pdf_bajados": ctrl["pdf_bajados"],
+                "sinpdf_marcados": ctrl["sinpdf_marcados"],
                 "senales_limite": ctrl["senales_limite"],
                 "limite_alcanzado": ctrl["limite_alcanzado"],
             }
             log(f"Scraping completo: {len(resultado['mensajes'])} mensajes; "
-                f"{ctrl['docs_bajados']} PDF, {ctrl['peticiones']} peticiones, "
+                f"{ctrl['docs_bajados']} PDF ({ctrl['pdf_bajados']} bf-pdf / "
+                f"{ctrl['sinpdf_marcados']} bf-sinpdf), {ctrl['peticiones']} peticiones, "
                 f"{resultado['metricas']['duracion_seg']}s"
                 f"{' [LÍMITE alcanzado]' if ctrl['limite_alcanzado'] else ''}.", "OK")
 

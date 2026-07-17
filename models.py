@@ -517,6 +517,12 @@ class Notificacion(Base, TimestampMixin):
     notificado_push: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notificado_push_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Backfill (zAlerta-85): se abrió el detalle y SUNAT NO entrega adjunto (solo
+    # cuerpo). Marca para que el backfill NO lo re-visite en cada corrida y el
+    # backlog converja de verdad. El cuerpo fiel se captura igual (texto_html).
+    revisado_sin_adjunto: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False)
+
     contribuyente: Mapped["Contribuyente"] = relationship(back_populates="notificaciones")
     adjuntos: Mapped[list["Adjunto"]] = relationship(
         back_populates="notificacion", cascade="all, delete-orphan")
@@ -1222,6 +1228,8 @@ class BarridoMetrica(Base):
     duracion_seg: Mapped[int | None] = mapped_column(Integer)
     docs_procesados: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pdfs_descargados: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Backfill (zAlerta-85): mensajes "sin adjunto" marcados en la corrida (baratos).
+    sinpdf_marcados: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     senales_limite: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     limite_alcanzado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     exito: Mapped[bool | None] = mapped_column(Boolean)

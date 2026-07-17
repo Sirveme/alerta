@@ -23,12 +23,12 @@ import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import select, update, or_, exists
 from sqlalchemy.orm import selectinload
 
 from db import get_session
 from models import (Contribuyente, CredencialSol, EstadoContribuyente,
-                    Notificacion, Adjunto, BarridoMetrica)
+                    Notificacion, Adjunto, BarridoMetrica, TIPODOC_A_VALORADO)
 from cifrado import descifrar_clave_sol
 from ingesta import ingestar_resultado
 import gcs
@@ -101,6 +101,64 @@ async def _sanar_gcs_desde_bytea(session, contrib: Contribuyente) -> int:
     return n
 
 
+async def _premarcar_cuerpo_solo(session, contrib: Contribuyente) -> int:
+    """Marca revisado_sin_adjunto SIN tocar SUNAT (zAlerta-85): informativos que
+    SUNAT declara sin adjunto (cant_adjuntos=0), cuyo cuerpo YA tenemos y que NO
+    son deuda (los de deuda pueden tener 2º PDF por goArchivoDescarga). Colapsa el
+    backlog de 'cuerpo-solo' de un tiro, así el backfill solo va por lo que falta."""
+    deuda_types = list(TIPODOC_A_VALORADO.keys())
+    sin_adj = ~exists().where(Adjunto.notificacion_id == Notificacion.id)
+    res = await session.execute(
+        update(Notificacion)
+        .where(Notificacion.contribuyente_id == contrib.id,
+               Notificacion.cant_adjuntos == 0,
+               Notificacion.texto_html.is_not(None),
+               Notificacion.revisado_sin_adjunto.is_(False),
+               or_(Notificacion.tipo_documento_enum.is_(None),
+                   Notificacion.tipo_documento_enum.not_in(deuda_types)),
+               sin_adj)
+        .values(revisado_sin_adjunto=True))
+    await session.commit()
+    return res.rowcount or 0
+
+
+async def _cods_completos(session, contrib: Contribuyente) -> tuple[set, set]:
+    """Devuelve (con_gcs, revisados): cod_mensaje que ya están COMPLETOS —
+    con PDF en GCS, o revisados sin adjunto (SUNAT no da PDF). El backfill los
+    salta; el censo detallado los usa para contar con/sin PDF (zAlerta-85)."""
+    con_gcs = {str(c) for c in await session.scalars(
+        select(Notificacion.cod_mensaje_sunat)
+        .join(Adjunto, Adjunto.notificacion_id == Notificacion.id)
+        .where(Notificacion.contribuyente_id == contrib.id,
+               Adjunto.gcs_key.is_not(None)))}
+    revisados = {str(c) for c in await session.scalars(
+        select(Notificacion.cod_mensaje_sunat)
+        .where(Notificacion.contribuyente_id == contrib.id,
+               Notificacion.revisado_sin_adjunto.is_(True)))}
+    return con_gcs, revisados
+
+
+async def _guardar_censo_detallado(session, contrib: Contribuyente,
+                                   resultado: dict) -> dict:
+    """Censo DETALLADO por año (zAlerta-85): cruza el índice del buzón
+    (censo_cods del scraper) contra lo que ya está en BD/GCS, para separar
+    con_pdf / pendientes / revisados. Lo guarda en censo_json y lo devuelve.
+      {"2024": {"total":160, "con_pdf":90, "pendientes":70, "revisados":0}, ...}"""
+    censo_cods = resultado.get("censo_cods") or {}
+    con_gcs, revisados = await _cods_completos(session, contrib)
+    detalle = {}
+    for anio, cods in censo_cods.items():
+        cset = {str(c) for c in cods}
+        con = len(cset & con_gcs)
+        rev = len(cset & revisados)
+        detalle[str(anio)] = {
+            "total": len(cset), "con_pdf": con, "revisados": rev,
+            "pendientes": max(0, len(cset) - con - rev)}
+    contrib.censo_json = detalle
+    contrib.censo_at = datetime.now(TZ_LIMA)
+    return detalle
+
+
 async def procesar_contribuyente(session, contrib: Contribuyente,
                                  frescura_horas: int, forzar: bool,
                                  full: bool = False,
@@ -133,6 +191,10 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         if sanados:
             log(f"  {contrib.ruc}: self-heal GCS — {sanados} adjunto(s) "
                 f"subido(s) desde bytea (sin tocar SUNAT).", "OK")
+        premarcados = await _premarcar_cuerpo_solo(session, contrib)
+        if premarcados:
+            log(f"  {contrib.ruc}: pre-marca — {premarcados} informativo(s) "
+                f"sin adjunto marcado(s) revisado (sin tocar SUNAT).", "OK")
 
     # ── Decidir FULL vs INCREMENTAL (zAlerta-46) ──
     # Full si: se pidió (barrido nocturno de seguridad) o NUNCA hubo un full
@@ -146,12 +208,10 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         conocidos = None
     elif backfill:
         hacer_full = False
-        cods = await session.scalars(
-            select(Notificacion.cod_mensaje_sunat)
-            .join(Adjunto, Adjunto.notificacion_id == Notificacion.id)
-            .where(Notificacion.contribuyente_id == contrib.id,
-                   Adjunto.gcs_key.is_not(None)))
-        conocidos = {str(c) for c in cods}
+        # "conocidos" (se saltan) = lo YA COMPLETO: con PDF en GCS o revisado sin
+        # adjunto. El resto son los pendientes REALES → el backlog converge.
+        con_gcs, revisados = await _cods_completos(session, contrib)
+        conocidos = con_gcs | revisados
     else:
         hacer_full = full or (contrib.ultimo_barrido_full_at is None)
         conocidos = None
@@ -161,7 +221,7 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
                     Notificacion.contribuyente_id == contrib.id))
             conocidos = {str(c) for c in cods}
     modo = ("CENSO" if solo_censo else
-            f"BACKFILL ({len(conocidos)} completos en GCS)" if backfill else
+            f"BACKFILL ({len(conocidos)} completos, salta esos)" if backfill else
             "FULL" if hacer_full else f"incremental ({len(conocidos)} conocidos)")
     log(f"  {contrib.ruc}: scrapeando [{modo}]...")
 
@@ -186,11 +246,9 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
 
     # ── CENSO puro (Tandas CCPL): NO se ingesta (registrar notifs volvería a
     # TODO "conocido" y las tandas incrementales saltarían todo → nunca bajarían
-    # PDFs). Solo se guarda la foto por año + una métrica, y se sale. ──
+    # PDFs). Solo guarda el DESGLOSE por año (total/con_pdf/pendientes) y sale. ──
     if solo_censo:
-        censo = resultado.get("censo") or {}
-        contrib.censo_json = {str(k): v for k, v in censo.items()}
-        contrib.censo_at = datetime.now(TZ_LIMA)
+        detalle = await _guardar_censo_detallado(session, contrib, resultado)
         met = resultado.get("metricas") or {}
         session.add(BarridoMetrica(
             contribuyente_id=contrib.id, estudio_id=contrib.estudio_id,
@@ -199,9 +257,10 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
             docs_procesados=met.get("docs_procesados", 0),
             pdfs_descargados=0, limite_alcanzado=False, exito=True))
         await session.commit()
-        total = sum(int(v) for v in censo.values()) if censo else 0
-        log(f"  {contrib.ruc}: CENSO — {total} docs en {len(censo)} año(s), "
-            f"{met.get('peticiones', 0)} peticiones, "
+        total = sum(d["total"] for d in detalle.values())
+        pend = sum(d["pendientes"] for d in detalle.values())
+        log(f"  {contrib.ruc}: CENSO — {total} docs en {len(detalle)} año(s); "
+            f"{pend} pendientes de PDF. {met.get('peticiones', 0)} peticiones, "
             f"{met.get('duracion_seg', 0)}s. (sin descargar)", "OK")
         return
 
@@ -216,14 +275,15 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         duracion_seg=met.get("duracion_seg"),
         docs_procesados=met.get("docs_procesados", 0),
         pdfs_descargados=met.get("pdfs_descargados", 0),
+        sinpdf_marcados=met.get("sinpdf_marcados", 0),
         limite_alcanzado=bool(met.get("limite_alcanzado")),
         exito=True))
-    # Censo del buzón: solo en FULL es completo. El incremental salta los
-    # conocidos ANTES de contar, así que su censo es parcial → no sobrescribir.
-    censo = resultado.get("censo")
-    if censo and hacer_full:   # mapa {año: nº docs} — tamaño del buzón, sin descargar
-        contrib.censo_json = {str(k): v for k, v in censo.items()}
-        contrib.censo_at = datetime.now(TZ_LIMA)
+    # Censo DETALLADO por año (zAlerta-85): solo en FULL es fiable, porque el
+    # índice se listó completo. Incremental Y backfill saltan conocidos ANTES de
+    # contar → índice parcial → no sobrescribir. Tras backfill, se refresca el
+    # desglose con otra corrida `censo` (o el censo programado).
+    if resultado.get("censo_cods") and hacer_full:
+        await _guardar_censo_detallado(session, contrib, resultado)
     # Un FULL exitoso sella la base contra la que compara el incremental.
     if hacer_full:
         contrib.ultimo_barrido_full_at = datetime.now(TZ_LIMA)
