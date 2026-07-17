@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models import (
     Contribuyente, Notificacion, Adjunto, TipoDocumento,
     DocumentoValorado, TipoValorado)
-from clasificacion import clasificar, subtipo_coactivo
+from clasificacion import clasificar, subtipo_coactivo, COACTIVO_META
 import gcs
 
 TZ_LIMA = ZoneInfo("America/Lima")
@@ -360,6 +360,22 @@ async def ingestar_resultado(
                 stats["valorados_error"] = stats.get("valorados_error", 0) + 1
                 print(f"[ingesta] valorado cod={cod} falló (sigo): "
                       f"{type(e).__name__}: {e}", flush=True)
+            # zAlerta-87 Bug 2: el asunto de una coactiva suele ser genérico
+            # ("Resolución Coactiva N° …"); la "Retención a terceros" solo aparece
+            # en el TEXTO de la resolución. Re-derivar el subtipo desde el texto SOLO
+            # si el asunto no lo resolvió → dispara la urgencia CRÍTICA + alerta.
+            if (tipo_doc == TipoDocumento.COBRANZA_COACTIVA and not sub_coa
+                    and val.get("pdf_texto")):
+                sub_txt = subtipo_coactivo(val["pdf_texto"])
+                meta = COACTIVO_META.get(sub_txt) if sub_txt else None
+                if sub_txt and meta:
+                    obj = await session.get(Notificacion, notif_id)
+                    if obj is not None:
+                        obj.subtipo_coactivo = sub_txt
+                        obj.urgencia = meta["urgencia"]
+                        obj.clasificado_at = ahora_lima()
+                        stats["subtipo_desde_texto"] = (
+                            stats.get("subtipo_desde_texto", 0) + 1)
 
     # Marcar el scrapeo en el contribuyente
     contrib = await session.get(Contribuyente, contribuyente_id)

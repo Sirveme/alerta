@@ -47,9 +47,11 @@ from playwright.sync_api import sync_playwright, Page, APIRequestContext, Timeou
 # funcionando para el índice; solo se omite la valoración.
 try:
     from clasificacion import clasificar as _clasificar
+    from clasificacion import solo_digitos as _solo_digitos
     from models import TIPODOC_A_VALORADO as _TIPODOC_A_VALORADO
 except Exception:   # pragma: no cover
     _clasificar = None
+    _solo_digitos = lambda s: "".join(ch for ch in (s or "") if ch.isdigit())
     _TIPODOC_A_VALORADO = {}
 
 # Carga automática de .env (no declarar variables a mano en el terminal)
@@ -1007,10 +1009,23 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                                         "trae monto. Abortando el lote de valorados.",
                                         "ERROR")
                             # CHECK DE INTEGRIDAD: el nº de documento de la fila debe
-                            # aparecer en el texto del PDF bajado.
-                            integ_ok = (not num_doc) or (num_doc in txt)
+                            # aparecer en el texto del PDF bajado. zAlerta-87: SUNAT
+                            # usa el número CON y SIN guiones inconsistentemente
+                            # (1240020011643 vs 124-002-0011643) → normalizar (solo
+                            # dígitos) antes de comparar. NO debilita: mismos dígitos
+                            # = mismo documento; solo tolera el formato.
+                            _esp = _solo_digitos(num_doc)
+                            hallados = _RE_NUM_DOC.findall(txt)
+                            # Candidatos: secuencias de dígitos contiguas (con o sin
+                            # guiones) en el PDF — cubre ambos formatos sin unir
+                            # números separados por espacios (evita falsos positivos).
+                            _cands = re.findall(r"\d[\d\-]{7,}\d", txt)
+                            integ_ok = (
+                                not num_doc
+                                or (num_doc in txt)
+                                or (bool(_esp) and any(
+                                    _solo_digitos(x) == _esp for x in _cands)))
                             if not self_check["abortado"] and not integ_ok:
-                                hallados = _RE_NUM_DOC.findall(txt)
                                 log(f"INTEGRIDAD: PDF cod={cod_msg} NO contiene "
                                     f"{num_doc}; hallados={hallados[:3]}. No se guarda.",
                                     "ERROR")
