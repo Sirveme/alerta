@@ -2208,3 +2208,81 @@ a.tarjeta-link { display:block; color:inherit; }
 .mc-censo-tabla th:first-child, .mc-censo-tabla td:first-child { text-align:left; }
 .mc-censo-tabla th { color:var(--texto-suave); font-weight:600; }
 .mc-censo-pend { color:var(--u-importante); }
+
+/* ══════════════════════════════════════════════════════════════════
+   CARTERA DEL CONTADOR (zAlerta-91) — hub de clientes del estudio.
+   Verde-contador vía data-rol; hechos, no urgencia (rojo=deuda, azul=info).
+   Mobile-first, sobrio, escaneable.
+   ══════════════════════════════════════════════════════════════════ */
+.cartera { max-width:1100px; margin:0 auto; padding:4px 2px 40px; }
+.cra-head { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end;
+  justify-content:space-between; margin-bottom:18px; }
+.cra-head-tit { display:flex; flex-direction:column; gap:2px; }
+.cra-head-tit .titulo-pagina { margin:0; }
+.cra-sub { font-size:.82rem; color:var(--texto-suave); }
+.cra-tools { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.cra-orden { display:flex; align-items:center; gap:6px; font-size:.8rem;
+  color:var(--texto-suave); }
+.cra-orden select { padding:8px 10px; border-radius:var(--radio,10px);
+  border:1px solid var(--borde); background:var(--superficie); color:var(--texto);
+  font:inherit; font-weight:600; }
+.cra-buscar { position:relative; display:flex; align-items:center;
+  background:var(--superficie); border:1px solid var(--borde);
+  border-radius:var(--radio,10px); padding:0 6px 0 34px; min-width:min(320px,86vw); }
+.cra-buscar:focus-within { border-color:var(--acento); }
+.cra-lupa { position:absolute; left:8px; color:var(--texto-suave); font-size:20px; }
+.cra-buscar input { flex:1; border:0; background:transparent; color:var(--texto);
+  font:inherit; padding:10px 4px; outline:none; }
+.cra-voz { border:0; background:transparent; cursor:pointer; font-size:1.05rem;
+  padding:6px 8px; border-radius:8px; line-height:1; }
+.cra-voz:hover { background:var(--superficie-2); }
+.cra-voz.grabando { animation:cra-pulso 1s infinite; }
+@keyframes cra-pulso { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.cra-grid { display:grid; gap:12px;
+  grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); }
+.cra-card { display:flex; flex-direction:column; gap:12px; padding:14px 16px;
+  background:var(--superficie); border:1px solid var(--borde);
+  border-radius:var(--radio,12px); text-decoration:none; color:inherit;
+  transition:border-color .12s, transform .12s; }
+.cra-card:hover { border-color:var(--acento); transform:translateY(-1px); }
+.cra-card-top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.cra-ident { min-width:0; }
+.cra-razon { font-weight:700; font-size:1rem; line-height:1.25;
+  overflow:hidden; text-overflow:ellipsis; }
+.cra-meta { font-size:.78rem; color:var(--texto-suave); margin-top:2px; }
+.cra-wh { white-space:nowrap; }
+.cra-resp { display:flex; align-items:center; gap:8px; flex-shrink:0; max-width:46%; }
+.cra-avatar { width:32px; height:32px; border-radius:50%; flex-shrink:0;
+  display:grid; place-items:center; font-weight:700; font-size:.9rem;
+  background:color-mix(in srgb, var(--acento) 22%, transparent); color:var(--acento); }
+.cra-avatar--sin { background:var(--superficie-2); color:var(--texto-suave); }
+.cra-resp-txt { display:flex; flex-direction:column; line-height:1.2; min-width:0; }
+.cra-resp-txt b { font-size:.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cra-resp-txt span { font-size:.74rem; color:var(--texto-suave); }
+.cra-resp--sin { color:var(--texto-suave); font-size:.8rem; }
+
+.cra-conteos { display:flex; flex-wrap:wrap; gap:8px; }
+.cra-cnt { display:flex; align-items:baseline; gap:5px; padding:4px 9px;
+  border-radius:8px; background:var(--superficie-2);
+  border:1px solid transparent; }
+.cra-cnt-n { font-size:1.05rem; font-weight:800; line-height:1; }
+.cra-cnt-l { font-size:.72rem; color:var(--texto-suave); }
+.cra-cnt--deuda .cra-cnt-n { color:var(--u-urgente); }
+.cra-cnt--deuda { border-color:color-mix(in srgb, var(--u-urgente) 30%, transparent); }
+.cra-cnt--info .cra-cnt-n { color:var(--marca); }
+.cra-cnt--cero { opacity:.4; }
+.cra-cnt--cero .cra-cnt-n { color:var(--texto-suave); }
+.cra-cnt--cero.cra-cnt--deuda { border-color:transparent; }
+
+.cra-vacio, .cra-nores { text-align:center; color:var(--texto-suave);
+  padding:40px 16px; }
+.cra-vacio .material-symbols-outlined { font-size:40px; display:block;
+  margin:0 auto 8px; opacity:.6; }
+
+@media (max-width:560px){
+  .cra-tools { width:100%; }
+  .cra-buscar { flex:1; }
+  .cra-grid { grid-template-columns:1fr; }
+  .cra-resp-txt span { display:none; }   /* en móvil, solo el nombre del responsable */
+}
