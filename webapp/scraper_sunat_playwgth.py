@@ -39,7 +39,7 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, quote
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright, Page, APIRequestContext, TimeoutError as PWTimeout
@@ -777,6 +777,48 @@ def capturar_cuerpo_genhtml(api: APIRequestContext, host: str, visor_base: str,
     return cuerpo, pdf_bytes, motivo
 
 
+def capturar_adjunto_ceros(api: APIRequestContext, visor_base: str, ruc: str,
+                           cod_mensaje, nom_archivo: str, diag: bool = False) -> tuple:
+    """Captura un adjunto codArchivo=0 por su NOMBRE (zAlerta-96). SUNAT los sirve
+    por bajarArchivo/0/0/0/RUC, pero varios comparten esa URL → el nomArchivo los
+    distingue. Como el formato exacto de la petición solo se confirma en el worker,
+    PRUEBA variantes y usa la primera que devuelve un PDF válido (auto-descubre).
+    Devuelve (pdf_bytes|None, motivo, variante_que_funcionó)."""
+    base = f"{visor_base}/visor/bajarArchivo/0/0/0/{ruc}"
+    nq = quote(nom_archivo or "")
+    bajar = f"{visor_base}/visor/bajarArchivo"
+    variantes = [
+        ("GET ?nomArchivo", lambda: api.get(f"{base}?nomArchivo={nq}", timeout=60_000)),
+        ("GET ?nombreArchivo", lambda: api.get(f"{base}?nombreArchivo={nq}", timeout=60_000)),
+        ("POST /0/0/0 nomArchivo", lambda: api.post(base, form={"nomArchivo": nom_archivo}, timeout=60_000)),
+        ("POST bajarArchivo accion+nom", lambda: api.post(bajar, form={
+            "accion": "archivo", "idMensaje": str(cod_mensaje or ""),
+            "nomArchivo": nom_archivo, "sistema": "0"}, timeout=60_000)),
+        ("POST bajarArchivo nombreArchivo", lambda: api.post(bajar, form={
+            "accion": "archivo", "codMensaje": str(cod_mensaje or ""),
+            "nombreArchivo": nom_archivo}, timeout=60_000)),
+        ("GET path/nombre", lambda: api.get(f"{base}/{nq}", timeout=60_000)),
+    ]
+    vacio = False
+    for etq, fn in variantes:
+        try:
+            resp = fn()
+            body = resp.body()
+            ct = (resp.headers.get("content-type") or "").lower()
+            if diag:
+                log(f"    [diag] {etq}: status={resp.status} ct={ct} "
+                    f"bytes={len(body)} pdf={body[:4] == b'%PDF'}", "INFO")
+            if resp.status == 200 and body[:4] == b"%PDF" and len(body) > 1000:
+                return body, "ok", etq
+            if resp.status == 200 and len(body) <= 1000:
+                vacio = True
+        except Exception as e:
+            if diag:
+                log(f"    [diag] {etq}: error {e}", "INFO")
+        time.sleep(0.4)
+    return None, ("vacio" if vacio else "no_pdf"), None
+
+
 def capturar_pdf_por_id(api: APIRequestContext, visor_base: str,
                         id_archivo, sistema, cod_mensaje) -> tuple:
     """Captura GENERAL (zAlerta-95): pide el PDF por id_archivo (POST bajarArchivo,
@@ -827,7 +869,9 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                  solo_censo: bool = False,
                  backfill: bool = False,
                  genhtml_pend: list | None = None,
-                 pdf_pend: list | None = None) -> dict:
+                 pdf_pend: list | None = None,
+                 ceros_pend: list | None = None,
+                 ceros_diag: bool = False) -> dict:
     # genhtml_pend (zAlerta-94): si se pasa una lista [{id, cod_mensaje, url,
     # num_documento}], el scraper SOLO hace login y captura el cuerpo (genhtml) +
     # PDF de esos avisos (familia gendocS01Alias), y sale. No barre el buzón.
@@ -976,6 +1020,32 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                     log(f"   pdf {_i}/{_tot} cod={it.get('cod_mensaje')}: "
                         f"{'sí' if pdf_bytes else 'no'} ({motivo})", "OK")
                 resultado["pdf_capturados"] = caps
+                resultado["exito"] = True
+                return resultado
+
+            # ── Captura de adjuntos "de ceros" (zAlerta-96): codArchivo=0 servido
+            # por NOMBRE. Abre el detalle primero (fija contexto de sesión) y luego
+            # baja cada nomArchivo del listAttach (auto-descubre la variante). ──
+            if ceros_pend is not None:
+                caps = []
+                _tot = len(ceros_pend)
+                for _i, it in enumerate(ceros_pend, 1):
+                    cod = it.get("cod_mensaje")
+                    # Abrir el detalle fija el contexto de sesión del mensaje.
+                    obtener_detalle(api, visor_base, cod, it.get("tipo_msj") or 1)
+                    arch = []
+                    for nom in (it.get("adjuntos") or []):
+                        if DESCARGA_PAUSA_S > 0:
+                            time.sleep(DESCARGA_PAUSA_S)   # throttle anti-ban
+                        pdf_bytes, motivo, variante = capturar_adjunto_ceros(
+                            api, visor_base, cfg.ruc, cod, nom, diag=ceros_diag)
+                        arch.append({"nom": nom, "pdf_bytes": pdf_bytes,
+                                     "motivo": motivo, "variante": variante})
+                        log(f"   ceros {_i}/{_tot} cod={cod} '{(nom or '')[:34]}': "
+                            f"{'sí' if pdf_bytes else 'no'} ({motivo}"
+                            f"{' via ' + variante if variante else ''})", "OK")
+                    caps.append({"id": it.get("id"), "cod_mensaje": cod, "adjuntos": arch})
+                resultado["ceros_capturados"] = caps
                 resultado["exito"] = True
                 return resultado
 
