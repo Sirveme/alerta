@@ -556,6 +556,11 @@ class Notificacion(Base, TimestampMixin):
     # marca, se reintenta.
     valorado_no_disponible: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False)
+    # zAlerta-94: cuerpo FIEL capturado del generador SUNAT (gendocS01Alias,
+    # accion=genhtml) para avisos cuyo texto_html es solo cabecera JSON (el cuerpo
+    # real "Estimada/o Contribuyente…" se genera on-demand). Se PIDE a SUNAT y se
+    # guarda tal cual (no se reconstruye con plantillas). NULL = aún no capturado.
+    cuerpo_capturado: Mapped[str | None] = mapped_column(Text)
 
     contribuyente: Mapped["Contribuyente"] = relationship(back_populates="notificaciones")
     adjuntos: Mapped[list["Adjunto"]] = relationship(
@@ -1304,3 +1309,127 @@ class BarridoMetrica(Base):
     exito: Mapped[bool | None] = mapped_column(Boolean)
     creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# CAPA DE GESTIÓN (zAlerta-90) — instrucciones + estados + evidencias.
+# Lo que convierte alerta.pe de "visor de SUNAT" a "espacio de trabajo del
+# estudio": el contador instruye, el equipo ejecuta y marca Terminado, con
+# evidencias de respaldo. Reusa personas/contribuyentes/notificaciones (z-89).
+# Editorial: NO calculamos plazos — `fecha_limite` la pone el contador.
+# ═════════════════════════════════════════════════════════════════════
+class EstadoInstruccion(str, enum.Enum):
+    """SOLO dos estados (decisión permanente): sin 'en proceso'."""
+    PENDIENTE = "pendiente"
+    TERMINADO = "terminado"
+
+
+class TipoEvidencia(str, enum.Enum):
+    """Prueba/respaldo del trabajo (Capa 2). NOTA_VOZ (audio como evidencia) es
+    DISTINTA de la instrucción dictada por voz (esa va en Instruccion)."""
+    WHATSAPP_CLIENTE = "whatsapp_cliente"   # captura de la conversación/aviso
+    VOUCHER_PAGO = "voucher_pago"
+    CARTA = "carta"                          # recibida o presentada
+    NOTA_VOZ = "nota_voz"                    # audio como evidencia
+
+
+class Instruccion(Base):
+    """Instrucción del contador a su equipo sobre un cliente (zAlerta-90).
+
+    DOS ALCANCES con UNA tabla, según `notificacion_id`:
+      · POR DOCUMENTO  → notificacion_id presente (instrucción sobre esa coactiva/OP).
+      · GENERAL DEL CLIENTE → notificacion_id NULL (trato/recomendación del RUC).
+    `contribuyente_id` SIEMPRE (a qué cliente pertenece). Autor y destinatario son
+    PERSONAS (z-89). `fecha_limite` la pone el contador; el sistema NO la calcula."""
+    __tablename__ = "instrucciones"
+    __table_args__ = (
+        Index("ix_instruccion_contribuyente", "contribuyente_id"),
+        Index("ix_instruccion_estudio", "estudio_id"),
+        Index("ix_instruccion_notificacion", "notificacion_id"),
+        # "mis pendientes": por destinatario + estado.
+        Index("ix_instruccion_destinatario_estado", "destinatario_persona_id", "estado"),
+        Index("ix_instruccion_estado", "estado"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    estudio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=False)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False)
+    # NULL = general del cliente; presente = atada a ese documento/notificación.
+    notificacion_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="SET NULL"),
+        nullable=True)
+
+    # Personas (z-89): quién la crea y a quién va (supervisor o asistente).
+    autor_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"))
+    destinatario_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"))
+
+    texto: Mapped[str | None] = mapped_column(Text)
+    # Dictado por voz (Capa 3): el texto transcrito va en `texto`; el audio
+    # original opcional en GCS. Distinto de la evidencia NOTA_VOZ.
+    entrada_por_voz: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    audio_instruccion_gcs_key: Mapped[str | None] = mapped_column(String(500))
+
+    # La fecha/hora límite que EL CONTADOR pone. El sistema NO la deriva.
+    fecha_limite: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    estado: Mapped[EstadoInstruccion] = mapped_column(
+        Enum(EstadoInstruccion, native_enum=False, length=20),
+        default=EstadoInstruccion.PENDIENTE, nullable=False)
+
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+    actualizado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, onupdate=ahora_lima, nullable=False)
+    terminado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    terminado_por_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"))
+
+    contribuyente: Mapped["Contribuyente"] = relationship(foreign_keys=[contribuyente_id])
+    notificacion: Mapped["Notificacion | None"] = relationship(foreign_keys=[notificacion_id])
+    evidencias: Mapped[list["Evidencia"]] = relationship(
+        back_populates="instruccion", cascade="all, delete-orphan")
+
+
+class Evidencia(Base):
+    """Prueba/respaldo adjunta (zAlerta-90, Capa 2). Vive SIEMPRE bajo un cliente
+    (`contribuyente_id`); opcionalmente atada a una `instruccion_id` y/o a un
+    documento (`notificacion_id`). El archivo/audio/imagen va a GCS (`gcs_key`)."""
+    __tablename__ = "evidencias"
+    __table_args__ = (
+        Index("ix_evidencia_instruccion", "instruccion_id"),
+        Index("ix_evidencia_contribuyente", "contribuyente_id"),
+        Index("ix_evidencia_estudio", "estudio_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    estudio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=False)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False)
+    instruccion_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("instrucciones.id", ondelete="CASCADE"),
+        nullable=True)
+    notificacion_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="SET NULL"),
+        nullable=True)
+
+    tipo_evidencia: Mapped[TipoEvidencia] = mapped_column(
+        Enum(TipoEvidencia, native_enum=False, length=20), nullable=False)
+    gcs_key: Mapped[str | None] = mapped_column(String(500))
+    descripcion: Mapped[str | None] = mapped_column(Text)
+    subido_por_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"))
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+    instruccion: Mapped["Instruccion | None"] = relationship(back_populates="evidencias")

@@ -29,6 +29,7 @@ Zona horaria: SIEMPRE America/Lima.
 
 from __future__ import annotations
 
+import html as _html
 import json
 import os
 import re
@@ -38,6 +39,7 @@ import random
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import unquote
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright, Page, APIRequestContext, TimeoutError as PWTimeout
@@ -695,6 +697,86 @@ def descargar_documento_real(api: APIRequestContext, visor_base: str,
     return None, "post_sin_pdf"
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Captura del CUERPO vía genhtml (zAlerta-94) — avisos cuyo cuerpo real y PDF
+# se generan on-demand desde gendocS01Alias (no están en texto_html, que solo
+# trae la cabecera JSON). Se PIDE a SUNAT el cuerpo (fiel) y el PDF por
+# id_archivo (reusa goArchivoDescarga/id-URL de z-88).
+# ─────────────────────────────────────────────────────────────────────
+def _cuerpo_de_html(html_txt: str | None) -> str | None:
+    """Extrae el cuerpo FIEL (bloque 'Estimada/o…Atentamente SUNAT') del HTML del
+    generador. Limpia tags/entidades (doble-decode). Texto tal cual de SUNAT —
+    no se reconstruye. Devuelve texto con saltos, o None si no hay cuerpo real."""
+    if not html_txt:
+        return None
+    t = re.sub(r"(?is)<\s*(script|style)[^>]*>.*?<\s*/\s*\1\s*>", " ", html_txt)
+    t = re.sub(r"(?i)<\s*br\s*/?\s*>", "\n", t)
+    t = re.sub(r"(?i)</\s*(p|div|tr|li|h\d)\s*>", "\n", t)
+    t = re.sub(r"<[^>]+>", " ", t)
+    try:
+        t = _html.unescape(unquote(t))
+    except Exception:
+        t = _html.unescape(t)
+    t = re.sub(r"[ \t]+", " ", t)
+    low = t.lower()
+    i = low.find("estimad")
+    if i >= 0:
+        t = t[i:]
+        low = t.lower()
+        j = low.rfind("atentamente")
+        if j >= 0:
+            k = low.find("sunat", j)
+            t = t[:(k + 5)] if k >= 0 else t[:j].rstrip()
+    lineas = [x.strip() for x in t.splitlines() if x.strip()]
+    cuerpo = "\n".join(lineas).strip()
+    # Sin marcador y muy corto → probablemente no es cuerpo (evita basura).
+    if i < 0 and len(cuerpo) < 60:
+        return None
+    return cuerpo or None
+
+
+def capturar_cuerpo_genhtml(api: APIRequestContext, host: str, visor_base: str,
+                            url_gen: str | None) -> tuple:
+    """Pide el generador (accion=genhtml) y devuelve (cuerpo_fiel|None,
+    pdf_bytes|None, motivo). El PDF se obtiene por id_archivo: goArchivoDescarga
+    del propio HTML, o el datos de la URL (z-88). No inventa nada."""
+    if not url_gen:
+        return None, None, "sin_url"
+    u = url_gen if url_gen.startswith("http") else host + ("" if url_gen.startswith("/") else "/") + url_gen
+    try:
+        html_txt = api.get(u, timeout=40_000).text()
+    except Exception as e:
+        log(f"    genhtml no cargó: {e}", "WARN")
+        return None, None, "genhtml_error"
+    cuerpo = _cuerpo_de_html(html_txt)
+    # PDF por id_archivo: primero goArchivoDescarga del HTML; si no, el datos-URL.
+    idar = sis = cmsg = None
+    m = _RE_GOARCHIVO.search(html_txt or "")
+    if m:
+        idar, sis, cmsg = m.group(1), m.group(2), m.group(3)
+    else:
+        idar, sis, cmsg = _id_deuda_de_url(u)
+    pdf_bytes = None
+    motivo = "solo_cuerpo"
+    if idar:
+        form = {"accion": "archivo", "idMensaje": str(cmsg or ""),
+                "idArchivo": str(idar), "sistema": str(sis or "0")}
+        for intento in range(3):
+            try:
+                resp = api.post(f"{visor_base}/visor/bajarArchivo", form=form, timeout=60_000)
+                body = resp.body()
+                if resp.status == 200 and body[:4] == b"%PDF" and len(body) > 1000:
+                    pdf_bytes = body
+                    motivo = "ok"
+                    break
+                if resp.status == 200 and len(body) <= 1000:
+                    motivo = "pdf_vacio"   # SUNAT sirve vacío → no-disponible honesto
+            except Exception:
+                motivo = "pdf_error"
+            time.sleep(1.0)
+    return cuerpo, pdf_bytes, motivo
+
+
 def texto_pdf(body: bytes) -> str:
     """Extrae texto (sin OCR) con pypdf. '' si no se puede."""
     try:
@@ -718,7 +800,11 @@ def _tiene_monto(texto: str) -> bool:
 def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                  anio_desde: int | None = None,
                  solo_censo: bool = False,
-                 backfill: bool = False) -> dict:
+                 backfill: bool = False,
+                 genhtml_pend: list | None = None) -> dict:
+    # genhtml_pend (zAlerta-94): si se pasa una lista [{id, cod_mensaje, url,
+    # num_documento}], el scraper SOLO hace login y captura el cuerpo (genhtml) +
+    # PDF de esos avisos (familia gendocS01Alias), y sale. No barre el buzón.
     # conocidos (zAlerta-46): set de cod_mensaje ya en BD. Si se pasa → lectura
     # INCREMENTAL (para cuando una página completa ya es conocida y salta los
     # mensajes ya vistos). Si es None → barrido COMPLETO.
@@ -817,6 +903,29 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
 
             # api_request_context comparte las cookies/sesión del contexto
             api = contexto.request
+
+            # ── Captura genhtml (zAlerta-94): solo login + pedir el cuerpo/PDF de
+            # los avisos de la familia gendocS01Alias, sin barrer el buzón. ──
+            if genhtml_pend is not None:
+                m = re.match(r"(https?://[^/]+)", visor_base)
+                host = m.group(1) if m else "https://ww1.sunat.gob.pe"
+                caps = []
+                for it in genhtml_pend:
+                    if DESCARGA_PAUSA_S > 0:
+                        time.sleep(DESCARGA_PAUSA_S)   # throttle anti-ban
+                    cuerpo, pdf_bytes, motivo = capturar_cuerpo_genhtml(
+                        api, host, visor_base, it.get("url"))
+                    caps.append({
+                        "id": it.get("id"), "cod_mensaje": it.get("cod_mensaje"),
+                        "num_documento": it.get("num_documento"),
+                        "cuerpo": cuerpo, "pdf_bytes": pdf_bytes, "motivo": motivo,
+                    })
+                    log(f"   genhtml cod={it.get('cod_mensaje')}: "
+                        f"cuerpo={'sí' if cuerpo else 'no'} "
+                        f"pdf={'sí' if pdf_bytes else 'no'} ({motivo})", "OK")
+                resultado["genhtml_capturados"] = caps
+                resultado["exito"] = True
+                return resultado
 
             # listarCarpetas (informativo; la estructura real la veremos en el JSON)
             carpetas = listar_carpetas(api, visor_base)

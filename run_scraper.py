@@ -77,6 +77,37 @@ def _scrapear_sync(ruc: str, usuario_sol: str, clave_sol: str,
                                 solo_censo=solo_censo, backfill=backfill)
 
 
+def _genhtml_sync(ruc: str, usuario_sol: str, clave_sol: str, pend: list) -> dict:
+    """Login + captura genhtml (cuerpo + PDF) de la lista `pend` (zAlerta-94)."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper.scrapear_ruc(cfg, genhtml_pend=pend)
+
+
+_JSON_CONTENIDO = ("adq_", "pro_", "tbodyCompras", "tbodyVentas",
+                   "listaDocumentos", "lstTramEspecif", "numTicket")
+
+
+def _es_cabecera_sola(texto_html: str | None) -> bool:
+    """True si texto_html es JSON de SOLO cabecera (numruc/razonSocial/período…)
+    SIN claves de contenido → su cuerpo real vive en el generador (zAlerta-94).
+    Distingue de los subtipos que z-92/93 SÍ renderizan desde el JSON."""
+    if not texto_html or not texto_html.strip().startswith("{"):
+        return False
+    import json as _json
+    from urllib.parse import unquote as _unq
+    d = None
+    for intento in (lambda: _json.loads(_unq(texto_html.strip())),
+                    lambda: _json.loads(texto_html.strip())):
+        try:
+            d = intento(); break
+        except Exception:
+            continue
+    if not isinstance(d, dict):
+        return False
+    return not any(any(k.startswith(p) or k == p for p in _JSON_CONTENIDO) for k in d)
+
+
 async def _sanar_gcs_desde_bytea(session, contrib: Contribuyente) -> int:
     """Sube a GCS los adjuntos que YA tienen bytes en BD (bytea_temporal) pero
     NO gcs_key, SIN tocar SUNAT (zAlerta-84). Es la mitad barata del backfill:
@@ -342,11 +373,105 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         f"{stats['adjuntos_nuevos']} adjuntos nuevos.", "OK")
 
 
+async def procesar_genhtml(session, contrib: Contribuyente,
+                           limite: int | None = None,
+                           diagnostico: bool = False) -> int:
+    """Captura el cuerpo (genhtml) + PDF de los avisos de la familia
+    gendocS01Alias cabecera-sola (zAlerta-94). En diagnóstico: procesa 1 e imprime
+    lo capturado SIN persistir (validar el parseo en el worker antes de escalar)."""
+    cred = contrib.credencial
+    if not cred or not cred.valida:
+        log(f"  {contrib.ruc}: sin credencial válida, salteado.", "WARN")
+        return 0
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    # Familia: url del generador + cabecera-sola + aún sin cuerpo capturado +
+    # SIN documento propio (ni adjunto ni valorado). Excluye coactivas/OP/multas
+    # que ya tienen su PDF por z-86/87/88 — el genhtml es para los avisos mudos.
+    sin_adj = ~exists().where(Adjunto.notificacion_id == Notificacion.id)
+    sin_val = ~exists().where(DocumentoValorado.notificacion_id == Notificacion.id)
+    todos = list(await session.scalars(
+        select(Notificacion).where(
+            Notificacion.contribuyente_id == contrib.id,
+            Notificacion.cuerpo_capturado.is_(None),
+            Notificacion.raw_detalle["url"].astext.like("%gendocS01Alias%"),
+            Notificacion.texto_html.is_not(None),
+            sin_adj, sin_val)))
+    fam = [n for n in todos if _es_cabecera_sola(n.texto_html)]
+    if diagnostico:
+        fam = fam[:1]
+    elif limite:
+        fam = fam[:limite]
+    if not fam:
+        log(f"  {contrib.ruc}: sin avisos genhtml pendientes.", "INFO")
+        return 0
+    pend = [{"id": n.id, "cod_mensaje": n.cod_mensaje_sunat,
+             "url": (n.raw_detalle or {}).get("url")} for n in fam]
+    log(f"  {contrib.ruc}: capturando {len(pend)} aviso(s) genhtml"
+        + (" [DIAGNÓSTICO, no persiste]" if diagnostico else "") + "...")
+    resultado = await asyncio.to_thread(
+        _genhtml_sync, contrib.ruc, cred.usuario_sol, clave, pend)
+    if not resultado.get("exito"):
+        log(f"  {contrib.ruc}: captura genhtml falló (login?).", "ERROR")
+        return 0
+    caps = resultado.get("genhtml_capturados") or []
+    by_id = {n.id: n for n in fam}
+    n_cuerpo = n_pdf = 0
+    for cap in caps:
+        n = by_id.get(cap["id"])
+        if not n:
+            continue
+        if diagnostico:
+            cuerpo = cap.get("cuerpo") or ""
+            log(f"    [DIAG] cod={cap['cod_mensaje']} motivo={cap['motivo']} "
+                f"cuerpo_len={len(cuerpo)} pdf={'sí' if cap['pdf_bytes'] else 'no'}", "INFO")
+            if cuerpo:
+                log("    [DIAG] cuerpo (200): "
+                    + cuerpo[:200].replace("\n", " "), "INFO")
+            continue
+        if cap.get("cuerpo"):
+            n.cuerpo_capturado = cap["cuerpo"]
+            n_cuerpo += 1
+        if cap.get("pdf_bytes"):
+            cod_arch = f"genhtml_{n.cod_mensaje_sunat}"
+            blob = f"{contrib.id}/genhtml/{n.cod_mensaje_sunat}.pdf"
+            key = gcs.subir_pdf(cap["pdf_bytes"], blob) if gcs.gcs_disponible() else None
+            existe = await session.scalar(select(Adjunto).where(
+                Adjunto.notificacion_id == n.id,
+                Adjunto.cod_archivo_sunat == cod_arch))
+            if existe:
+                existe.bytea_temporal = cap["pdf_bytes"]
+                if key:
+                    existe.gcs_key = key
+            else:
+                session.add(Adjunto(
+                    notificacion_id=n.id, cod_archivo_sunat=cod_arch,
+                    nombre_archivo=f"Reporte_{n.cod_mensaje_sunat}.pdf",
+                    bytea_temporal=cap["pdf_bytes"], gcs_key=key))
+            n.revisado_sin_adjunto = False       # ya tiene adjunto real
+            n.cant_adjuntos = max(n.cant_adjuntos or 0, 1)
+            n_pdf += 1
+    if diagnostico:
+        return len(caps)
+    await session.commit()
+    log(f"  {contrib.ruc}: genhtml OK — {n_cuerpo} cuerpo(s), {n_pdf} PDF(s) "
+        f"de {len(caps)} aviso(s).", "OK")
+    return len(caps)
+
+
 async def main(ruc_filtro: str | None = None, forzar: bool = False,
                frescura_horas: int = FRESCURA_HORAS_DEFAULT,
-               solo_censo: bool = False, backfill: bool = False) -> None:
+               solo_censo: bool = False, backfill: bool = False,
+               genhtml: bool = False, genhtml_diag: bool = False) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
-    if solo_censo:
+    if genhtml_diag:
+        log("modo GENHTML-DIAG: captura 1 aviso genhtml e imprime (NO persiste).", "WARN")
+    elif genhtml:
+        log("modo GENHTML: captura cuerpo+PDF de avisos gendocS01Alias (zAlerta-94).", "WARN")
+    elif solo_censo:
         log("modo CENSO: lista y cuenta por año SIN descargar (foto previa).", "WARN")
     elif backfill:
         log("modo BACKFILL: baja el histórico pendiente de a MAX_DOCS, "
@@ -358,10 +483,14 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                await procesar_contribuyente(
-                    session, contrib, frescura_horas,
-                    forzar=(forzar or solo_censo or backfill),
-                    solo_censo=solo_censo, backfill=backfill)
+                if genhtml or genhtml_diag:
+                    await procesar_genhtml(session, contrib,
+                                           diagnostico=genhtml_diag)
+                else:
+                    await procesar_contribuyente(
+                        session, contrib, frescura_horas,
+                        forzar=(forzar or solo_censo or backfill),
+                        solo_censo=solo_censo, backfill=backfill)
             except Exception as e:
                 log(f"  {contrib.ruc}: error inesperado: {e}", "ERROR")
     log("Orquestación completa.", "OK")
@@ -374,10 +503,14 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> forzar   → ignora frescura, scrapea sí o sí
     #   python run_scraper.py <RUC> censo    → foto por año SIN descargar (Tandas)
     #   python run_scraper.py <RUC> backfill → baja histórico pendiente de a MAX_DOCS
+    #   python run_scraper.py <RUC> genhtml-diag → captura 1 aviso genhtml e imprime
+    #   python run_scraper.py <RUC> genhtml  → captura cuerpo+PDF de avisos gendocS01Alias
     ruc = None
     forzar = False
     solo_censo = False
     backfill = False
+    genhtml = False
+    genhtml_diag = False
     for arg in sys.argv[1:]:
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
@@ -385,6 +518,11 @@ if __name__ == "__main__":
             solo_censo = True
         elif arg.lower() in ("backfill", "--backfill", "-b"):
             backfill = True
+        elif arg.lower() in ("genhtml-diag", "--genhtml-diag"):
+            genhtml_diag = True
+        elif arg.lower() in ("genhtml", "--genhtml"):
+            genhtml = True
         else:
             ruc = arg
-    asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill))
+    asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill,
+                     genhtml=genhtml, genhtml_diag=genhtml_diag))
