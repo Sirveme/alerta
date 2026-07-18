@@ -205,6 +205,17 @@ def _render_fallback(d: dict) -> str:
     return "<div class='rsm-json'>" + "".join(filas) + "</div>"
 
 
+def cuerpo_texto_a_html(texto: str | None) -> str | None:
+    """Envuelve un cuerpo YA limpio (texto plano con saltos) como párrafos HTML.
+    Para el cuerpo_capturado del generador SUNAT (zAlerta-94): FIEL, solo escapa
+    y separa en <p>. No re-decodifica (ya viene decodificado del scraper)."""
+    if not texto:
+        return None
+    partes = [f"<p class='rsm-json-p'>{_html.escape(x.strip())}</p>"
+              for x in str(texto).splitlines() if x.strip()]
+    return "<div class='rsm-json'>" + "".join(partes) + "</div>" if partes else None
+
+
 def cuerpo_texto_plano(texto_html: str | None) -> str | None:
     """Último recurso (zAlerta-93): cuerpo NO-JSON que `cuerpo_fiel` no rescató
     (sin 'Estimado', corto). Limpia HTML + doble-decode y devuelve un párrafo, o
