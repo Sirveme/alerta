@@ -38,7 +38,8 @@ from ..deps import UsuarioActual, usuario_actual
 from ..estados import estado_conexion
 from ..deuda import (extraer_monto, fmt_soles, extraer_pago, deudor_de_retencion,
                      anio_deuda_desde_default, resumen_cabecera, extraer_esquela,
-                     cuerpo_fiel, cuerpo_json_html, cuerpo_texto_plano)
+                     cuerpo_fiel, cuerpo_json_html, cuerpo_texto_plano,
+                     cuerpo_texto_a_html)
 from clasificacion import COACTIVO_META, COACTIVO_NO_SUMA
 
 router = APIRouter(tags=["resumen"])
@@ -278,13 +279,18 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                 if deudor and deudor != ruc:
                     coactivo["tercero_retenedor"] = True
                     coactivo["deudor_ruc"] = deudor
-        # Cuerpo del mensaje (zAlerta-92/93): SIEMPRE que texto_html tenga
-        # contenido. (1) literal 'Estimado…' → lista de párrafos; (2) JSON de
-        # avisos → render por subtipo; (3) fallback de texto plano. Nunca mudo.
-        _cuerpo_lista = cuerpo_fiel(n.texto_html)
-        _cuerpo_html = cuerpo_json_html(n.asunto, n.texto_html)
-        if not _cuerpo_lista and not _cuerpo_html:
-            _cuerpo_html = cuerpo_texto_plano(n.texto_html)
+        # Cuerpo del mensaje (zAlerta-92/93/94): SIEMPRE que exista contenido.
+        # (0) cuerpo_capturado del generador (genhtml, zAlerta-94) → prioridad, es
+        # el cuerpo fiel real; (1) literal 'Estimado…'; (2) JSON por subtipo;
+        # (3) fallback de texto plano. Nunca mudo.
+        _cuerpo_lista = []
+        if n.cuerpo_capturado:
+            _cuerpo_html = cuerpo_texto_a_html(n.cuerpo_capturado)
+        else:
+            _cuerpo_lista = cuerpo_fiel(n.texto_html)
+            _cuerpo_html = cuerpo_json_html(n.asunto, n.texto_html)
+            if not _cuerpo_lista and not _cuerpo_html:
+                _cuerpo_html = cuerpo_texto_plano(n.texto_html)
         fila = {
             "id": str(n.id),
             "documento": documento,
