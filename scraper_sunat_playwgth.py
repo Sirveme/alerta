@@ -778,31 +778,36 @@ def capturar_cuerpo_genhtml(api: APIRequestContext, host: str, visor_base: str,
 
 
 def capturar_adjunto_ceros(api: APIRequestContext, visor_base: str, ruc: str,
-                           cod_mensaje, nom_archivo: str, diag: bool = False) -> tuple:
+                           cod_mensaje, nom_archivo: str, tipo_msj=2,
+                           diag: bool = False) -> tuple:
     """Captura un adjunto codArchivo=0 por su NOMBRE (zAlerta-96). SUNAT los sirve
     por bajarArchivo/0/0/0/RUC, pero varios comparten esa URL → el nomArchivo los
     distingue. Como el formato exacto de la petición solo se confirma en el worker,
     PRUEBA variantes y usa la primera que devuelve un PDF válido (auto-descubre).
     Devuelve (pdf_bytes|None, motivo, variante_que_funcionó)."""
-    base = f"{visor_base}/visor/bajarArchivo/0/0/0/{ruc}"
+    v = f"{visor_base}/visor/bajarArchivo"
     nq = quote(nom_archivo or "")
-    bajar = f"{visor_base}/visor/bajarArchivo"
+    cm = str(cod_mensaje or "")
+    tm = str(tipo_msj or 2)
+    # zAlerta-96b: el endpoint es GET (POST=405). Sin cod_mensaje devuelve un PDF
+    # vacío (~29 bytes) → falta el contexto del mensaje. Se prueba el cod_mensaje
+    # como query param y en cada segmento de la URL; el detalle ya se abrió antes
+    # en la sesión (Vía B). Se usa la 1ª que devuelva un PDF real (>1KB).
     variantes = [
-        ("GET ?nomArchivo", lambda: api.get(f"{base}?nomArchivo={nq}", timeout=60_000)),
-        ("GET ?nombreArchivo", lambda: api.get(f"{base}?nombreArchivo={nq}", timeout=60_000)),
-        ("POST /0/0/0 nomArchivo", lambda: api.post(base, form={"nomArchivo": nom_archivo}, timeout=60_000)),
-        ("POST bajarArchivo accion+nom", lambda: api.post(bajar, form={
-            "accion": "archivo", "idMensaje": str(cod_mensaje or ""),
-            "nomArchivo": nom_archivo, "sistema": "0"}, timeout=60_000)),
-        ("POST bajarArchivo nombreArchivo", lambda: api.post(bajar, form={
-            "accion": "archivo", "codMensaje": str(cod_mensaje or ""),
-            "nombreArchivo": nom_archivo}, timeout=60_000)),
-        ("GET path/nombre", lambda: api.get(f"{base}/{nq}", timeout=60_000)),
+        ("GET 0/0/0 ?nom", f"{v}/0/0/0/{ruc}?nomArchivo={nq}"),
+        ("GET 0/0/0 ?nom&codMensaje", f"{v}/0/0/0/{ruc}?nomArchivo={nq}&codMensaje={cm}"),
+        ("GET 0/0/0 ?nom&codigoMensaje&tipoMsj",
+         f"{v}/0/0/0/{ruc}?nomArchivo={nq}&codigoMensaje={cm}&tipoMsj={tm}"),
+        ("GET 0/0/0 ?nom&cod_mensaje", f"{v}/0/0/0/{ruc}?nomArchivo={nq}&cod_mensaje={cm}"),
+        ("GET cod/0/0 ?nom", f"{v}/{cm}/0/0/{ruc}?nomArchivo={nq}"),
+        ("GET 0/0/cod ?nom", f"{v}/0/0/{cm}/{ruc}?nomArchivo={nq}"),
+        ("GET 0/cod/0 ?nom", f"{v}/0/{cm}/0/{ruc}?nomArchivo={nq}"),
+        ("GET cod/tipoMsj/0 ?nom", f"{v}/{cm}/{tm}/0/{ruc}?nomArchivo={nq}"),
     ]
     vacio = False
-    for etq, fn in variantes:
+    for etq, url in variantes:
         try:
-            resp = fn()
+            resp = api.get(url, timeout=60_000)
             body = resp.body()
             ct = (resp.headers.get("content-type") or "").lower()
             if diag:
@@ -815,7 +820,7 @@ def capturar_adjunto_ceros(api: APIRequestContext, visor_base: str, ruc: str,
         except Exception as e:
             if diag:
                 log(f"    [diag] {etq}: error {e}", "INFO")
-        time.sleep(0.4)
+        time.sleep(0.3)
     return None, ("vacio" if vacio else "no_pdf"), None
 
 
@@ -1038,7 +1043,8 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                         if DESCARGA_PAUSA_S > 0:
                             time.sleep(DESCARGA_PAUSA_S)   # throttle anti-ban
                         pdf_bytes, motivo, variante = capturar_adjunto_ceros(
-                            api, visor_base, cfg.ruc, cod, nom, diag=ceros_diag)
+                            api, visor_base, cfg.ruc, cod, nom,
+                            tipo_msj=it.get("tipo_msj") or 2, diag=ceros_diag)
                         arch.append({"nom": nom, "pdf_bytes": pdf_bytes,
                                      "motivo": motivo, "variante": variante})
                         log(f"   ceros {_i}/{_tot} cod={cod} '{(nom or '')[:34]}': "
