@@ -189,6 +189,21 @@ _JSON_ETIQ = {
 }
 
 
+def _render_doc_metadata(d: dict) -> str:
+    """Mensaje cuyo contenido real es el PDF (zAlerta-95): muestra la descripción
+    legible ('numero', ej. 'Resolución de Conclusión Nro: …') + una nota de que el
+    documento está en el adjunto. Oculta id_archivo/cod_mensaje/id_anexo (internos)."""
+    num = (d.get("numero") or d.get("des_tip_doc") or "").strip()
+    partes = ["<div class='rsm-json'>"]
+    if num:
+        partes.append(f"<p class='rsm-json-p'>{_esc(num)}</p>")
+    if d.get("fecha_deposito"):
+        partes.append(f"<div class='rsm-json-sub'>Fecha: {_esc(d.get('fecha_deposito'))}</div>")
+    partes.append("<div class='rsm-json-sub'>El documento está en el PDF adjunto.</div>")
+    partes.append("</div>")
+    return "".join(partes)
+
+
 def _render_fallback(d: dict) -> str:
     """JSON no reconocido → pares clave-valor legibles. NUNCA ocultar el cuerpo."""
     filas = []
@@ -264,6 +279,11 @@ def cuerpo_json_html(asunto: str | None, texto_html: str | None) -> str | None:
             return _render_rvie_rce(d)
         if "lstTramEspecif" in d:
             return _render_autorizacion(d)
+        # Metadata de documento (zAlerta-95): id_archivo → el contenido real ES el
+        # PDF. Mostrar 'numero' legible, NUNCA los campos técnicos (id_archivo/
+        # cod_mensaje/id_anexo). El PDF se muestra aparte (si se capturó).
+        if "id_archivo" in d:
+            return _render_doc_metadata(d)
         return _render_fallback(d)
     except Exception:
         return _render_fallback(d)
