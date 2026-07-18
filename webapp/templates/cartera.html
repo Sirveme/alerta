@@ -38,7 +38,7 @@
   <!-- ══ Grilla de tarjetas (una por cliente) ══ -->
   <div class="cra-grid" id="cra-grid" aria-live="polite">
     {% for c in clientes %}
-    <a class="cra-card acento" href="/resumen"
+    <a class="cra-card acento" href="/cliente/{{ c.id }}"
        data-razon="{{ c.razon_social|lower }}" data-ruc="{{ c.ruc }}"
        data-responsable="{{ (c.responsable or 'zzz sin asignar')|lower }}">
       <div class="cra-card-top">

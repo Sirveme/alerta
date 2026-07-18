@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block titulo %}{{ contrib.razon_social }} · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="cli" id="cli" data-cid="{{ contrib.id }}">
+
+  <!-- ══ Encabezado del cliente ══ -->
+  <header class="cli-head">
+    <a href="/cartera" class="cli-volver"><span class="material-symbols-outlined">arrow_back</span> Cartera</a>
+    <div class="cli-ident">
+      <h1 class="titulo-pagina">{{ contrib.razon_social }}</h1>
+      <span class="cli-sub">RUC {{ contrib.ruc }} · {{ total_docs }} documento(s)</span>
+    </div>
+  </header>
+
+  <!-- ══ Instrucción GENERAL del cliente (capa gestión, notif NULL) ══ -->
+  <section class="cli-general">
+    <div class="cli-general-h">
+      <span class="material-symbols-outlined">sticky_note_2</span>
+      <b>Instrucción general del cliente</b>
+    </div>
+    <div class="cli-instr-lista" data-notif="">
+      {% for it in instr_general %}
+      {% include "_instruccion.html" %}
+      {% endfor %}
+    </div>
+    <button class="cli-instr-add" data-notif="">+ Añadir instrucción general</button>
+  </section>
+
+  <!-- ══ Tabla período+tributo (la cadena de cumplimiento; hechos, sin neto) ══ -->
+  <div class="cli-tabla-scroll">
+    <table class="cli-tabla">
+      <thead>
+        <tr>
+          <th></th><th>Período · Tributo</th><th>¿Declaró?</th>
+          <th>Multa</th><th>O. Pago</th><th>Coactiva</th>
+          <th class="cli-th-deuda">Deuda notif.</th><th class="cli-th-pago">Pagado</th>
+          <th>Gestión</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in filas %}
+        <tr class="cli-fila" data-i="{{ loop.index0 }}">
+          <td class="cli-exp"><span class="material-symbols-outlined">chevron_right</span></td>
+          <td class="cli-pt"><b>{{ f.periodo }}</b> · {{ f.tributo }}</td>
+          <td>{% if f.omiso %}<span class="cli-omiso">Omiso</span>{% else %}—{% endif %}</td>
+          <td>{% if f.multas %}<span class="cli-n cli-n--deuda">{{ f.multas }}</span>{% else %}—{% endif %}</td>
+          <td>{% if f.ops %}<span class="cli-n cli-n--deuda">{{ f.ops }}</span>{% else %}—{% endif %}</td>
+          <td>{% if f.coactivas %}<span class="cli-n cli-n--deuda">{{ f.coactivas }}</span>{% if f.coactiva_sub %} <small>{{ f.coactiva_sub }}</small>{% endif %}{% else %}—{% endif %}</td>
+          <td class="cli-td-deuda">{{ f.deuda_fmt or '—' }}</td>
+          <td class="cli-td-pago">{{ f.pagado_fmt or '—' }}</td>
+          <td>
+            {% if f.instr_pend %}<span class="cli-g cli-g--pend">{{ f.instr_pend }} pend.</span>{% endif %}
+            {% if f.instr_term %}<span class="cli-g cli-g--term">{{ f.instr_term }} ✓</span>{% endif %}
+            {% if not f.instr_pend and not f.instr_term %}—{% endif %}
+          </td>
+        </tr>
+        <!-- Despliegue: documentos del período+tributo -->
+        <tr class="cli-detalle" data-i="{{ loop.index0 }}" hidden>
+          <td colspan="9">
+            <div class="cli-docs">
+              {% for doc in f.docs %}
+              <div class="cli-doc bloque {{ doc.naturaleza }}">
+                <div class="cli-doc-top">
+                  <span class="cli-doc-tipo">{{ doc.tipo }}</span>
+                  {% if doc.monto %}<span class="cli-doc-monto">{{ doc.monto }}</span>{% endif %}
+                  <span class="cli-doc-fecha">{{ doc.fecha }}</span>
+                </div>
+                <div class="cli-doc-asunto">{{ doc.asunto }}</div>
+                <div class="cli-doc-acc">
+                  {% if doc.valorado_id %}<a class="cli-pdf" href="/valorados/{{ doc.valorado_id }}/ver" target="_blank" rel="noopener"><span class="material-symbols-outlined">request_quote</span> Ver documento</a>{% endif %}
+                  {% for a in doc.adjuntos %}<a class="cli-pdf" href="/adjuntos/{{ a.id }}/ver" target="_blank" rel="noopener"><span class="material-symbols-outlined">picture_as_pdf</span> {{ a.nombre[:22] }}</a>{% endfor %}
+                </div>
+                <div class="cli-instr-lista" data-notif="{{ doc.id }}">
+                  {% for it in doc.instrucciones %}
+                  {% include "_instruccion.html" %}
+                  {% endfor %}
+                </div>
+                <button class="cli-instr-add cli-instr-add--sm" data-notif="{{ doc.id }}">+ Instrucción sobre este documento</button>
+              </div>
+              {% endfor %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if not filas %}
+  <p class="cli-vacio">Aún no hay documentos de este cliente.</p>
+  {% endif %}
+</div>
+
+<!-- Plantilla del formulario de instrucción (se clona por JS) -->
+<template id="cli-form-tpl">
+  <form class="cli-instr-form">
+    <textarea class="cli-instr-txt" rows="2" placeholder="Escribe la instrucción para tu equipo…" required></textarea>
+    <div class="cli-instr-row">
+      <select class="cli-instr-dest">
+        <option value="">Responsable…</option>
+        {% for p in equipo %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}
+      </select>
+      <label class="cli-instr-fl">Fecha límite <input type="datetime-local" class="cli-instr-fecha"></label>
+      <button type="submit" class="cli-instr-ok">Guardar</button>
+      <button type="button" class="cli-instr-cancel">Cancelar</button>
+    </div>
+  </form>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/cliente.js"></script>
+{% endblock %}

@@ -1,0 +1,13 @@
+{# Una instrucción (z-90 / z-97 Capa 1). Contexto: `it` (dict). #}
+<div class="cli-instr cli-instr--{{ it.estado }}" data-id="{{ it.id }}">
+  <div class="cli-instr-texto">{{ it.texto }}</div>
+  <div class="cli-instr-meta">
+    {% if it.fecha_limite %}<span class="cli-instr-tag"><span class="material-symbols-outlined">event</span>{{ it.fecha_limite }}</span>{% endif %}
+    {% if it.estado == 'terminado' %}
+    <span class="cli-instr-estado cli-instr-estado--term">✓ Terminado{% if it.terminado_at %} · {{ it.terminado_at }}{% endif %}</span>
+    {% else %}
+    <span class="cli-instr-estado cli-instr-estado--pend">Pendiente</span>
+    <button class="cli-instr-terminar" data-id="{{ it.id }}">Marcar terminado</button>
+    {% endif %}
+  </div>
+</div>
