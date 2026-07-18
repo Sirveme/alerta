@@ -2318,3 +2318,94 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
   border:1px solid color-mix(in srgb, #F0863B 34%, transparent); }
 .rsm-json-plazo b { color:#F0863B; }
 .rsm-json-plazo .material-symbols-outlined { font-size:20px; flex-shrink:0; }
+
+/* ══════════════════════════════════════════════════════════════════
+   VISTA DEL CLIENTE PARA EL CONTADOR (zAlerta-97) — tabla período+tributo
+   (hechos, sin neto) + capa de gestión Capa 1. Verde-contador, oscuro, móvil.
+   ══════════════════════════════════════════════════════════════════ */
+.cli { max-width:1100px; margin:0 auto; padding:4px 2px 48px; }
+.cli-head { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+.cli-volver { display:inline-flex; align-items:center; gap:4px; color:var(--texto-suave);
+  text-decoration:none; font-size:.82rem; width:max-content; }
+.cli-volver:hover { color:var(--acento); }
+.cli-ident .titulo-pagina { margin:0; }
+.cli-sub { font-size:.82rem; color:var(--texto-suave); }
+
+.cli-general { background:var(--superficie); border:1px solid var(--borde);
+  border-left:3px solid var(--acento); border-radius:var(--radio,12px);
+  padding:12px 14px; margin-bottom:16px; }
+.cli-general-h { display:flex; align-items:center; gap:7px; font-size:.9rem; margin-bottom:8px; }
+.cli-general-h .material-symbols-outlined { color:var(--acento); font-size:20px; }
+
+.cli-tabla-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch;
+  border:1px solid var(--borde); border-radius:var(--radio,12px); }
+.cli-tabla { width:100%; border-collapse:collapse; font-size:.84rem; min-width:760px; }
+.cli-tabla thead th { text-align:right; padding:9px 12px; font-size:.72rem;
+  font-weight:600; color:var(--texto-suave); background:var(--superficie-2);
+  white-space:nowrap; border-bottom:1px solid var(--borde); }
+.cli-tabla thead th:nth-child(2) { text-align:left; }
+.cli-fila > td { padding:9px 12px; text-align:right; border-bottom:1px solid var(--borde);
+  white-space:nowrap; cursor:pointer; }
+.cli-fila:hover > td { background:var(--superficie-2); }
+.cli-exp { width:34px; text-align:center !important; color:var(--texto-suave); }
+.cli-exp .material-symbols-outlined { font-size:20px; transition:transform .12s; }
+.cli-fila--abierta .cli-exp .material-symbols-outlined { transform:rotate(90deg); }
+.cli-pt { text-align:left !important; }
+.cli-pt small { color:var(--texto-suave); }
+.cli-omiso { color:var(--u-urgente); font-weight:700; }
+.cli-n { display:inline-block; min-width:20px; font-weight:800; }
+.cli-n--deuda { color:var(--u-urgente); }
+.cli-td-deuda { color:var(--u-urgente); font-weight:600; }
+.cli-td-pago { color:var(--marca); font-weight:600; }
+.cli-g { display:inline-block; font-size:.72rem; padding:2px 7px; border-radius:6px; margin-left:3px; }
+.cli-g--pend { color:var(--u-importante); background:color-mix(in srgb,var(--u-importante) 15%,transparent); }
+.cli-g--term { color:var(--u-aldia); background:color-mix(in srgb,var(--u-aldia) 15%,transparent); }
+
+.cli-detalle > td { padding:0; background:var(--fondo); }
+.cli-docs { display:flex; flex-direction:column; gap:10px; padding:12px; }
+.cli-doc { background:var(--superficie); border:1px solid var(--borde);
+  border-radius:10px; padding:10px 12px; }
+.cli-doc-top { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.cli-doc-tipo { font-weight:700; font-size:.86rem; }
+.cli-doc-monto { color:var(--u-urgente); font-weight:600; font-size:.82rem; }
+.cli-doc-fecha { color:var(--texto-suave); font-size:.76rem; margin-left:auto; }
+.cli-doc-asunto { font-size:.82rem; color:var(--texto-suave); margin:4px 0 8px; }
+.cli-doc-acc { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+.cli-pdf { display:inline-flex; align-items:center; gap:5px; font-size:.78rem;
+  color:var(--acento); text-decoration:none; padding:4px 8px; border-radius:8px;
+  border:1px solid var(--borde); }
+.cli-pdf:hover { border-color:var(--acento); }
+.cli-pdf .material-symbols-outlined { font-size:18px; }
+
+/* Capa de gestión — instrucciones */
+.cli-instr-lista { display:flex; flex-direction:column; gap:8px; }
+.cli-instr { background:var(--superficie-2); border:1px solid var(--borde);
+  border-left:3px solid var(--u-importante); border-radius:8px; padding:8px 10px; }
+.cli-instr--terminado { border-left-color:var(--u-aldia); opacity:.85; }
+.cli-instr-texto { font-size:.86rem; line-height:1.4; white-space:pre-wrap; }
+.cli-instr-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.cli-instr-tag { display:inline-flex; align-items:center; gap:3px; font-size:.74rem; color:var(--texto-suave); }
+.cli-instr-tag .material-symbols-outlined { font-size:15px; }
+.cli-instr-estado { font-size:.74rem; font-weight:600; }
+.cli-instr-estado--pend { color:var(--u-importante); }
+.cli-instr-estado--term { color:var(--u-aldia); }
+.cli-instr-terminar { font-size:.74rem; background:transparent; border:1px solid var(--borde);
+  color:var(--texto); border-radius:6px; padding:3px 8px; cursor:pointer; }
+.cli-instr-terminar:hover { border-color:var(--u-aldia); color:var(--u-aldia); }
+.cli-instr-add { margin-top:8px; background:transparent; border:1px dashed var(--borde);
+  color:var(--texto-suave); border-radius:8px; padding:7px 11px; cursor:pointer; font:inherit; font-size:.8rem; }
+.cli-instr-add:hover { border-color:var(--acento); color:var(--acento); }
+.cli-instr-add--sm { padding:5px 9px; font-size:.76rem; }
+.cli-instr-form { margin-top:8px; display:flex; flex-direction:column; gap:8px;
+  background:var(--superficie-2); border:1px solid var(--borde); border-radius:8px; padding:10px; }
+.cli-instr-txt { width:100%; resize:vertical; border:1px solid var(--borde);
+  background:var(--fondo); color:var(--texto); border-radius:6px; padding:8px; font:inherit; }
+.cli-instr-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.cli-instr-dest, .cli-instr-fecha { border:1px solid var(--borde); background:var(--fondo);
+  color:var(--texto); border-radius:6px; padding:6px 8px; font:inherit; font-size:.8rem; }
+.cli-instr-fl { display:flex; align-items:center; gap:5px; font-size:.76rem; color:var(--texto-suave); }
+.cli-instr-ok { background:var(--acento); color:#06210f; border:0; border-radius:6px;
+  padding:7px 14px; font-weight:700; cursor:pointer; }
+.cli-instr-cancel { background:transparent; border:0; color:var(--texto-suave); cursor:pointer; font:inherit; }
+.cli-vacio { text-align:center; color:var(--texto-suave); padding:30px; }
+@media (max-width:560px){ .cli-instr-row { flex-direction:column; align-items:stretch; } }
