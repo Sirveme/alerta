@@ -23,7 +23,7 @@ import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, update, or_, and_, exists
+from sqlalchemy import select, update, or_, and_, exists, cast, Text
 from sqlalchemy.orm import selectinload
 
 from db import get_session
@@ -89,6 +89,40 @@ def _pdf_sync(ruc: str, usuario_sol: str, clave_sol: str, pend: list) -> dict:
     cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
                               clave_sol=clave_sol, headless=True)
     return scraper.scrapear_ruc(cfg, pdf_pend=pend)
+
+
+def _ceros_sync(ruc: str, usuario_sol: str, clave_sol: str, pend: list,
+                diag: bool = False) -> dict:
+    """Login + captura de adjuntos codArchivo=0 por nombre (zAlerta-96)."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper.scrapear_ruc(cfg, ceros_pend=pend, ceros_diag=diag)
+
+
+def _ceros_de(raw_detalle) -> list:
+    """nomArchivo de los adjuntos codArchivo=0 (o null) del listAttach que son
+    ARCHIVO real (con nombre) y NO el generador de cuerpo (indMensaje='3')."""
+    d = raw_detalle
+    if not isinstance(d, dict):
+        import json as _json
+        try:
+            d = _json.loads(raw_detalle)
+        except Exception:
+            return []
+    out = []
+    for a in (d.get("listAttach") or []):
+        if not isinstance(a, dict):
+            continue
+        nom = a.get("nomArchivo")
+        cod = a.get("codArchivo")
+        if nom and (cod == 0 or cod is None) and str(a.get("indMensaje") or "") != "3":
+            out.append(nom)
+    return out
+
+
+def _slug_arch(nom: str) -> str:
+    import re as _re
+    return _re.sub(r"[^A-Za-z0-9]+", "_", nom or "")[:48] or "archivo"
 
 
 def _pdf_meta_de(texto_html: str | None) -> dict | None:
@@ -581,13 +615,107 @@ async def procesar_pdf_general(session, contrib: Contribuyente,
     return len(caps)
 
 
+async def procesar_ceros(session, contrib: Contribuyente,
+                         limite: int | None = None,
+                         diagnostico: bool = False) -> int:
+    """Captura de adjuntos "de ceros" (zAlerta-96): codArchivo=0 servidos por
+    NOMBRE (nomArchivo). El listAttach ya está en raw_detalle; se baja cada archivo
+    real por su nombre (auto-descubre la variante de petición) y sube a GCS."""
+    cred = contrib.credencial
+    if not cred or not cred.valida:
+        log(f"  {contrib.ruc}: sin credencial válida, salteado.", "WARN")
+        return 0
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    # Candidatas: raw_detalle con codArchivo:0 en su listAttach. Refina en Python.
+    cand = list(await session.scalars(
+        select(Notificacion).where(
+            Notificacion.contribuyente_id == contrib.id,
+            cast(Notificacion.raw_detalle, Text).like('%"codArchivo": 0%'))))
+    ya = set()   # (notif_id, nombre) ya en GCS → no re-bajar
+    if cand:
+        for nid, nom in await session.execute(
+                select(Adjunto.notificacion_id, Adjunto.nombre_archivo).where(
+                    Adjunto.notificacion_id.in_([n.id for n in cand]),
+                    Adjunto.gcs_key.is_not(None))):
+            ya.add((nid, nom))
+    fam = []
+    for n in cand:
+        noms = [x for x in _ceros_de(n.raw_detalle) if (n.id, x) not in ya]
+        if noms:
+            fam.append((n, noms))
+    if diagnostico:
+        fam = fam[:1]
+    elif limite:
+        fam = fam[:limite]
+    if not fam:
+        log(f"  {contrib.ruc}: sin adjuntos de ceros pendientes.", "INFO")
+        return 0
+    pend = [{"id": n.id, "cod_mensaje": n.cod_mensaje_sunat, "tipo_msj": n.tipo_msj,
+             "adjuntos": (noms[:1] if diagnostico else noms)} for n, noms in fam]
+    n_arch = sum(len(p["adjuntos"]) for p in pend)
+    log(f"  {contrib.ruc}: capturando {n_arch} adjunto(s) de ceros en "
+        f"{len(pend)} mensaje(s)" + (" [DIAGNÓSTICO]" if diagnostico else "") + "...")
+    resultado = await asyncio.to_thread(
+        _ceros_sync, contrib.ruc, cred.usuario_sol, clave, pend, diagnostico)
+    if not resultado.get("exito"):
+        log(f"  {contrib.ruc}: captura de ceros falló (login?).", "ERROR")
+        return 0
+    caps = resultado.get("ceros_capturados") or []
+    by_id = {n.id: n for n, _ in fam}
+    n_pdf = n_nod = 0
+    for cap in caps:
+        n = by_id.get(cap["id"])
+        if not n:
+            continue
+        for a in cap.get("adjuntos", []):
+            if diagnostico:
+                log(f"    [DIAG] '{(a['nom'] or '')[:40]}' motivo={a['motivo']} "
+                    f"variante={a.get('variante')} pdf={'sí' if a['pdf_bytes'] else 'no'}", "INFO")
+                continue
+            if a.get("pdf_bytes"):
+                slug = _slug_arch(a["nom"])
+                blob = f"{contrib.id}/adjuntos/ceros_{cap['cod_mensaje']}_{slug}.pdf"
+                key = gcs.subir_pdf(a["pdf_bytes"], blob) if gcs.gcs_disponible() else None
+                ex = await session.scalar(select(Adjunto).where(
+                    Adjunto.notificacion_id == n.id,
+                    Adjunto.nombre_archivo == a["nom"]).limit(1))
+                if ex:
+                    ex.bytea_temporal = a["pdf_bytes"]
+                    if key:
+                        ex.gcs_key = key
+                else:
+                    session.add(Adjunto(
+                        notificacion_id=n.id, cod_archivo_sunat=f"ceros_{slug}"[:50],
+                        nombre_archivo=a["nom"], bytea_temporal=a["pdf_bytes"], gcs_key=key))
+                n.revisado_sin_adjunto = False
+                n.cant_adjuntos = max(n.cant_adjuntos or 0, 1)
+                n_pdf += 1
+            elif a.get("motivo") == "vacio":
+                n_nod += 1
+    if diagnostico:
+        return len(caps)
+    await session.commit()
+    log(f"  {contrib.ruc}: ceros OK — {n_pdf} adjunto(s) capturado(s), "
+        f"{n_nod} vacío(s) de {n_arch}.", "OK")
+    return len(caps)
+
+
 async def main(ruc_filtro: str | None = None, forzar: bool = False,
                frescura_horas: int = FRESCURA_HORAS_DEFAULT,
                solo_censo: bool = False, backfill: bool = False,
                genhtml: bool = False, genhtml_diag: bool = False,
-               pdf: bool = False, pdf_diag: bool = False) -> None:
+               pdf: bool = False, pdf_diag: bool = False,
+               ceros: bool = False, ceros_diag: bool = False) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
-    if pdf_diag:
+    if ceros_diag:
+        log("modo CEROS-DIAG: prueba variantes de descarga por nombre e imprime.", "WARN")
+    elif ceros:
+        log("modo CEROS: captura adjuntos codArchivo=0 por nomArchivo (zAlerta-96).", "WARN")
+    elif pdf_diag:
         log("modo PDF-DIAG: captura 1 PDF por id_archivo e imprime (NO persiste).", "WARN")
     elif pdf:
         log("modo PDF: captura GENERAL por id_archivo (zAlerta-95).", "WARN")
@@ -607,7 +735,9 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if pdf or pdf_diag:
+                if ceros or ceros_diag:
+                    await procesar_ceros(session, contrib, diagnostico=ceros_diag)
+                elif pdf or pdf_diag:
                     await procesar_pdf_general(session, contrib,
                                                diagnostico=pdf_diag)
                 elif genhtml or genhtml_diag:
@@ -634,6 +764,8 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> genhtml  → captura cuerpo+PDF de avisos gendocS01Alias
     #   python run_scraper.py <RUC> pdf-diag → captura 1 PDF por id_archivo e imprime
     #   python run_scraper.py <RUC> pdf      → captura GENERAL de PDF por id_archivo
+    #   python run_scraper.py <RUC> ceros-diag → prueba variantes de descarga por nombre
+    #   python run_scraper.py <RUC> ceros    → captura adjuntos codArchivo=0 por nomArchivo
     ruc = None
     forzar = False
     solo_censo = False
@@ -642,6 +774,8 @@ if __name__ == "__main__":
     genhtml_diag = False
     pdf = False
     pdf_diag = False
+    ceros = False
+    ceros_diag = False
     for arg in sys.argv[1:]:
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
@@ -657,8 +791,12 @@ if __name__ == "__main__":
             pdf_diag = True
         elif arg.lower() in ("pdf", "--pdf"):
             pdf = True
+        elif arg.lower() in ("ceros-diag", "--ceros-diag"):
+            ceros_diag = True
+        elif arg.lower() in ("ceros", "--ceros"):
+            ceros = True
         else:
             ruc = arg
     asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill,
                      genhtml=genhtml, genhtml_diag=genhtml_diag,
-                     pdf=pdf, pdf_diag=pdf_diag))
+                     pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag))
