@@ -777,6 +777,31 @@ def capturar_cuerpo_genhtml(api: APIRequestContext, host: str, visor_base: str,
     return cuerpo, pdf_bytes, motivo
 
 
+def capturar_pdf_por_id(api: APIRequestContext, visor_base: str,
+                        id_archivo, sistema, cod_mensaje) -> tuple:
+    """Captura GENERAL (zAlerta-95): pide el PDF por id_archivo (POST bajarArchivo,
+    patrón z-88). Regla universal: si el JSON del mensaje trae id_archivo, hay un
+    PDF descargable — sin importar el tipo/asunto. (pdf_bytes|None, motivo).
+    Distinción honesta (z-86): 200-vacío = no-disponible; error = reintentar."""
+    if not id_archivo:
+        return None, "sin_id"
+    form = {"accion": "archivo", "idMensaje": str(cod_mensaje or ""),
+            "idArchivo": str(id_archivo), "sistema": str(sistema if sistema is not None else "0")}
+    motivo = "pdf_error"
+    for _intento in range(3):
+        try:
+            resp = api.post(f"{visor_base}/visor/bajarArchivo", form=form, timeout=60_000)
+            body = resp.body()
+            if resp.status == 200 and body[:4] == b"%PDF" and len(body) > 1000:
+                return body, "ok"
+            if resp.status == 200 and len(body) <= 1000:
+                motivo = "pdf_vacio"      # SUNAT sirve vacío → no-disponible honesto
+        except Exception:
+            motivo = "pdf_error"
+        time.sleep(1.0)
+    return None, motivo
+
+
 def texto_pdf(body: bytes) -> str:
     """Extrae texto (sin OCR) con pypdf. '' si no se puede."""
     try:
@@ -801,10 +826,14 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                  anio_desde: int | None = None,
                  solo_censo: bool = False,
                  backfill: bool = False,
-                 genhtml_pend: list | None = None) -> dict:
+                 genhtml_pend: list | None = None,
+                 pdf_pend: list | None = None) -> dict:
     # genhtml_pend (zAlerta-94): si se pasa una lista [{id, cod_mensaje, url,
     # num_documento}], el scraper SOLO hace login y captura el cuerpo (genhtml) +
     # PDF de esos avisos (familia gendocS01Alias), y sale. No barre el buzón.
+    # pdf_pend (zAlerta-95): lista [{id, cod_mensaje, id_archivo, sistema,
+    # num_documento}] → captura GENERAL del PDF por id_archivo (POST directo),
+    # sin barrer. Regla universal "id_archivo en JSON → hay PDF".
     # conocidos (zAlerta-46): set de cod_mensaje ya en BD. Si se pasa → lectura
     # INCREMENTAL (para cuando una página completa ya es conocida y salta los
     # mensajes ya vistos). Si es None → barrido COMPLETO.
@@ -910,7 +939,8 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                 m = re.match(r"(https?://[^/]+)", visor_base)
                 host = m.group(1) if m else "https://ww1.sunat.gob.pe"
                 caps = []
-                for it in genhtml_pend:
+                _tot = len(genhtml_pend)
+                for _i, it in enumerate(genhtml_pend, 1):
                     if DESCARGA_PAUSA_S > 0:
                         time.sleep(DESCARGA_PAUSA_S)   # throttle anti-ban
                     cuerpo, pdf_bytes, motivo = capturar_cuerpo_genhtml(
@@ -920,10 +950,32 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
                         "num_documento": it.get("num_documento"),
                         "cuerpo": cuerpo, "pdf_bytes": pdf_bytes, "motivo": motivo,
                     })
-                    log(f"   genhtml cod={it.get('cod_mensaje')}: "
+                    log(f"   genhtml {_i}/{_tot} cod={it.get('cod_mensaje')}: "
                         f"cuerpo={'sí' if cuerpo else 'no'} "
                         f"pdf={'sí' if pdf_bytes else 'no'} ({motivo})", "OK")
                 resultado["genhtml_capturados"] = caps
+                resultado["exito"] = True
+                return resultado
+
+            # ── Captura GENERAL por id_archivo (zAlerta-95): POST directo, sin
+            # abrir genhtml. Regla universal "id_archivo en JSON → hay PDF". ──
+            if pdf_pend is not None:
+                caps = []
+                _tot = len(pdf_pend)
+                for _i, it in enumerate(pdf_pend, 1):
+                    if DESCARGA_PAUSA_S > 0:
+                        time.sleep(DESCARGA_PAUSA_S)   # throttle anti-ban
+                    pdf_bytes, motivo = capturar_pdf_por_id(
+                        api, visor_base, it.get("id_archivo"),
+                        it.get("sistema"), it.get("cod_mensaje"))
+                    caps.append({
+                        "id": it.get("id"), "cod_mensaje": it.get("cod_mensaje"),
+                        "num_documento": it.get("num_documento"),
+                        "pdf_bytes": pdf_bytes, "motivo": motivo,
+                    })
+                    log(f"   pdf {_i}/{_tot} cod={it.get('cod_mensaje')}: "
+                        f"{'sí' if pdf_bytes else 'no'} ({motivo})", "OK")
+                resultado["pdf_capturados"] = caps
                 resultado["exito"] = True
                 return resultado
 

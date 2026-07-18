@@ -23,7 +23,7 @@ import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, update, or_, exists
+from sqlalchemy import select, update, or_, and_, exists
 from sqlalchemy.orm import selectinload
 
 from db import get_session
@@ -82,6 +82,39 @@ def _genhtml_sync(ruc: str, usuario_sol: str, clave_sol: str, pend: list) -> dic
     cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
                               clave_sol=clave_sol, headless=True)
     return scraper.scrapear_ruc(cfg, genhtml_pend=pend)
+
+
+def _pdf_sync(ruc: str, usuario_sol: str, clave_sol: str, pend: list) -> dict:
+    """Login + captura GENERAL de PDF por id_archivo de la lista (zAlerta-95)."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper.scrapear_ruc(cfg, pdf_pend=pend)
+
+
+def _pdf_meta_de(texto_html: str | None) -> dict | None:
+    """Extrae {id_archivo, sistema, cod_mensaje, numero} del JSON del mensaje si
+    trae id_archivo (zAlerta-95). None si no aplica. Regla universal: id_archivo
+    en el JSON → hay un PDF descargable por ese id (cualquier tipo)."""
+    if not texto_html or not texto_html.strip().startswith("{"):
+        return None
+    import json as _json
+    import html as _h
+    from urllib.parse import unquote as _unq
+    d = None
+    for intento in (lambda: _json.loads(_unq(texto_html.strip())),
+                    lambda: _json.loads(texto_html.strip())):
+        try:
+            d = intento(); break
+        except Exception:
+            continue
+    if not isinstance(d, dict):
+        return None
+    ida = d.get("id_archivo")
+    if not (ida and str(ida).isdigit()):
+        return None
+    return {"id_archivo": str(ida), "sistema": d.get("sistema"),
+            "cod_mensaje": d.get("cod_mensaje"),
+            "numero": _h.unescape(str(d.get("numero") or d.get("des_tip_doc") or ""))}
 
 
 _JSON_CONTENIDO = ("adq_", "pro_", "tbodyCompras", "tbodyVentas",
@@ -462,12 +495,103 @@ async def procesar_genhtml(session, contrib: Contribuyente,
     return len(caps)
 
 
+async def procesar_pdf_general(session, contrib: Contribuyente,
+                               limite: int | None = None,
+                               diagnostico: bool = False) -> int:
+    """Captura GENERAL de PDF (zAlerta-95): TODA notif cuyo JSON traiga id_archivo
+    y aún no tenga su PDF en GCS → pide el PDF por ese id (regla universal, cubre
+    Resolución de Conclusión, Cartas y cualquier tipo futuro). Log de progreso."""
+    cred = contrib.credencial
+    if not cred or not cred.valida:
+        log(f"  {contrib.ruc}: sin credencial válida, salteado.", "WARN")
+        return 0
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    # Familia: JSON con id_archivo + SIN adjunto en GCS + sin valorado.
+    sin_gcs = ~exists().where(and_(
+        Adjunto.notificacion_id == Notificacion.id, Adjunto.gcs_key.is_not(None)))
+    sin_val = ~exists().where(DocumentoValorado.notificacion_id == Notificacion.id)
+    todos = list(await session.scalars(
+        select(Notificacion).where(
+            Notificacion.contribuyente_id == contrib.id,
+            Notificacion.texto_html.is_not(None),
+            sin_gcs, sin_val)))
+    fam = []
+    for n in todos:
+        meta = _pdf_meta_de(n.texto_html)
+        if meta:
+            fam.append((n, meta))
+    if diagnostico:
+        fam = fam[:1]
+    elif limite:
+        fam = fam[:limite]
+    if not fam:
+        log(f"  {contrib.ruc}: sin PDFs pendientes por id_archivo.", "INFO")
+        return 0
+    pend = [{"id": n.id, "cod_mensaje": m["cod_mensaje"] or n.cod_mensaje_sunat,
+             "id_archivo": m["id_archivo"], "sistema": m["sistema"],
+             "num_documento": m["numero"]} for n, m in fam]
+    log(f"  {contrib.ruc}: capturando {len(pend)} PDF(s) por id_archivo"
+        + (" [DIAGNÓSTICO, no persiste]" if diagnostico else "") + "...")
+    resultado = await asyncio.to_thread(
+        _pdf_sync, contrib.ruc, cred.usuario_sol, clave, pend)
+    if not resultado.get("exito"):
+        log(f"  {contrib.ruc}: captura PDF general falló (login?).", "ERROR")
+        return 0
+    caps = resultado.get("pdf_capturados") or []
+    by_id = {n.id: n for n, _ in fam}
+    n_pdf = n_nodisp = 0
+    for cap in caps:
+        n = by_id.get(cap["id"])
+        if not n:
+            continue
+        if diagnostico:
+            log(f"    [DIAG] cod={cap['cod_mensaje']} motivo={cap['motivo']} "
+                f"pdf={'sí' if cap['pdf_bytes'] else 'no'}", "INFO")
+            continue
+        if cap.get("pdf_bytes"):
+            blob = f"{contrib.id}/adjuntos/idarch_{cap['cod_mensaje']}.pdf"
+            key = gcs.subir_pdf(cap["pdf_bytes"], blob) if gcs.gcs_disponible() else None
+            existe = await session.scalar(select(Adjunto).where(
+                Adjunto.notificacion_id == n.id).limit(1))
+            if existe:                          # rellenar la fila vacía existente
+                existe.bytea_temporal = cap["pdf_bytes"]
+                if key:
+                    existe.gcs_key = key
+            else:
+                session.add(Adjunto(
+                    notificacion_id=n.id,
+                    cod_archivo_sunat=f"idarch_{cap['cod_mensaje']}",
+                    nombre_archivo=f"Documento_{cap['cod_mensaje']}.pdf",
+                    bytea_temporal=cap["pdf_bytes"], gcs_key=key))
+            n.revisado_sin_adjunto = False
+            n.cant_adjuntos = max(n.cant_adjuntos or 0, 1)
+            n_pdf += 1
+        elif cap.get("motivo") == "pdf_vacio":
+            n.valorado_no_disponible = True     # SUNAT no lo sirve (honesto)
+            n_nodisp += 1
+    if diagnostico:
+        return len(caps)
+    await session.commit()
+    log(f"  {contrib.ruc}: PDF general OK — {n_pdf} capturado(s), "
+        f"{n_nodisp} no-disponible(s) de {len(caps)}.", "OK")
+    return len(caps)
+
+
 async def main(ruc_filtro: str | None = None, forzar: bool = False,
                frescura_horas: int = FRESCURA_HORAS_DEFAULT,
                solo_censo: bool = False, backfill: bool = False,
-               genhtml: bool = False, genhtml_diag: bool = False) -> None:
+               genhtml: bool = False, genhtml_diag: bool = False,
+               pdf: bool = False, pdf_diag: bool = False) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
-    if genhtml_diag:
+    if pdf_diag:
+        log("modo PDF-DIAG: captura 1 PDF por id_archivo e imprime (NO persiste).", "WARN")
+    elif pdf:
+        log("modo PDF: captura GENERAL por id_archivo (zAlerta-95).", "WARN")
+    elif genhtml_diag:
         log("modo GENHTML-DIAG: captura 1 aviso genhtml e imprime (NO persiste).", "WARN")
     elif genhtml:
         log("modo GENHTML: captura cuerpo+PDF de avisos gendocS01Alias (zAlerta-94).", "WARN")
@@ -483,7 +607,10 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if genhtml or genhtml_diag:
+                if pdf or pdf_diag:
+                    await procesar_pdf_general(session, contrib,
+                                               diagnostico=pdf_diag)
+                elif genhtml or genhtml_diag:
                     await procesar_genhtml(session, contrib,
                                            diagnostico=genhtml_diag)
                 else:
@@ -505,12 +632,16 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> backfill → baja histórico pendiente de a MAX_DOCS
     #   python run_scraper.py <RUC> genhtml-diag → captura 1 aviso genhtml e imprime
     #   python run_scraper.py <RUC> genhtml  → captura cuerpo+PDF de avisos gendocS01Alias
+    #   python run_scraper.py <RUC> pdf-diag → captura 1 PDF por id_archivo e imprime
+    #   python run_scraper.py <RUC> pdf      → captura GENERAL de PDF por id_archivo
     ruc = None
     forzar = False
     solo_censo = False
     backfill = False
     genhtml = False
     genhtml_diag = False
+    pdf = False
+    pdf_diag = False
     for arg in sys.argv[1:]:
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
@@ -522,7 +653,12 @@ if __name__ == "__main__":
             genhtml_diag = True
         elif arg.lower() in ("genhtml", "--genhtml"):
             genhtml = True
+        elif arg.lower() in ("pdf-diag", "--pdf-diag"):
+            pdf_diag = True
+        elif arg.lower() in ("pdf", "--pdf"):
+            pdf = True
         else:
             ruc = arg
     asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill,
-                     genhtml=genhtml, genhtml_diag=genhtml_diag))
+                     genhtml=genhtml, genhtml_diag=genhtml_diag,
+                     pdf=pdf, pdf_diag=pdf_diag))
