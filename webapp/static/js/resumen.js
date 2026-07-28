@@ -131,6 +131,9 @@
     const cuerpo = cuerpoFielHTML(f);
     const meta = [];
     meta.push('<span class="rsm-mod-chip sem-bg--' + sem + '">' + esc(URG_LBL[f.urgencia] || 'Informativa') + '</span>');
+    // Origen SUNAFIL + plazo accionable (SUNAFIL-1).
+    if (f.fuente === 'sunafil') meta.push('<span class="rsm-mod-chip rsm-chip--sunafil">SUNAFIL' + (f.categoria_fuente ? ' · ' + esc(f.categoria_fuente) : '') + '</span>');
+    if (f.plazo_dias) meta.push('<span class="rsm-mod-tag rsm-tag--plazo">Tienes ' + esc(String(f.plazo_dias)) + ' día(s) para responder</span>');
     if (f.monto) meta.push('<span class="rsm-mod-chip rsm-mod-chip--deuda">' + esc(f.monto) + '</span>');
     if (f.periodo && f.periodo !== '—') meta.push('<span class="rsm-mod-tag">Periodo: ' + esc(f.periodo) + '</span>');
     if (f.fecha && f.fecha !== '—') meta.push('<span class="rsm-mod-tag">Documento: ' + esc(f.fecha) + '</span>');
