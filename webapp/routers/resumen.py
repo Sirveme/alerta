@@ -314,6 +314,10 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "coactivo": coactivo,
             "es_esquela": esquela is not None,
             "esquela": esquela,
+            # Origen + plazo (SUNAFIL-1): alerta accionable "tienes X días".
+            "fuente": n.fuente,
+            "categoria_fuente": n.categoria_fuente,
+            "plazo_dias": n.plazo_dias,
             # Cuerpo FIEL del mensaje SUNAT (zAlerta-82): literal, sin resumir.
             "cuerpo": _cuerpo_lista,
             # Cuerpo renderizado (zAlerta-92/93): JSON por subtipo o, si no lo
