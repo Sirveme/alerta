@@ -2409,3 +2409,114 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 .cli-instr-cancel { background:transparent; border:0; color:var(--texto-suave); cursor:pointer; font:inherit; }
 .cli-vacio { text-align:center; color:var(--texto-suave); padding:30px; }
 @media (max-width:560px){ .cli-instr-row { flex-direction:column; align-items:stretch; } }
+
+/* Rejilla completa de períodos (zAlerta-98): meses tranquilos en verde. */
+.cli-fila--verde > td { cursor:default; color:var(--texto-suave); }
+.cli-fila--verde:hover > td { background:transparent; }
+.cli-fila--verde .cli-pt b { color:var(--texto-suave); font-weight:600; }
+.cli-check { color:var(--u-aldia); font-size:18px !important; }
+.cli-verde { text-align:left !important; color:var(--u-aldia);
+  background:color-mix(in srgb, var(--u-aldia) 7%, transparent) !important; font-size:.8rem; }
+.cli-doc-trib { font-size:.74rem; color:var(--texto-suave); padding:1px 6px;
+  border:1px solid var(--borde); border-radius:5px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   REGISTRO DEL CONTADOR (zAlerta-99) — la puerta del estudio. Verde,
+   oscuro, mobile-first, fricción mínima.
+   ══════════════════════════════════════════════════════════════════ */
+.reg { max-width:440px; margin:0 auto; padding:20px 16px 48px; }
+.reg-hero { text-align:center; margin-bottom:20px; }
+.reg-hero .marca-punto { display:inline-block; margin-bottom:8px; }
+.reg-hero h1 { margin:0; font-size:1.5rem; }
+.reg-hero h1 span { color:var(--acento); }
+.reg-lema { color:var(--texto-suave); font-size:.9rem; margin:8px 0 0; }
+.reg-puertas { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
+.reg-puerta { display:flex; flex-direction:column; align-items:center; gap:2px;
+  background:var(--superficie); border:1px solid var(--borde); border-radius:12px;
+  padding:14px 8px; cursor:pointer; color:var(--texto); font:inherit; }
+.reg-puerta .material-symbols-outlined { font-size:26px; color:var(--texto-suave); }
+.reg-puerta b { font-size:.9rem; }
+.reg-puerta small { color:var(--texto-suave); font-size:.72rem; text-align:center; }
+.reg-puerta.sel { border-color:var(--acento);
+  background:color-mix(in srgb, var(--acento) 10%, transparent); }
+.reg-puerta.sel .material-symbols-outlined { color:var(--acento); }
+.reg-form { display:flex; flex-direction:column; gap:12px; }
+.reg-grupo { display:flex; flex-direction:column; gap:5px; }
+.reg-grupo label { font-size:.8rem; color:var(--texto-suave); }
+.reg-grupo input { padding:11px 12px; border-radius:10px; border:1px solid var(--borde);
+  background:var(--superficie); color:var(--texto); font:inherit; }
+.reg-grupo input:focus { outline:none; border-color:var(--acento); }
+.reg-fila { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.reg-cta { margin-top:6px; justify-content:center; background:var(--acento);
+  color:#06210f; border:0; }
+.reg-error { background:color-mix(in srgb, var(--u-urgente) 14%, transparent);
+  border:1px solid color-mix(in srgb, var(--u-urgente) 40%, transparent);
+  color:var(--u-urgente); padding:10px 12px; border-radius:10px; font-size:.84rem;
+  margin-bottom:14px; }
+.reg-login { text-align:center; font-size:.84rem; color:var(--texto-suave); margin:4px 0 0; }
+.reg-login a { color:var(--acento); }
+@media (max-width:400px){ .reg-fila { grid-template-columns:1fr; } }
+
+/* SUNAFIL (SUNAFIL-1): chip de origen + plazo accionable en el modal. */
+.rsm-chip--sunafil { background:color-mix(in srgb, #8B5CF6 22%, transparent);
+  color:#B79CF6; font-weight:600; }
+.rsm-tag--plazo { color:#F0863B; border-color:color-mix(in srgb,#F0863B 34%,transparent) !important; }
+
+/* ══════════════════════════════════════════════════════════════════
+   HOME DISTRIBUIDORA + rutas por avatar (zAlerta-Landing). Orienta, no vende.
+   ══════════════════════════════════════════════════════════════════ */
+.home { max-width:820px; margin:0 auto; padding:16px 18px 48px; }
+.home-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+.home-entrar { color:var(--texto-suave); text-decoration:none; font-size:.86rem; }
+.home-entrar:hover { color:var(--marca); }
+.home-hero { text-align:center; margin:8px 0 22px; }
+.home-titular { font-size:clamp(1.6rem,5vw,2.3rem); line-height:1.15; margin:0; }
+.home-titular .hl { color:var(--marca); }
+.home-sub { color:var(--texto-suave); font-size:1rem; margin:12px 0 0; }
+.home-video { margin:0 auto 26px; max-width:680px; }
+.home-video-player { width:100%; border-radius:14px; border:1px solid var(--borde); background:#000; }
+.home-video-ph { display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; aspect-ratio:16/9; border:1px dashed var(--borde); border-radius:14px;
+  background:var(--superficie); color:var(--texto-suave); text-align:center; padding:16px; }
+.home-video-ph .material-symbols-outlined { font-size:44px; opacity:.6; }
+.home-puertas { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.home-puerta { display:flex; flex-direction:column; gap:6px; text-decoration:none; color:inherit;
+  background:var(--superficie); border:1px solid var(--borde); border-radius:14px; padding:20px 18px;
+  transition:border-color .12s, transform .12s; }
+.home-puerta:hover { transform:translateY(-2px); }
+.home-puerta-ico { font-size:1.5rem; }
+.home-puerta b { font-size:1.05rem; }
+.home-puerta p { color:var(--texto-suave); font-size:.86rem; margin:0; line-height:1.4; }
+.home-puerta-ir { margin-top:6px; font-weight:600; font-size:.86rem; }
+.home-puerta--emp:hover { border-color:var(--marca); } .home-puerta--emp .home-puerta-ir { color:var(--marca); }
+.home-puerta--con { border-radius:6px; }   /* recto = mundo del contador */
+.home-puerta--con:hover { border-color:var(--u-aldia); } .home-puerta--con .home-puerta-ir { color:var(--u-aldia); }
+.home-pie { text-align:center; color:var(--texto-suave); font-size:.76rem; margin-top:30px; }
+@media (max-width:560px){ .home-puertas { grid-template-columns:1fr; } }
+
+/* Conversión CONTADOR (hoja de cálculo: recto, verde, ordenado) */
+.con-valor { display:flex; flex-direction:column; gap:2px; margin:18px 0 4px;
+  border:1px solid var(--borde); border-radius:6px; overflow:hidden; }
+.con-fila { display:flex; gap:12px; padding:14px 14px; border-bottom:1px solid var(--borde);
+  background:var(--superficie); }
+.con-fila:last-child { border-bottom:0; }
+.con-fila .material-symbols-outlined { color:var(--u-aldia); flex-shrink:0; }
+.con-fila--pronto .material-symbols-outlined { color:var(--u-importante); }
+.con-fila b { font-size:.94rem; } .con-fila p { color:var(--texto-suave); font-size:.84rem; margin:3px 0 0; line-height:1.45; }
+.con-testi { margin:18px 0; padding:14px 16px; border-left:3px solid var(--u-aldia);
+  background:var(--superficie); border-radius:0 6px 6px 0; }
+.con-testi p { margin:0; font-style:italic; } .con-testi cite { display:block; margin-top:8px; color:var(--texto-suave); font-size:.82rem; font-style:normal; }
+.con-testi-ph { opacity:.6; }
+.con-cta-tit { text-align:center; margin:22px 0 12px; font-size:1.15rem; }
+
+/* Extra EMPRESARIO (equipo + SUNAFIL pronto + testimonio) */
+.lp-emp-extra { display:flex; flex-direction:column; gap:14px; }
+.lp-emp-benef { display:flex; gap:12px; align-items:flex-start; text-align:left; }
+.lp-emp-benef .material-symbols-outlined { color:var(--marca); flex-shrink:0; }
+.lp-emp-benef p { margin:3px 0 0; font-size:.9rem; }
+.lp-emp-pronto { display:flex; align-items:center; gap:8px; justify-content:center;
+  font-size:.9rem; color:var(--texto-suave); }
+.lp-emp-pronto .material-symbols-outlined { color:var(--u-importante); }
+.lp-emp-testi { margin:0; padding:12px 16px; border-left:3px solid var(--marca);
+  background:var(--superficie); border-radius:0 10px 10px 0; text-align:left; }
+.lp-emp-testi p { margin:0; font-style:italic; } .lp-emp-testi cite { display:block; margin-top:6px; color:var(--texto-suave); font-size:.82rem; font-style:normal; }
