@@ -93,6 +93,13 @@ class TipoBandeja(int, enum.Enum):
     NOTIFICACIONES = 2
 
 
+class FuenteNotificacion(str, enum.Enum):
+    """Origen de la notificación (zAlerta-SUNAFIL-1). Mismo login Clave SOL,
+    distinto buzón. Permite filtrar/mostrar por origen y no mezclar la dedup."""
+    SUNAT = "sunat"
+    SUNAFIL = "sunafil"
+
+
 class Urgencia(str, enum.Enum):
     """Clasificación de urgencia (Capa 4). Default SIN_CLASIFICAR."""
     SIN_CLASIFICAR = "sin_clasificar"
@@ -285,6 +292,9 @@ class EstudioContable(Base, TimestampMixin):
     # Estado operativo del estudio (distinto de `activo`/suscripción): 'activo' |
     # 'suspendido' | 'baja'. VARCHAR para no requerir tipo pg.
     estado: Mapped[str] = mapped_column(String(20), default="activo", nullable=False)
+    # Segmento comercial (zAlerta-99): 'estudio' | 'independiente'. Mismo camino;
+    # se guarda solo para segmentar después. NULL en cuentas viejas.
+    segmento: Mapped[str | None] = mapped_column(String(20))
     # MARCA BLANCA (reservado, zAlerta-89): solo el espacio; NO se desarrolla aún.
     # La arquitectura no debe impedir marca blanca luego.
     marca_nombre: Mapped[str | None] = mapped_column(String(120))
@@ -482,9 +492,10 @@ class CredencialSol(Base, TimestampMixin):
 class Notificacion(Base, TimestampMixin):
     __tablename__ = "notificaciones"
     __table_args__ = (
-        # REGLA DE ORO: dedup — nunca guardar dos veces el mismo mensaje SUNAT
+        # REGLA DE ORO: dedup — nunca guardar dos veces el mismo mensaje. Incluye
+        # `fuente` (SUNAFIL-1): un expediente SUNAFIL no colisiona con un cod SUNAT.
         UniqueConstraint(
-            "contribuyente_id", "cod_mensaje_sunat", "tipo_msj",
+            "contribuyente_id", "cod_mensaje_sunat", "tipo_msj", "fuente",
             name="uq_notif_dedup"),
         Index("ix_notif_estudio_fecha", "estudio_id", "fecha_publica_sunat"),
         Index("ix_notif_estudio_urgencia", "estudio_id", "urgencia"),
@@ -500,9 +511,19 @@ class Notificacion(Base, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
         nullable=False, index=True)
 
-    # Identificación SUNAT (claves de dedup)
+    # Identificación (claves de dedup). En SUNAFIL, cod_mensaje_sunat guarda el
+    # Nº de expediente (identificador único de la casilla).
     cod_mensaje_sunat: Mapped[str] = mapped_column(String(50), nullable=False)
     tipo_msj: Mapped[int] = mapped_column(Integer, nullable=False)  # 1 o 2
+    # Origen del buzón (SUNAFIL-1): 'sunat' | 'sunafil'. VARCHAR con default para
+    # que las filas viejas queden como SUNAT sin backfill.
+    fuente: Mapped[str] = mapped_column(String(10), default="sunat", nullable=False)
+    # Categoría dentro del buzón de la fuente (SUNAFIL: Fiscalización Laboral,
+    # Cobranza Ordinaria, Acciones Previas, Orientaciones, etc.).
+    categoria_fuente: Mapped[str | None] = mapped_column(String(60))
+    # Plazo en DÍAS que la propia notificación declara (SUNAFIL lo trae; SUNAT no
+    # siempre). Para alertas accionables "tienes X días para responder".
+    plazo_dias: Mapped[int | None] = mapped_column(Integer)
 
     # Contenido (del JSON real del visor)
     asunto: Mapped[str | None] = mapped_column(Text)                  # desAsunto

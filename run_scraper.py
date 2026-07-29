@@ -36,6 +36,7 @@ import gcs
 
 # El scraper validado (Playwright puro). Ajustar al nombre real del archivo.
 import scraper_sunat_playwgth as scraper
+import scraper_sunafil   # lector de la casilla SUNAFIL (SUNAFIL-1)
 
 TZ_LIMA = ZoneInfo("America/Lima")
 
@@ -704,14 +705,68 @@ async def procesar_ceros(session, contrib: Contribuyente,
     return len(caps)
 
 
+def _sunafil_sync(ruc: str, usuario_sol: str, clave_sol: str,
+                  conocidos: set | None, diag: bool) -> dict:
+    """Lee la casilla SUNAFIL (sync, Playwright) con las credenciales SOL."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper_sunafil.leer_casilla_sunafil(cfg, conocidos=conocidos, diag=diag)
+
+
+async def procesar_sunafil(session, contrib: Contribuyente,
+                           diagnostico: bool = False) -> int:
+    """Lee el buzón SUNAFIL del contribuyente y lo ingesta por el MISMO pipeline
+    (fuente='sunafil'). NUEVAS = por expediente (conocidos) + estado no leído."""
+    cred = contrib.credencial
+    if not cred or not cred.valida:
+        log(f"  {contrib.ruc}: sin credencial válida, salteado.", "WARN")
+        return 0
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    # Conocidos SUNAFIL: expedientes ya guardados (dedup por fuente). En DIAG se
+    # omite (no ingesta, y así el diag corre aunque el DDL de `fuente` no esté aún).
+    conocidos = None
+    if not diagnostico:
+        cods = await session.scalars(
+            select(Notificacion.cod_mensaje_sunat).where(
+                Notificacion.contribuyente_id == contrib.id,
+                Notificacion.fuente == "sunafil"))
+        conocidos = {str(c) for c in cods}
+    log(f"  {contrib.ruc}: leyendo casilla SUNAFIL ({len(conocidos or [])} conocidos)"
+        + (" [DIAGNÓSTICO — vuelca DOM]" if diagnostico else "") + "...")
+    resultado = await asyncio.to_thread(
+        _sunafil_sync, contrib.ruc, cred.usuario_sol, clave, conocidos, diagnostico)
+    if not resultado.get("exito"):
+        log(f"  {contrib.ruc}: lectura SUNAFIL falló (login/navegación).", "ERROR")
+        return 0
+    n = len(resultado.get("mensajes", []))
+    if diagnostico:
+        log(f"  {contrib.ruc}: SUNAFIL-DIAG — {n} fila(s) parseada(s) "
+            f"(revisa las capturas/HTML del volcado). No se ingesta.", "OK")
+        return n
+    stats = await ingestar_resultado(session, contrib.estudio_id, contrib.id, resultado)
+    await session.commit()
+    log(f"  {contrib.ruc}: SUNAFIL OK — {stats['mensajes_nuevos']} nueva(s), "
+        f"{stats['mensajes_duplicados']} ya conocidas.", "OK")
+    return n
+
+
 async def main(ruc_filtro: str | None = None, forzar: bool = False,
                frescura_horas: int = FRESCURA_HORAS_DEFAULT,
                solo_censo: bool = False, backfill: bool = False,
                genhtml: bool = False, genhtml_diag: bool = False,
                pdf: bool = False, pdf_diag: bool = False,
-               ceros: bool = False, ceros_diag: bool = False) -> None:
+               ceros: bool = False, ceros_diag: bool = False,
+               sunafil: bool = False, sunafil_diag: bool = False) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
-    if ceros_diag:
+    if sunafil_diag:
+        log("modo SUNAFIL-DIAG: login + vuelca el DOM de la casilla (NO ingesta).", "WARN")
+    elif sunafil:
+        log("modo SUNAFIL: lee la casilla SUNAFIL e ingesta (fuente=sunafil).", "WARN")
+    elif ceros_diag:
         log("modo CEROS-DIAG: prueba variantes de descarga por nombre e imprime.", "WARN")
     elif ceros:
         log("modo CEROS: captura adjuntos codArchivo=0 por nomArchivo (zAlerta-96).", "WARN")
@@ -735,7 +790,9 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if ceros or ceros_diag:
+                if sunafil or sunafil_diag:
+                    await procesar_sunafil(session, contrib, diagnostico=sunafil_diag)
+                elif ceros or ceros_diag:
                     await procesar_ceros(session, contrib, diagnostico=ceros_diag)
                 elif pdf or pdf_diag:
                     await procesar_pdf_general(session, contrib,
@@ -749,7 +806,10 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
                         forzar=(forzar or solo_censo or backfill),
                         solo_censo=solo_censo, backfill=backfill)
             except Exception as e:
-                log(f"  {contrib.ruc}: error inesperado: {e}", "ERROR")
+                import traceback
+                log(f"  {contrib.ruc}: error inesperado: {type(e).__name__}: {e}",
+                    "ERROR")
+                log("  traceback:\n" + traceback.format_exc(), "ERROR")
     log("Orquestación completa.", "OK")
 
 
@@ -766,6 +826,8 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> pdf      → captura GENERAL de PDF por id_archivo
     #   python run_scraper.py <RUC> ceros-diag → prueba variantes de descarga por nombre
     #   python run_scraper.py <RUC> ceros    → captura adjuntos codArchivo=0 por nomArchivo
+    #   python run_scraper.py <RUC> sunafil-diag → login + vuelca el DOM de la casilla SUNAFIL
+    #   python run_scraper.py <RUC> sunafil  → lee la casilla SUNAFIL e ingesta (fuente=sunafil)
     ruc = None
     forzar = False
     solo_censo = False
@@ -776,6 +838,8 @@ if __name__ == "__main__":
     pdf_diag = False
     ceros = False
     ceros_diag = False
+    sunafil = False
+    sunafil_diag = False
     for arg in sys.argv[1:]:
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
@@ -795,8 +859,13 @@ if __name__ == "__main__":
             ceros_diag = True
         elif arg.lower() in ("ceros", "--ceros"):
             ceros = True
+        elif arg.lower() in ("sunafil-diag", "--sunafil-diag"):
+            sunafil_diag = True
+        elif arg.lower() in ("sunafil", "--sunafil"):
+            sunafil = True
         else:
             ruc = arg
     asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill,
                      genhtml=genhtml, genhtml_diag=genhtml_diag,
-                     pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag))
+                     pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag,
+                     sunafil=sunafil, sunafil_diag=sunafil_diag))

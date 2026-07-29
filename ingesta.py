@@ -151,6 +151,9 @@ async def ingestar_resultado(
         tipo_msj = int(msg.get("tipo_msj") or 0)
         if not cod or not tipo_msj:
             continue
+        # Origen del buzón (SUNAFIL-1): 'sunat' | 'sunafil'. Default sunat para no
+        # tocar el flujo existente. Entra en la dedup (mismo expediente por fuente).
+        origen = (msg.get("fuente") or "sunat")
 
         # ── Clasificación: CARPETA > ASUNTO > OTRO (zAlerta-28/32) ──
         cod_carp = msg.get("cod_carpeta") or None
@@ -171,6 +174,7 @@ async def ingestar_resultado(
                 Notificacion.contribuyente_id == contribuyente_id,
                 Notificacion.cod_mensaje_sunat == cod,
                 Notificacion.tipo_msj == tipo_msj,
+                Notificacion.fuente == origen,
             )
         )
         if existe is not None:
@@ -239,6 +243,10 @@ async def ingestar_resultado(
                 contribuyente_id=contribuyente_id,
                 cod_mensaje_sunat=cod,
                 tipo_msj=tipo_msj,
+                # Origen + categoría + plazo (SUNAFIL-1). Default sunat.
+                fuente=origen,
+                categoria_fuente=msg.get("categoria"),
+                plazo_dias=(int(msg["plazo_dias"]) if str(msg.get("plazo_dias") or "").isdigit() else None),
                 asunto=msg.get("asunto"),
                 texto_html=msg.get("texto_html"),
                 cant_adjuntos=int(msg.get("cant_adjuntos") or 0),
