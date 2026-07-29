@@ -28,7 +28,7 @@ from . import auth
 from .routers import (
     dashboard, notificaciones, voz, actualizar, push, clientes, registro,
     superadmin, landing, resumen, pagos, cuenta, blog, blog_admin, seleccion,
-    cartera, cliente,
+    cartera, cliente, contadores,
 )
 
 app = FastAPI(title="alerta.pe", docs_url=None, redoc_url=None)
@@ -52,6 +52,7 @@ app.include_router(pagos.router)
 app.include_router(cuenta.router)
 app.include_router(cartera.router)       # cartera del contador (zAlerta-91)
 app.include_router(cliente.router)       # vista del cliente + gestión (zAlerta-97)
+app.include_router(contadores.router)    # registro + puerta del estudio (zAlerta-99)
 app.include_router(blog.router)          # blog público + SEO (zAlerta-40)
 app.include_router(blog_admin.router)    # panel admin del blog (solo admin)
 
