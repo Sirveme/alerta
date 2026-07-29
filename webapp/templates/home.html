@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block titulo %}alerta.pe · Nunca vuelvas a perder una notificación importante{% endblock %}
+{% block contenido %}
+<div class="home" id="home">
+
+  <!-- Barra mínima -->
+  <header class="home-top">
+    <span class="logo-selva">alerta<i>.pe</i></span>
+    <a href="/login" class="home-entrar">Iniciar sesión</a>
+  </header>
+
+  <!-- Titular limpio: orienta, no vende -->
+  <section class="home-hero">
+    <h1 class="home-titular">Nunca vuelvas a perder una <span class="hl">notificación importante</span>.</h1>
+    <p class="home-sub">Vigilamos tu buzón SUNAT y te avisamos al instante. Elige por dónde entrar.</p>
+  </section>
+
+  <!-- Video de FILOSOFÍA (no es un pitch). Reproductor listo; el video se graba después. -->
+  <section class="home-video">
+    {% if video_url %}
+    <video class="home-video-player" controls preload="metadata" playsinline
+           {% if video_poster %}poster="{{ video_poster }}"{% endif %}>
+      <source src="{{ video_url }}" type="video/mp4">
+      Tu navegador no reproduce el video.
+    </video>
+    {% else %}
+    <div class="home-video-ph" role="img" aria-label="Video próximamente">
+      <span class="material-symbols-outlined">movie</span>
+      <span>Video: por qué construimos alerta.pe distinto para cada uno</span>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- Dos puertas por avatar. Que veas la otra refuerza que entendemos a ambos. -->
+  <section class="home-puertas">
+    <a href="/empresarios" class="home-puerta home-puerta--emp" data-avatar="empresario">
+      <span class="home-puerta-ico">🟦</span>
+      <b>Soy Empresario</b>
+      <p>Quiero enterarme al instante de las notificaciones de SUNAT (y pronto SUNAFIL).</p>
+      <span class="home-puerta-ir">Entrar por aquí ›</span>
+    </a>
+    <a href="/contadores" class="home-puerta home-puerta--con" data-avatar="contador">
+      <span class="home-puerta-ico">🟨</span>
+      <b>Soy Contador o Estudio Contable</b>
+      <p>Administro varios clientes y quiero monitorear todos sus buzones desde un solo lugar.</p>
+      <span class="home-puerta-ir">Entrar por aquí ›</span>
+    </a>
+  </section>
+
+  <p class="home-pie">alerta.pe · Perú · Vigilancia del buzón SUNAT</p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>document.documentElement.setAttribute('data-color', 'dark');</script>
+{% endblock %}

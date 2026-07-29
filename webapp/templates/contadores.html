@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block titulo %}Para contadores · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="reg" id="reg">
+  <div class="reg-hero">
+    <span class="marca-punto"></span>
+    <h1>alerta.pe <span>para contadores</span></h1>
+    <p class="reg-lema">Vigila los buzones de todos tus clientes desde un solo lugar.
+      Y cada mes, conoce los nuevos negocios de tu distrito.</p>
+  </div>
+
+  <!-- ══ Conversión (estilo hoja de cálculo: recto, ordenado, verde) ══ -->
+  <section class="con-valor">
+    <div class="con-fila">
+      <span class="material-symbols-outlined">grid_on</span>
+      <div><b>Toda tu cartera en una sola vista</b>
+        <p>Cada cliente, su buzón SUNAT y su estado por período+tributo — como la
+          hoja que ya tienes en la cabeza, sin abrir 20 Claves SOL.</p></div>
+    </div>
+    <div class="con-fila">
+      <span class="material-symbols-outlined">visibility</span>
+      <div><b>Sabes si tu cliente ya vio la notificación</b>
+        <p>Comunicación más fácil con tu equipo y tu cliente: queda registrado
+          quién revisó cada alerta y cuándo. (Marca interna de alerta.pe; el acuse
+          oficial siempre lo haces tú en SUNAT.)</p></div>
+    </div>
+    <div class="con-fila">
+      <span class="material-symbols-outlined">storefront</span>
+      <div><b>Nuevos Negocios de tu distrito</b>
+        <p>Cada mes, los RUCs recién inscritos en tu zona — clientes potenciales
+          para tu estudio. Ya disponible en el Club.</p></div>
+    </div>
+    <div class="con-fila con-fila--pronto">
+      <span class="material-symbols-outlined">schedule</span>
+      <div><b>SUNAFIL y dashboard de productividad</b>
+        <p>En camino. Cuando estén, verás también las notificaciones de SUNAFIL
+          y métricas de tu estudio.</p></div>
+    </div>
+  </section>
+
+  <!-- Testimonio (placeholder hasta tener uno real) -->
+  <blockquote class="con-testi">
+    <p>“Antes revisaba las Claves SOL una por una. Ahora veo toda mi cartera de un
+      vistazo y sé qué cliente ya vio su notificación.”</p>
+    <cite>— Contador(a), Lima <span class="con-testi-ph">(testimonio de ejemplo)</span></cite>
+  </blockquote>
+
+  <h2 class="con-cta-tit">Crea tu cuenta y entra a tu cartera</h2>
+
+  <!-- Dos puertas: mismo camino, se guarda la distinción -->
+  <div class="reg-puertas" role="tablist">
+    <button class="reg-puerta sel" data-tipo="estudio" type="button">
+      <span class="material-symbols-outlined">apartment</span>
+      <b>Estudio contable</b><small>Equipo y varios clientes</small></button>
+    <button class="reg-puerta" data-tipo="independiente" type="button">
+      <span class="material-symbols-outlined">person</span>
+      <b>Contador independiente</b><small>Trabajas por tu cuenta</small></button>
+  </div>
+
+  {% if error %}<div class="reg-error">{{ error }}</div>{% endif %}
+
+  <form class="reg-form" method="post" action="/contadores/registro" autocomplete="off">
+    <input type="hidden" name="tipo" id="reg-tipo" value="{{ tipo or 'estudio' }}">
+
+    <div class="reg-grupo">
+      <label>DNI</label>
+      <input name="dni" inputmode="numeric" maxlength="8" required
+             value="{{ dni or '' }}" placeholder="Tu DNI (es tu usuario)">
+    </div>
+    <div class="reg-grupo">
+      <label>Apellidos y nombres</label>
+      <input name="nombres" required value="{{ nombres or '' }}" placeholder="Como en tu DNI">
+    </div>
+    <div class="reg-fila">
+      <div class="reg-grupo">
+        <label>Clave</label>
+        <input name="clave" type="password" autocomplete="new-password" required
+               placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="reg-grupo">
+        <label>Repite la clave</label>
+        <input name="clave_repetir" type="password" autocomplete="new-password" required>
+      </div>
+    </div>
+    <div class="reg-grupo">
+      <label id="reg-lbl-estudio">Nombre de tu estudio</label>
+      <input name="nombre_estudio" required value="{{ nombre_estudio or '' }}"
+             placeholder="Ej. Estudio Contable López">
+    </div>
+    <div class="reg-grupo">
+      <label>RUC del estudio</label>
+      <input name="ruc" inputmode="numeric" maxlength="11" required
+             value="{{ ruc or '' }}" placeholder="Confirmamos tu razón social">
+    </div>
+
+    <button class="lp-cta reg-cta" type="submit">
+      <span class="material-symbols-outlined">login</span>
+      <span class="lp-cta-resp">Crear mi cuenta y entrar</span></button>
+    <p class="reg-login">¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></p>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.documentElement.setAttribute('data-rol', 'contador');
+  (function () {
+    var tipo = document.getElementById('reg-tipo');
+    var lbl = document.getElementById('reg-lbl-estudio');
+    document.querySelectorAll('.reg-puerta').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('.reg-puerta').forEach(function (x) { x.classList.remove('sel'); });
+        b.classList.add('sel');
+        tipo.value = b.dataset.tipo;
+        lbl.textContent = b.dataset.tipo === 'independiente'
+          ? 'Nombre para tu cuenta' : 'Nombre de tu estudio';
+      });
+    });
+  })();
+</script>
+{% endblock %}
