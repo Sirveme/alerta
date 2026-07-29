@@ -127,19 +127,29 @@ async def vista_cliente(contribuyente_id: uuid.UUID, request: Request,
                 "terminado_at": fecha_lima(it.terminado_at) if it.terminado_at else None,
             }
 
-        # ── Armar filas período+tributo con la cadena de cumplimiento ──
-        grupos: dict = {}
+        # ── Agrupar documentos por PERÍODO (z-98). El período sale del asunto (o
+        #    del texto del valorado, best-effort). Los sin período → bucket aparte.
+        ahora = ahora_lima()
+        cur = ahora.year * 12 + (ahora.month - 1)   # índice del mes actual
+
+        def _nuevo(per, vacio=False):
+            return {"periodo": per, "vacio": vacio, "omiso": False, "multas": 0,
+                    "ops": 0, "coactivas": 0, "coactiva_sub": None, "deuda": 0.0,
+                    "pagado": 0.0, "docs": [], "instr_pend": 0, "instr_term": 0}
+
+        grupos: dict = {}   # "MM/YYYY" -> grupo ; "SIN" -> sin período
         for n in notifs:
             tdoc = n.tipo_documento_enum
-            per = _periodo_de(n.asunto) or "Sin período"
-            trib = _tributo_de(n.asunto)
-            clave = (per, trib)
-            g = grupos.setdefault(clave, {
-                "periodo": per, "tributo": trib, "omiso": False,
-                "multas": 0, "ops": 0, "coactivas": 0, "coactiva_sub": None,
-                "deuda": 0.0, "pagado": 0.0, "docs": [], "instr_pend": 0, "instr_term": 0,
-            })
             v = vals.get(n.id)
+            per = _periodo_de(n.asunto) or (_periodo_de(v.pdf_texto) if v else None)
+            # Períodos absurdamente viejos (fuera del calendario) → sin período.
+            if per and _idx_periodo(per) is not None and _idx_periodo(per) < cur - 119:
+                per = None
+            key = per or "SIN"
+            g = grupos.get(key)
+            if g is None:
+                g = _nuevo(per or "Sin período")
+                grupos[key] = g
             monto = monto_de_valorado(v) if v else None
             if tdoc == TipoDocumento.ESQUELA:
                 g["omiso"] = True
@@ -150,9 +160,8 @@ async def vista_cliente(contribuyente_id: uuid.UUID, request: Request,
             elif tdoc == TipoDocumento.COBRANZA_COACTIVA:
                 g["coactivas"] += 1
                 g["coactiva_sub"] = g["coactiva_sub"] or n.subtipo_coactivo
-            # Deuda notificada (separada) vs pagado (separado) — NUNCA neto.
-            # Excluye lo que no es deuda: PAGO, esquela, y coactivas de alivio/cierre
-            # (levantamiento/conclusión/reducción — COACTIVO_NO_SUMA), como deuda_estudio.
+            # Deuda notificada (separada) vs pagado (separado) — NUNCA neto. Excluye
+            # PAGO, esquela y coactivas de alivio/cierre (COACTIVO_NO_SUMA).
             _no_suma = (tdoc == TipoDocumento.COBRANZA_COACTIVA
                         and n.subtipo_coactivo in COACTIVO_NO_SUMA)
             if tdoc == TipoDocumento.PAGO:
@@ -161,7 +170,6 @@ async def vista_cliente(contribuyente_id: uuid.UUID, request: Request,
             elif monto and not _no_suma and v and v.tipo_valorado not in (
                     TipoValorado.PAGO, TipoValorado.ESQUELA_OMISO):
                 g["deuda"] += monto
-            # Documentos del grupo (para el despliegue).
             its = instr_por_notif.get(n.id, [])
             for it in its:
                 if (it.estado.value if hasattr(it.estado, "value") else it.estado) == "terminado":
@@ -170,7 +178,7 @@ async def vista_cliente(contribuyente_id: uuid.UUID, request: Request,
                     g["instr_pend"] += 1
             g["docs"].append({
                 "id": str(n.id), "tipo": _tipo_legible(tdoc, n.subtipo_coactivo),
-                "asunto": n.asunto or "—",
+                "asunto": n.asunto or "—", "tributo": _tributo_de(n.asunto),
                 "fecha": fecha_lima(n.fecha_publica_sunat) if n.fecha_publica_sunat else "—",
                 "naturaleza": _naturaleza(tdoc),
                 "monto": fmt_soles(monto) if monto else None,
@@ -180,13 +188,24 @@ async def vista_cliente(contribuyente_id: uuid.UUID, request: Request,
                 "instrucciones": [_instr_dto(it) for it in its],
             })
 
-        # Orden: períodos con "Sin período" al final; dentro, por período desc.
-        filas = sorted(grupos.values(),
-                       key=lambda g: (g["periodo"] == "Sin período", _orden_periodo(g["periodo"])),
-                       reverse=False)
+        # ── Rejilla COMPLETA de períodos (calendario, descendente). Los meses SIN
+        #    documentos salen en VERDE "sin novedad en el buzón". ──
+        idxs = [i for i in (_idx_periodo(p) for p in grupos if p != "SIN")
+                if i is not None]
+        inicio = min(idxs) if idxs else cur - 11
+        inicio = min(inicio, cur - 11)             # al menos 12 meses
+        inicio = max(inicio, cur - 119)            # tope 120 meses (10 años)
+        filas = []
+        for idx in range(cur, inicio - 1, -1):
+            y, m = divmod(idx, 12)
+            per = f"{m + 1:02d}/{y}"
+            filas.append(grupos.get(per) or _nuevo(per, vacio=True))
+        if "SIN" in grupos:                        # bucket sin período, al final
+            filas.append(grupos["SIN"])
         for g in filas:
             g["deuda_fmt"] = fmt_soles(g["deuda"]) if g["deuda"] else None
             g["pagado_fmt"] = fmt_soles(g["pagado"]) if g["pagado"] else None
+            g["con_docs"] = bool(g["docs"])
 
     return templates.TemplateResponse(request, "cliente.html", {
         "user": user,
@@ -199,9 +218,10 @@ async def vista_cliente(contribuyente_id: uuid.UUID, request: Request,
     })
 
 
-def _orden_periodo(per: str):
+def _idx_periodo(per: str):
+    """'MM/YYYY' → índice de mes (YYYY*12 + MM-1), o None si no es un período."""
     m = re.match(r"(\d{2})/(\d{4})", per or "")
-    return -(int(m.group(2)) * 100 + int(m.group(1))) if m else 0
+    return int(m.group(2)) * 12 + (int(m.group(1)) - 1) if m else None
 
 
 def _naturaleza(tdoc) -> str:

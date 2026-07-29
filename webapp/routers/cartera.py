@@ -56,13 +56,19 @@ async def cartera(request: Request,
     async with get_session() as session:
         estudio = await session.get(EstudioContable, user.estudio_id)
         # Cartera del estudio + WhatsApp del cliente (si tiene cuenta-empresario).
-        filas = list(await session.execute(
-            select(Contribuyente.id, Contribuyente.ruc, Contribuyente.razon_social,
-                   EstudioContable.whatsapp)
-            .outerjoin(EstudioContable,
-                       EstudioContable.id == Contribuyente.cuenta_empresario_id)
-            .where(Contribuyente.estudio_id == user.estudio_id)
-            .order_by(Contribuyente.razon_social)))
+        q = (select(Contribuyente.id, Contribuyente.ruc, Contribuyente.razon_social,
+                    EstudioContable.whatsapp)
+             .outerjoin(EstudioContable,
+                        EstudioContable.id == Contribuyente.cuenta_empresario_id)
+             .where(Contribuyente.estudio_id == user.estudio_id)
+             .order_by(Contribuyente.razon_social))
+        # El ASISTENTE ve SOLO sus RUCs asignados (z-89); el contador/supervisor,
+        # todo el estudio. (zAlerta-99, aterrizaje por rol.)
+        from models import RolUsuario, Asignacion
+        if user.rol == RolUsuario.ASISTENTE and user.persona_id:
+            q = q.join(Asignacion, Asignacion.contribuyente_id == Contribuyente.id).where(
+                Asignacion.persona_asistente_id == user.persona_id)
+        filas = list(await session.execute(q))
         ids = [f[0] for f in filas]
 
         # Conteos por tipo (una query agrupada) → se agregan a los 5 grupos.
