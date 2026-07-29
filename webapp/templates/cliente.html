@@ -39,9 +39,17 @@
       </thead>
       <tbody>
         {% for f in filas %}
+        {% if f.vacio %}
+        <!-- Período tranquilo: sin documentos en el buzón (verde, fiel) -->
+        <tr class="cli-fila cli-fila--verde">
+          <td class="cli-exp"><span class="material-symbols-outlined cli-check">check</span></td>
+          <td class="cli-pt"><b>{{ f.periodo }}</b></td>
+          <td colspan="7" class="cli-verde">Sin novedad en el buzón SUNAT</td>
+        </tr>
+        {% else %}
         <tr class="cli-fila" data-i="{{ loop.index0 }}">
           <td class="cli-exp"><span class="material-symbols-outlined">chevron_right</span></td>
-          <td class="cli-pt"><b>{{ f.periodo }}</b> · {{ f.tributo }}</td>
+          <td class="cli-pt"><b>{{ f.periodo }}</b></td>
           <td>{% if f.omiso %}<span class="cli-omiso">Omiso</span>{% else %}—{% endif %}</td>
           <td>{% if f.multas %}<span class="cli-n cli-n--deuda">{{ f.multas }}</span>{% else %}—{% endif %}</td>
           <td>{% if f.ops %}<span class="cli-n cli-n--deuda">{{ f.ops }}</span>{% else %}—{% endif %}</td>
@@ -54,7 +62,7 @@
             {% if not f.instr_pend and not f.instr_term %}—{% endif %}
           </td>
         </tr>
-        <!-- Despliegue: documentos del período+tributo -->
+        <!-- Despliegue: documentos del período -->
         <tr class="cli-detalle" data-i="{{ loop.index0 }}" hidden>
           <td colspan="9">
             <div class="cli-docs">
@@ -62,6 +70,7 @@
               <div class="cli-doc bloque {{ doc.naturaleza }}">
                 <div class="cli-doc-top">
                   <span class="cli-doc-tipo">{{ doc.tipo }}</span>
+                  {% if doc.tributo and doc.tributo != 'General' %}<span class="cli-doc-trib">{{ doc.tributo }}</span>{% endif %}
                   {% if doc.monto %}<span class="cli-doc-monto">{{ doc.monto }}</span>{% endif %}
                   <span class="cli-doc-fecha">{{ doc.fecha }}</span>
                 </div>
@@ -81,6 +90,7 @@
             </div>
           </td>
         </tr>
+        {% endif %}
         {% endfor %}
       </tbody>
     </table>

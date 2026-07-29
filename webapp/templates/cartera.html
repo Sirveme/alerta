@@ -30,8 +30,12 @@
 
   {% if not clientes %}
   <div class="cra-vacio">
-    <span class="material-symbols-outlined">group</span>
-    <p>Aún no tienes clientes en tu cartera. Agrégalos desde <b>Clientes</b>.</p>
+    <span class="material-symbols-outlined">group_add</span>
+    <p><b>Aún no tienes clientes en tu cartera.</b><br>
+      Carga tus RUCs y sus claves SOL para empezar a vigilar sus buzones SUNAT.</p>
+    <a class="lp-cta mc-cta" href="/contribuyentes" style="margin-top:8px">
+      <span class="material-symbols-outlined">upload</span>
+      <span class="lp-cta-resp">Cargar mi cartera</span></a>
   </div>
   {% endif %}
 
