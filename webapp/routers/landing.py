@@ -106,14 +106,13 @@ async def _upsert_lead(session, ruc: str, whatsapp: str | None,
         await session.rollback()
 
 
+@router.get("/empresarios", response_class=HTMLResponse)
 @router.get("/landing", response_class=HTMLResponse)
 async def landing(request: Request):
-    """Landing pública (no requiere sesión)."""
-    user = None
+    """Ruta de conversión del EMPRESARIO (zAlerta-Landing): estilo chicha, copy de
+    tranquilidad. URL propia /empresarios → medible por separado para publicidad.
+    /landing queda como alias. Pública (no requiere sesión)."""
     sesion = leer_sesion(request.cookies.get(COOKIE_NOMBRE))
-    if sesion:
-        # Logueado: ofrecer ir a su panel, pero la landing sigue siendo pública.
-        user = {"nombre": sesion.get("nombre", "")}
     return templates.TemplateResponse(request, "landing.html", {
         "logueado": bool(sesion),
         "whatsapp_soporte": WHATSAPP_SOPORTE,

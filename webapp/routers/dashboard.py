@@ -12,6 +12,7 @@ Multi-tenant SIEMPRE: cada query filtra por user.estudio_id.
 
 from __future__ import annotations
 
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -209,10 +210,13 @@ async def _vista_empresario(request: Request, session, user: UsuarioActual):
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request,
                     user: UsuarioActual | None = Depends(usuario_actual_opcional)):
-    # Anónimo → landing pública (zAlerta-11a). Logueado → su panel.
+    # Anónimo → HOME DISTRIBUIDORA (zAlerta-Landing): orienta por avatar, no vende.
+    # Logueado → su panel.
     if user is None:
-        return templates.TemplateResponse(request, "landing.html", {
-            "logueado": False, "whatsapp_soporte": WHATSAPP_SOPORTE})
+        return templates.TemplateResponse(request, "home.html", {
+            "logueado": False, "whatsapp_soporte": WHATSAPP_SOPORTE,
+            "video_url": os.getenv("HOME_VIDEO_URL", ""),
+            "video_poster": os.getenv("HOME_VIDEO_POSTER", "")})
     # El empresario aterriza en su BUZÓN (zAlerta-47): es lo que quiere ver,
     # y adonde lleva el push. "Mi Cuenta" queda accesible desde el nav.
     if user.es_empresario:
