@@ -99,7 +99,7 @@ def _accion_dominante(estado_clave: str, estudio) -> dict:
     if estado_susc == EstadoSuscripcion.PRUEBA.value and vence:
         nota = ("Prueba hasta el " + fecha_lima(vence)
                 + (" · vence pronto" if dias is not None and dias <= DIAS_AVISO_VENCE else ""))
-    return {"tipo": "pagar", "label": "Activar mi plan · S/5", "href": "/pagar",
+    return {"tipo": "pagar", "label": "Activar mi plan · S/35", "href": "/pagar",
             "icono": "bolt", "clase": "verde", "nota": nota}
 
 
