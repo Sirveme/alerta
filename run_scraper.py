@@ -19,6 +19,7 @@ Pensado para correr en el scheduler (Railway beat) en producción.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -729,12 +730,18 @@ async def procesar_sunafil(session, contrib: Contribuyente,
     # Conocidos SUNAFIL: expedientes ya guardados (dedup por fuente). En DIAG se
     # omite (no ingesta, y así el diag corre aunque el DDL de `fuente` no esté aún).
     conocidos = None
+    primera_ingesta = False
     if not diagnostico:
         cods = await session.scalars(
             select(Notificacion.cod_mensaje_sunat).where(
                 Notificacion.contribuyente_id == contrib.id,
                 Notificacion.fuente == "sunafil"))
         conocidos = {str(c) for c in cods}
+        # ¿PRIMERA ingesta SUNAFIL de este cliente? = aún NO tiene ninguna notificación
+        # SUNAFIL en nuestra base (0 conocidos). Definición robusta a flakes: si la 1ª
+        # corrida no trae nada, la base sigue en 0 → la siguiente sí silencia el backlog
+        # real. En cuanto guarda ≥1, deja de ser "primera" → NO re-silencia después.
+        primera_ingesta = (len(conocidos) == 0)
     log(f"  {contrib.ruc}: leyendo casilla SUNAFIL ({len(conocidos or [])} conocidos)"
         + (" [DIAGNÓSTICO — vuelca DOM]" if diagnostico else "") + "...")
     resultado = await asyncio.to_thread(
@@ -748,9 +755,71 @@ async def procesar_sunafil(session, contrib: Contribuyente,
             f"(revisa las capturas/HTML del volcado). No se ingesta.", "OK")
         return n
     stats = await ingestar_resultado(session, contrib.estudio_id, contrib.id, resultado)
+
+    # Registro de categorías que REQUIEREN ATENCIÓN (best-effort, nunca rompe):
+    #  · forma_desconocida  = sin mapeador → NO se ingiere (solo se anota su actividad).
+    #  · mapeo_no_validado  = con mapeador pero sin validar contra datos → SÍ se ingiere,
+    #    pero al aparecer su 1ª fila real se anota el formato para que lo CONFIRMEMOS.
+    desconocidas = resultado.get("formas_desconocidas") or []
+    no_validados = resultado.get("mapeos_no_validados") or []
+    if desconocidas or no_validados:
+        try:
+            estado = dict(contrib.sunafil_desconocidas_json or {})
+            ahora_iso = scraper.ahora_lima().isoformat()
+            for fd in desconocidas:
+                cat = fd.get("categoria") or "?"
+                prev = estado.get(cat) or {}
+                estado[cat] = {
+                    "tipo": "forma_desconocida",
+                    "primera_vez": prev.get("primera_vez", ahora_iso),
+                    "ultima_vez": ahora_iso,
+                    "filas": fd.get("filas", 0),
+                    "columnas": fd.get("columnas", []),
+                }
+            for s in no_validados:
+                cat = s.get("categoria") or "?"
+                prev = estado.get(cat) or {}
+                estado[cat] = {
+                    "tipo": "mapeo_no_validado",
+                    "forma": s.get("forma"),
+                    "confirmado": False,
+                    "primera_fila_real": prev.get("primera_fila_real", ahora_iso),
+                    "ultima_vez": ahora_iso,
+                    "formato_detectado": s.get("formato_detectado"),
+                    "id_tipo": s.get("id_tipo"),
+                    "accion_id_oculto": s.get("accion_id_oculto"),
+                    "avisos_formato": s.get("avisos_formato"),
+                    "columnas": s.get("columnas", []),
+                }
+            contrib.sunafil_desconocidas_json = estado
+        except Exception as e:
+            log(f"  {contrib.ruc}: no pude registrar señales SUNAFIL ({e}).", "WARN")
+
+    # Arranque SILENCIOSO del backlog (SUNAFIL_SILENCIAR_BACKLOG=1): en la PRIMERA
+    # ingesta SUNAFIL de este cliente, marca TODO su histórico como ya notificado
+    # (notificado_push=True) → NO alerta el backlog acumulado de golpe. De ahí en
+    # adelante alerta solo lo NUEVO no-leído. Es POR-CLIENTE y se hace UNA sola vez
+    # (marcador durable sunafil_inicializado_at, aunque haya 0 filas). Con el flag en
+    # 0/ausente → comportamiento normal (alerta todo lo no-leído).
+    silenciados = 0
+    if primera_ingesta and os.getenv("SUNAFIL_SILENCIAR_BACKLOG", "0").strip().lower() \
+            in ("1", "true", "yes", "on"):
+        res = await session.execute(
+            update(Notificacion)
+            .where(Notificacion.contribuyente_id == contrib.id,
+                   Notificacion.fuente == "sunafil",
+                   Notificacion.notificado_push.is_(False))
+            .values(notificado_push=True, notificado_push_at=scraper.ahora_lima()))
+        silenciados = res.rowcount or 0
+
     await session.commit()
+    con_datos = sum(1 for fd in desconocidas if fd.get("filas", 0) > 0)
+    extra = (f" · BACKLOG SILENCIADO ({silenciados} no-leída(s) marcadas como ya "
+             f"notificadas, no alertan)") if silenciados else ""
     log(f"  {contrib.ruc}: SUNAFIL OK — {stats['mensajes_nuevos']} nueva(s), "
-        f"{stats['mensajes_duplicados']} ya conocidas.", "OK")
+        f"{stats['mensajes_duplicados']} ya conocidas · "
+        f"{len(desconocidas)} forma(s) desconocida(s) NO ingerida(s) ({con_datos} con datos) · "
+        f"{len(no_validados)} mapeo(s) no validado(s) por CONFIRMAR{extra}.", "OK")
     return n
 
 

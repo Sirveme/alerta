@@ -61,7 +61,8 @@ _DEUDA_TIPOS = {TipoDocumento.ORDEN_PAGO, TipoDocumento.MULTA,
 # Días de prueba (zAlerta-11c D): arrancan al CONFIRMAR la conexión, no antes.
 DIAS_PRUEBA_EMPRESARIO = 7
 # Reutilizamos la lógica validada del orquestador (scraper + ingesta + dedup).
-from run_scraper import procesar_contribuyente, log, FRESCURA_HORAS_DEFAULT
+from run_scraper import (procesar_contribuyente, procesar_sunafil, log,
+                         FRESCURA_HORAS_DEFAULT)
 from cifrado import descifrar_clave_sol
 # Login-only para "Comprobar conexión" (reusa el login del scraper, no lo toca).
 from validar_login import validar_login_sync
@@ -323,6 +324,33 @@ async def _procesar_recordatorios(session) -> int:
     return enviados
 
 
+def _sunafil_habilitado(ruc: str) -> bool:
+    """SUNAFIL en el worker está OFF salvo que la env `SUNAFIL_RUCS` liste el RUC
+    (coma-separado) o sea '*' (todos). Arranque CONTROLADO: por defecto (env vacía)
+    NO corre para nadie, así se activa primero para un RUC de prueba y luego se amplía."""
+    raw = os.getenv("SUNAFIL_RUCS", "").strip()
+    if not raw:
+        return False
+    rucs = {r.strip() for r in raw.split(",") if r.strip()}
+    return "*" in rucs or ruc in rucs
+
+
+async def _procesar_sunafil_seguro(session, contrib) -> None:
+    """Paso SUNAFIL del ciclo (gated). Lee+ingesta la casilla SUNAFIL; el push se
+    agrupa aparte por `notificado_push` (solo NO-leídas nuevas). AISLADO: cualquier
+    fallo se loguea, hace rollback y NO rompe el ciclo ni a los demás contribuyentes.
+    Las categorías con mapeo no validado (FISC/COBR/AFOR) registran su señal sin
+    frenar al resto (ver procesar_sunafil)."""
+    try:
+        await procesar_sunafil(session, contrib, diagnostico=False)
+    except Exception as e:
+        log(f"  {contrib.ruc}: SUNAFIL falló (aislado, sigo): {e}", "ERROR")
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+
+
 async def _procesar_fondo(session, full: bool = False) -> int:
     """Scrapea por frescura vencida (ciclo de fondo, no fuerza).
 
@@ -339,10 +367,42 @@ async def _procesar_fondo(session, full: bool = False) -> int:
 
     for contrib in activos:
         try:
+            antes_scr = contrib.ultimo_scrapeo_at
             await _procesar_y_notificar(session, contrib, forzar=False, full=full)
+            # SUNAFIL (arranque controlado por SUNAFIL_RUCS): solo si está habilitado
+            # para el RUC y SUNAT REALMENTE scrapeó esta pasada (misma frescura → no
+            # martillea la casilla). Aislado: su fallo no rompe el ciclo.
+            if _sunafil_habilitado(contrib.ruc) and contrib.ultimo_scrapeo_at != antes_scr:
+                await _procesar_sunafil_seguro(session, contrib)
         except Exception as e:
             log(f"  {contrib.ruc}: error inesperado (fondo): {e}", "ERROR")
     return len(activos)
+
+
+def _copy_push(n_sunat: int, n_sunafil: int, deuda: int) -> tuple[str, str]:
+    """Título y cuerpo del push según la FUENTE de los avisos. SUNAT ≠ SUNAFIL: un
+    contador no debe buscar en el buzón equivocado. 'deuda' es señal SUNAT (la casilla
+    SUNAFIL no la usa). SOLO arma el texto; no cambia el disparo ni la dedup."""
+    total = n_sunat + n_sunafil
+    if n_sunafil and not n_sunat:                       # solo SUNAFIL
+        return ("Novedades en tu Casilla SUNAFIL",
+                f"Tienes {total} notificación(es) nueva(s) en tu Casilla Electrónica "
+                f"SUNAFIL. Toca RESUMEN para revisarlas.")
+    if n_sunat and not n_sunafil:                       # solo SUNAT
+        if deuda > 0:
+            return ("Novedades en tu Buzón SUNAT",
+                    f"Tienes {total} aviso(s) nuevo(s), {deuda} con deuda por atender. "
+                    f"Toca RESUMEN para revisarlos.")
+        return ("Novedades en tu Buzón SUNAT",
+                f"Tienes {total} aviso(s) nuevo(s) en tu Buzón SUNAT.")
+    # mixto: ambas fuentes en el mismo lote del destinatario
+    det = f"{n_sunat} en tu Buzón SUNAT y {n_sunafil} en tu Casilla SUNAFIL"
+    if deuda > 0:
+        return ("Novedades en tus buzones SUNAT y SUNAFIL",
+                f"Tienes {total} aviso(s) nuevo(s) ({det}), {deuda} con deuda por "
+                f"atender. Toca RESUMEN para revisarlos.")
+    return ("Novedades en tus buzones SUNAT y SUNAFIL",
+            f"Tienes {total} aviso(s) nuevo(s): {det}. Toca RESUMEN para revisarlos.")
 
 
 async def _enviar_push_agrupado(session) -> int:
@@ -408,13 +468,11 @@ async def _enviar_push_agrupado(session) -> int:
         subs = [s for s in subs if s.endpoint not in enviados_endpoints]
 
         total, deuda = len(nuevos), d["deuda"]
-        if deuda > 0:
-            body = (f"Tienes {total} aviso(s) nuevo(s), {deuda} con deuda por "
-                    f"atender. Toca RESUMEN para revisarlos.")
-        else:
-            body = f"Tienes {total} aviso(s) nuevo(s) en tu Buzón SUNAT."
+        # Copy según FUENTE de los avisos del destinatario (SUNAT / SUNAFIL / mixto).
+        n_sunafil = sum(1 for x in nuevos if (x.fuente or "sunat") == "sunafil")
+        titulo, body = _copy_push(total - n_sunafil, n_sunafil, deuda)
         payload = json.dumps({
-            "title": "Novedades en tu Buzón SUNAT", "body": body,
+            "title": titulo, "body": body,
             "url": "/resumen?from=push", "acciones": True,
             "tag": "alertape-buzon", "requiere": (deuda > 0)})
 

@@ -98,23 +98,27 @@ def _login_casilla(page, cfg, diag: bool) -> bool:
     page.wait_for_timeout(2500)   # el inbox es una app JS: dar tiempo a que pinte
     return "si.inbox" in page.url
 
-# Las 6 categorías del buzón SUNAFIL (reconocimiento). El parseo es homogéneo.
-CATEGORIAS_SUNAFIL = [
-    "Fiscalización Laboral", "Cobranza Ordinaria", "Acciones Previas",
-    "Alertas de Formalización", "Seguridad y Salud en el Trabajo", "Orientaciones",
-]
+# ── Categorías del buzón + navegación ──────────────────────────────────────
+# Endpoint del dashboard del empleador (donde están los enlaces "Notificaciones
+# de <categoría>"). El contexto EMPLEADOR ya queda fijado por el OAuth de
+# /si.inbox/Login/SUNAT (originalUrl=…/Login/Empresa); no hay clic aparte.
+URL_INICIO_EMPLEADOR = "https://casillaelectronica.sunafil.gob.pe/si.inbox/Inicio/Empleador"
 
-# Mapa NOMBRE-de-columna (normalizado) → clave de salida. El parser lee el header
-# de la tabla y ubica cada celda por su título, sin depender de IDs.
-_COL_MAP = {
-    "tipo de requerimiento": "tipo_requerimiento",
-    "registro": "expediente",
-    "fecha de deposito": "fecha_deposito",
-    "fecha de acuse de recibo": "fecha_acuse",
-    "fecha de acuse": "fecha_acuse",
-    "fecha de notificacion": "fecha_notificacion",
-    "plazo": "plazo_dias",
-    "estado": "estado",
+# Nombre visible de cada categoría del buzón. El token de `_CAT_KW` es SOLO para
+# LOCALIZAR el enlace del dashboard y hacer clic (navegación). La FORMA de la
+# tabla se detecta SIEMPRE por CABECERA (ver _detectar_forma), NUNCA por el nombre:
+# las categorías hoy vacías podrían traer mañana una variante de columnas distinta.
+CATEGORIAS_SUNAFIL = [
+    "Acciones Previas", "Fiscalización Laboral", "Cobranza Ordinaria",
+    "Seguridad y Salud en el Trabajo", "Alertas de Formalización", "Orientaciones",
+]
+_CAT_KW = {
+    "Acciones Previas": "acciones previas",
+    "Fiscalización Laboral": "fiscalizacion",
+    "Cobranza Ordinaria": "cobranza",
+    "Seguridad y Salud en el Trabajo": "seguridad",
+    "Alertas de Formalización": "formaliza",
+    "Orientaciones": "orientacion",
 }
 
 
@@ -122,6 +126,349 @@ def _norm(s: str) -> str:
     s = (s or "").lower().strip()
     return "".join(c for c in __import__("unicodedata").normalize("NFD", s)
                    if __import__("unicodedata").category(c) != "Mn")
+
+
+_RE_FECHA = re.compile(r"\d{2}/\d{2}/\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?")
+
+
+def _fecha_limpia(txt: str) -> str:
+    """Extrae la fecha (dd/mm/aaaa [hh:mm[:ss]]) de una celda que puede traer
+    sufijos/otra línea. Acota el valor (la col fecha_envio_sunat es VARCHAR(30))."""
+    m = _RE_FECHA.search(txt or "")
+    return m.group(0) if m else (txt or "").strip()[:30]
+
+
+def _ir_categoria(page, nombre: str, diag: bool) -> bool:
+    """Vuelve al dashboard y hace clic en el enlace 'Notificaciones de <categoría>'.
+    El token solo LOCALIZA el enlace; no decide la forma de la tabla. El clic se
+    dispara por JS (los commandLink JSF no siempre son 'accionables' para Playwright)."""
+    kw = _CAT_KW.get(nombre, _norm(nombre).split()[0])
+    page.goto(URL_INICIO_EMPLEADOR, wait_until="domcontentloaded", timeout=45_000)
+    page.wait_for_timeout(2500)
+    _cerrar_modales(page, diag)
+    objetivos = []
+    for a in page.query_selector_all("a.commandLink, a[role='menuitem'], a"):
+        try:
+            txt = (a.inner_text() or "").strip()
+        except Exception:
+            continue
+        if kw in _norm(txt):
+            objetivos.append((a, txt))
+    # preferir el enlace del RESUMEN ('Notificaciones de …') al del menú lateral
+    objetivos.sort(key=lambda x: 0 if "notificacion" in _norm(x[1]) else 1)
+    for a, _txt in objetivos:
+        try:
+            a.evaluate("el => el.click()")
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def _esperar_lista(page, timeout_ms: int = 12_000) -> bool:
+    """Espera (sin tiempo fijo) a que pinte un datatable de notificaciones: una
+    <table> con ≥2 cabeceras reales que NO sea la tabla-resumen del dashboard.
+    True si apareció; False si la categoría está vacía o no cargó."""
+    try:
+        page.wait_for_function(
+            """() => {
+                const ts=[...document.querySelectorAll('table')];
+                return ts.some(t=>{
+                  const hs=[...t.querySelectorAll('thead th, tr th')]
+                    .map(x=>(x.innerText||'').trim().toLowerCase());
+                  if(hs.includes('cantidad') && hs.includes('descripción')) return false;
+                  return hs.filter(h=>h).length >= 2;
+                });
+            }""", timeout=timeout_ms)
+        return True
+    except Exception:
+        return False
+
+
+def _abrir_categoria(page, nombre: str, diag: bool) -> bool:
+    """Navega a la lista de la categoría, con 1 REINTENTO si el datatable no pinta
+    a tiempo (flakiness JSF). True si quedó una tabla de notificaciones cargada."""
+    for _intento in (1, 2):
+        if not _ir_categoria(page, nombre, diag):
+            continue                                  # enlace no hallado → reintenta
+        try:
+            page.wait_for_load_state("networkidle", timeout=12_000)
+        except Exception:
+            pass
+        if _esperar_lista(page) or _tabla_notificaciones(page) is not None:
+            return True
+        # navegó pero no pintó la tabla → reintenta la navegación una vez más
+    return _tabla_notificaciones(page) is not None
+
+
+def _tabla_notificaciones(page):
+    """La <table> de notificaciones: la que tiene CABECERAS REALES (≥2), excluyendo
+    la tabla-resumen del dashboard ('Descripción | Cantidad') y las tablas de layout
+    sin thead. Devuelve None si no hay ninguna (categoría vacía o no cargó)."""
+    cand = []
+    for t in page.query_selector_all("table"):
+        heads = [_norm(th.inner_text()) for th in t.query_selector_all("thead th, tr th")]
+        if "cantidad" in heads and "descripcion" in heads:
+            continue
+        reales = [h for h in heads if h]
+        if len(reales) >= 2:                       # tiene cabeceras → es un datatable
+            filas = len(t.query_selector_all("tbody tr"))
+            cand.append((len(reales), filas, t))
+    if not cand:
+        return None
+    cand.sort(key=lambda x: (x[0], x[1]), reverse=True)   # más cabeceras, luego más filas
+    return cand[0][2]
+
+
+def _headers(tabla) -> list:
+    return [th.inner_text().strip() for th in tabla.query_selector_all("thead th, tr th")]
+
+
+# Marca leído/no-leído UNIVERSAL: el ícono de estado de la fila. Es la fuente
+# PRIMARIA en TODAS las formas. `icon_novisto.png`=no leído, `icon_visto.png`=leído.
+# (La columna 'Estado' de texto, solo en Forma B, es respaldo secundario.)
+def _leido_por_icono(tr):
+    """True=leído (icon_visto) · False=no leído (icon_novisto) · None=sin ícono."""
+    for img in tr.query_selector_all("img"):
+        src = (img.get_attribute("src") or "").lower()
+        if "icon_novisto" in src:
+            return False
+        if "icon_visto" in src:
+            return True
+    return None
+
+
+def _has(heads_norm: list, token: str) -> bool:
+    return any(token in h for h in heads_norm)
+
+
+# ── FORMAS de tabla, detectadas POR CABECERA (nunca por el nombre de categoría) ──
+# Cada spec: cómo se detecta (firma de cabecera), cómo mapea columnas→claves, cómo
+# forma el id ('expediente' visible | 'hash' de cat+fecha+asunto), y si su mapeo YA
+# fue VALIDADO con filas reales. Las columnas ausentes en una forma quedan NULAS
+# (no se inventan). Las NO validadas se usan, pero emiten una señal de confirmación
+# la primera vez que traen una fila real (para cotejar el formato de los valores).
+_FORMAS = [
+    {   # A — Trámite/Expediente (Acciones Previas; y Fiscalización/Cobranza/Seguridad
+        #     comparten esta familia cuando traen 'Registro'+'Plazo'). VALIDADO.
+        "clave": "A", "nombre": "Trámite/Expediente", "validado": True, "id": "expediente",
+        "coincide": lambda h: _has(h, "registro") and _has(h, "plazo"),
+        "mapa": [("tipo de requerimiento", "asunto"), ("registro", "expediente"),
+                 ("fecha de deposito", "fecha_envio"), ("fecha acuse de recibo", "fecha_acuse"),
+                 ("fecha de notificacion", "fecha_notificacion"), ("plazo", "plazo_dias"),
+                 ("fecha limite de presentacion", "fecha_limite")],
+    },
+    {   # B — Aviso (Orientaciones, Seguridad y Salud). VALIDADO.
+        "clave": "B", "nombre": "Aviso", "validado": True, "id": "hash",
+        "coincide": lambda h: _has(h, "asunto") and _has(h, "estado"),
+        "mapa": [("fecha de deposito", "fecha_envio"), ("asunto", "asunto"),
+                 ("estado", "estado_txt")],
+    },
+    {   # FISC — Fiscalización Laboral. NO VALIDADO (sin filas reales aún).
+        #   Sin fecha ni plazo en la lista → esos campos quedan nulos.
+        "clave": "FISC", "nombre": "Fiscalización Laboral", "validado": False, "id": "expediente",
+        "coincide": lambda h: _has(h, "orden de inspeccion"),
+        "mapa": [("orden de inspeccion", "expediente"), ("intendencia", "intendencia"),
+                 ("estado", "estado_txt"), ("ver documentos", "_accion")],
+    },
+    {   # COBR — Cobranza Ordinaria. NO VALIDADO. Sin fecha/estado/plazo → nulos.
+        "clave": "COBR", "nombre": "Cobranza Ordinaria", "validado": False, "id": "expediente",
+        "coincide": lambda h: _has(h, "expediente sancionador"),
+        "mapa": [("expediente sancionador", "expediente"), ("intendencia", "intendencia"),
+                 ("ver documentos", "_accion")],
+    },
+    {   # AFOR — Alertas de Formalización. NO VALIDADO. Sin expediente → id por hash.
+        #   'Registrar Incorporados' es acción de ESCRITURA → SOLO se mapea como
+        #   acción; el parser JAMÁS la pulsa (solo lectura).
+        "clave": "AFOR", "nombre": "Alertas de Formalización", "validado": False, "id": "hash",
+        "coincide": lambda h: _has(h, "trabajadores incorporados") or _has(h, "registrar incorporados"),
+        "mapa": [("fecha de deposito", "fecha_envio"), ("fecha de notificacion", "fecha_notificacion"),
+                 ("fecha limite de respuesta", "fecha_limite"), ("asunto", "asunto"),
+                 ("trabajadores incorporados", "_info"), ("opcion", "_accion"),
+                 ("registrar incorporados", "_accion_escritura")],
+    },
+]
+
+
+def _detectar_forma(heads_norm: list):
+    """Devuelve el spec de forma que coincide con la cabecera, o None (desconocida)."""
+    for spec in _FORMAS:
+        if spec["coincide"](heads_norm):
+            return spec
+    return None
+
+
+def _col_idx(heads_norm: list, mapa: list) -> dict:
+    idx = {}
+    for i, h in enumerate(heads_norm):
+        for token, clave in mapa:
+            if clave not in idx and (h == token or token in h):
+                idx[clave] = i
+    return idx
+
+
+def _cel(tds, idx) -> str:
+    return tds[idx].inner_text().strip() if (idx is not None and idx < len(tds)) else ""
+
+
+def _clasif_valor(v: str) -> str:
+    """Tipo del valor por su FORMATO (para la señal de confirmación; nunca el valor)."""
+    v = (v or "").strip()
+    if not v:
+        return "vacío"
+    if re.fullmatch(r"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}(?::\d{2})?", v):
+        return "fecha+hora"
+    if re.fullmatch(r"\d{2}/\d{2}/\d{4}", v):
+        return "fecha"
+    if re.search(r"\d+\s*d[ií]a", v, re.I):
+        return "plazo(N días)"
+    if re.fullmatch(r"\d+", v):
+        return "número"
+    if re.search(r"no\s*le[ií]d", v, re.I):
+        return "estado=No leído"
+    if re.search(r"\ble[ií]d[oa]\b", v, re.I):
+        return "estado=Leído"
+    if re.search(r"SUNAFIL", v, re.I):
+        return "expediente(SUNAFIL)"
+    return "texto"
+
+
+_CAMPOS_FECHA = ("fecha_envio", "fecha_notificacion", "fecha_acuse", "fecha_limite")
+
+
+def _parsear_pagina(tabla, spec: dict, categoria: str, heads_norm: list,
+                    senales: list | None = None) -> list:
+    """Parsea las filas de la página ACTUAL según el spec de forma. SOLO LEE:
+    reporta leído/no-leído (por ícono); jamás lo cambia ni acusa recibo. Para las
+    formas NO validadas, chequea el formato y, en la primera fila real, apunta una
+    señal de confirmación en `senales` (no ingiere valores que no calzan)."""
+    import hashlib
+    items = []
+    col = _col_idx(heads_norm, spec["mapa"])
+    claves_mapa = {c for _, c in spec["mapa"]}
+    validado = spec["validado"]
+    for tr in tabla.query_selector_all("tbody tr"):
+        tds = tr.query_selector_all("td")
+        # La fila placeholder de tabla vacía ('No hay registros') es UNA sola celda
+        # con colspan → una fila real tiene varias columnas. Evita ingerir el vacío.
+        if len(tds) < 2:
+            continue
+        asunto = _cel(tds, col.get("asunto")) or categoria
+        # Fechas: en formas VALIDADAS, _fecha_limpia (tolerante); en NO validadas,
+        # estricta (solo acepta fecha reconocible; si no calza → nulo + aviso).
+        avisos = []
+
+        def _fecha(clave):
+            raw = _cel(tds, col.get(clave)) if clave in claves_mapa else ""
+            if not raw:
+                return ""
+            m = _RE_FECHA.search(raw)
+            if m:
+                return m.group(0)
+            if not validado:
+                avisos.append(f"{clave}: se esperaba fecha y no calza")
+                return ""              # NO ingerir valor mal parseado
+            return raw.strip()[:30]
+
+        fecha_envio = _fecha("fecha_envio")
+        # id del registro
+        if spec["id"] == "expediente":
+            cod = _cel(tds, col.get("expediente"))
+            if not cod:
+                continue               # sin id no se puede deduplicar → se salta
+        else:  # hash de categoría+fecha+asunto (formas sin expediente visible)
+            if not (fecha_envio or asunto):
+                continue
+            base = (categoria + "|" + fecha_envio + "|" + asunto).encode("utf-8")
+            cod = "SUNAFIL-" + hashlib.sha1(base).hexdigest()[:16]
+        # plazo (solo si la forma lo trae y es numérico)
+        plazo = None
+        if "plazo_dias" in claves_mapa:
+            raw_pl = _cel(tds, col.get("plazo_dias"))
+            plazo = _plazo_a_dias(raw_pl)
+            if raw_pl and plazo is None and not validado:
+                avisos.append("plazo: se esperaba número y no calza")
+        # estado leído/no-leído: ÍCONO primario; texto 'Estado' respaldo secundario.
+        leido = _leido_por_icono(tr)
+        estado_txt = _cel(tds, col.get("estado_txt")) if "estado_txt" in claves_mapa else ""
+        if leido is None and estado_txt:
+            leido = ("no le" not in _norm(estado_txt))
+
+        item = {
+            "cod_mensaje": cod, "tipo_msj": 2, "fuente": "sunafil",
+            "categoria": categoria, "asunto": asunto,
+            "fecha_envio": fecha_envio,
+            "fecha_notificacion": _fecha("fecha_notificacion"),
+            "fecha_acuse": _fecha("fecha_acuse") if "fecha_acuse" in claves_mapa else "",
+            "fecha_limite": _fecha("fecha_limite") if "fecha_limite" in claves_mapa else "",
+            "plazo_dias": plazo,
+            "no_leida": (leido is False),
+            "_forma": spec["clave"], "_validado": validado,
+            "_estado_icono": leido,
+        }
+
+        # Señal de confirmación: primera fila REAL de una forma NO validada.
+        if not validado and senales is not None and \
+                not any(s["categoria"] == categoria for s in senales):
+            formato = {clave: _clasif_valor(_cel(tds, col.get(clave)))
+                       for _, clave in spec["mapa"] if not clave.startswith("_")}
+            # ¿la celda de acción esconde un id? (para confirmar id oculto vs hash)
+            id_oculto = False
+            for ck in ("_accion", "_accion_escritura"):
+                ci = col.get(ck)
+                if ci is not None and ci < len(tds):
+                    if tds[ci].query_selector("[onclick], input[type='hidden'], [data-id], a[href*='id']"):
+                        id_oculto = True
+            senales.append({
+                "categoria": categoria, "forma": spec["clave"], "nombre": spec["nombre"],
+                "id_tipo": spec["id"], "columnas": heads_norm[:],
+                "formato_detectado": formato, "accion_id_oculto": id_oculto,
+                "avisos_formato": avisos,
+            })
+        items.append(item)
+    return items
+
+
+def _siguiente_pagina(page) -> bool:
+    """Avanza a la página siguiente del datatable (jQuery DataTables / PrimeFaces).
+    False si no hay siguiente o está deshabilitada. SOLO navega (no acusa nada)."""
+    for sel in ("a.paginate_button.next", ".dataTables_paginate a.next",
+                "li.next:not(.disabled) > a", ".ui-paginator-next"):
+        btn = page.query_selector(sel)
+        if not btn:
+            continue
+        try:
+            cls = (btn.get_attribute("class") or "")
+            padre = btn.evaluate("e => e.parentElement ? e.parentElement.className : ''") or ""
+        except Exception:
+            cls, padre = "", ""
+        if "disabled" in cls or "disabled" in padre or "ui-state-disabled" in cls:
+            return False
+        try:
+            btn.evaluate("el => el.click()")
+            return True
+        except Exception:
+            return False
+    return False
+
+
+def _firma_tabla(tabla) -> str:
+    """Firma interna de la página (para cortar paginación repetida). No se imprime."""
+    try:
+        return str(hash(tabla.inner_text()))
+    except Exception:
+        return ""
+
+
+def _contar_filas_datos(tabla) -> int:
+    """Filas con datos reales (≥2 celdas no vacías). Ignora el placeholder de tabla
+    vacía ('No hay registros', normalmente una sola celda con colspan)."""
+    n = 0
+    for tr in tabla.query_selector_all("tbody tr"):
+        tds = tr.query_selector_all("td")
+        if sum(1 for td in tds if (td.inner_text() or "").strip()) >= 2:
+            n += 1
+    return n
 
 
 def _cerrar_modales(page, diag: bool) -> None:
@@ -157,64 +504,21 @@ def _plazo_a_dias(txt: str):
     return int(m.group(1)) if m else None
 
 
-def _parsear_tabla(page, categoria: str, diag: bool) -> list:
-    """Parsea la tabla de notificaciones de la categoría activa POR NOMBRE de
-    columna (robusto a IDs). Devuelve items con expediente/fechas/plazo/estado."""
-    items = []
-    tablas = page.query_selector_all("table")
-    for t in tablas:
-        heads = [_norm(th.inner_text()) for th in t.query_selector_all("thead th, tr th")]
-        if not heads:
-            continue
-        # ¿Es la tabla de notificaciones? (tiene 'registro'/'requerimiento'/'plazo')
-        if not any(h in ("registro", "plazo") or "requerimiento" in h for h in heads):
-            continue
-        col_idx = {}
-        for i, h in enumerate(heads):
-            clave = _COL_MAP.get(h)
-            if not clave and "requerimiento" in h:
-                clave = "tipo_requerimiento"
-            if clave and clave not in col_idx:
-                col_idx[clave] = i
-        if diag:
-            log(f"   [sunafil-diag] '{categoria}' headers={heads} map={col_idx}", "INFO")
-        for tr in t.query_selector_all("tbody tr"):
-            tds = tr.query_selector_all("td")
-            if not tds:
-                continue
-            def cel(clave):
-                i = col_idx.get(clave)
-                return (tds[i].inner_text().strip() if i is not None and i < len(tds) else "")
-            exp = cel("expediente")
-            if not exp:
-                continue
-            estado_txt = _norm(cel("estado")) or _norm(tr.inner_text())
-            items.append({
-                "cod_mensaje": exp,                     # expediente = id único
-                "tipo_msj": 2,                          # notificación
-                "fuente": "sunafil",
-                "categoria": categoria,
-                "asunto": cel("tipo_requerimiento") or categoria,
-                "fecha_envio": cel("fecha_deposito"),
-                "fecha_notificacion": cel("fecha_notificacion"),
-                "plazo_dias": _plazo_a_dias(cel("plazo_dias")),
-                "no_leida": ("no leido" in estado_txt or "no leído" in estado_txt),
-                "_row_handle": tr,                      # para expandir y bajar el PDF
-            })
-        if items:
-            break
-    return items
-
-
 def leer_casilla_sunafil(cfg: SunatConfig, conocidos: set | None = None,
                          categorias: list | None = None, diag: bool = False) -> dict:
     """Lee el buzón SUNAFIL del RUC. Reusa el login SOL. Devuelve un resultado con
     el MISMO shape que el scraper SUNAT (mensajes[]) para que `ingestar_resultado`
-    lo guarde igual (con fuente='sunafil'). `diag=True` vuelca el DOM y NO exige
-    que el parseo sea perfecto (sirve para confirmar selectores en el worker)."""
+    lo guarde igual (con fuente='sunafil').
+
+    Por cada categoría: navega a su lista (enlace 'Notificaciones de …'), DETECTA la
+    forma de la tabla POR CABECERA (A=expediente/plazo · B=aviso), recorre TODAS las
+    páginas (paginación) y parsea cada fila. El estado leído/no-leído sale del ÍCONO
+    (universal). SOLO LEE: reporta el estado, nunca lo cambia ni acusa recibo.
+    Si una categoría trae una forma DESCONOCIDA, la registra en `formas_desconocidas`
+    con su esquema y NO la parsea (prefiere avisar 'no sé leer esto' a inventar)."""
     resultado = {"ruc": cfg.ruc, "fuente": "sunafil",
                  "scrapeado_at": ahora_lima().isoformat(), "mensajes": [],
-                 "exito": False}
+                 "formas_desconocidas": [], "mapeos_no_validados": [], "exito": False}
     cats = categorias or CATEGORIAS_SUNAFIL
     with sync_playwright() as p:
         nav = p.chromium.launch(headless=cfg.headless,
@@ -232,35 +536,80 @@ def leer_casilla_sunafil(cfg: SunatConfig, conocidos: set | None = None,
                     _evidencia(page, "sunafil_00_no_inbox")
                 return resultado
             _cerrar_modales(page, diag)
-            page.wait_for_timeout(1500)
-            # VUELCA EL INBOX REAL (clave para afinar selectores de tabla/categorías).
             if diag:
-                _evidencia(page, "sunafil_inbox")
                 log(f"   [sunafil-diag] DENTRO del inbox: {page.url}", "INFO")
-                log(f"   [sunafil-diag] tablas en el inbox: "
-                    f"{len(page.query_selector_all('table'))}", "INFO")
 
-            # 2) Recorrer categorías. Cada una: click en su pestaña/enlace dentro del
-            #    inbox (app JS), esperar la tabla, parsear por encabezado.
+            # Recorrer categorías: cada una navega a su lista, detecta la forma POR
+            # CABECERA, pagina y parsea. dedup por id entre categorías.
+            vistos = set()
             for cat in cats:
                 try:
-                    tab = page.query_selector(f"a:has-text('{cat}'), button:has-text('{cat}'), "
-                                              f"li:has-text('{cat}'), span:has-text('{cat}')")
-                    if tab:
-                        try:
-                            tab.click()
-                        except Exception:
-                            pass
-                        page.wait_for_timeout(2000)
+                    if not _abrir_categoria(page, cat, diag):
+                        log(f"SUNAFIL '{cat}': no cargó la lista (sin acceso, sin "
+                            f"registros o timeout tras reintento).", "WARN")
+                        # no cortamos: el while de abajo verá 'sin tabla' → 0 filas.
                     _cerrar_modales(page, diag)
+
+                    # Recorrer TODAS las páginas de la categoría (paginación datatable).
+                    filas_cat, spec_cat, firmas, n_pag = [], None, set(), 0
+                    senales_cat = []            # señal de mapeo NO validado (1ª fila real)
+                    while n_pag < 40:
+                        tabla = _tabla_notificaciones(page)
+                        if tabla is None:
+                            break
+                        heads = _headers(tabla)
+                        heads_norm = [_norm(h) for h in heads]
+                        spec = _detectar_forma(heads_norm)
+                        if spec is None:
+                            # FORMA DESCONOCIDA (sin mapeador): registra el esquema + nº de
+                            # filas y NO parsea (no inventa). Dice si ya se pobló.
+                            if not any(fd["categoria"] == cat
+                                       for fd in resultado["formas_desconocidas"]):
+                                n_fd = _contar_filas_datos(tabla)
+                                resultado["formas_desconocidas"].append(
+                                    {"categoria": cat, "columnas": heads, "filas": n_fd})
+                                log(f"SUNAFIL '{cat}': FORMA DESCONOCIDA ({n_fd} fila(s) con "
+                                    f"datos) — no la parseo (prefiero avisar a inventar). "
+                                    f"columnas={heads}", "WARN")
+                            break
+                        spec_cat = spec
+                        fr = _firma_tabla(tabla)
+                        if fr and fr in firmas:
+                            break                        # página repetida → fin
+                        firmas.add(fr)
+                        filas_cat += _parsear_pagina(tabla, spec, cat, heads_norm, senales_cat)
+                        if not _siguiente_pagina(page):
+                            break
+                        page.wait_for_timeout(1200)
+                        n_pag += 1
+
+                    # Señal de confirmación (mapeo NO validado con su 1ª fila real).
+                    for s in senales_cat:
+                        resultado["mapeos_no_validados"].append(s)
+                        log(f"SUNAFIL '{cat}': MAPEO NO VALIDADO (forma {s['forma']}) con su "
+                            f"1ª fila real → CONFIRMAR formato: {s['formato_detectado']} "
+                            f"| id={s['id_tipo']} id_oculto={s['accion_id_oculto']}"
+                            + (f" | AVISOS: {s['avisos_formato']}" if s['avisos_formato'] else ""),
+                            "WARN")
+
+                    no_leidas = sum(1 for f in filas_cat if f["no_leida"])
+                    etq = (f"{spec_cat['clave']}{'' if spec_cat['validado'] else '·NO-VALID'}"
+                           if spec_cat else "—")
                     if diag:
-                        _evidencia(page, f"sunafil_cat_{_norm(cat)[:20].replace(' ', '_')}")
-                    filas = _parsear_tabla(page, cat, diag)
-                    log(f"SUNAFIL '{cat}': {len(filas)} notificación(es).", "OK")
-                    for f in filas:
-                        if conocidos is not None and str(f["cod_mensaje"]) in conocidos:
+                        log(f"SUNAFIL '{cat}': forma {etq} · {len(filas_cat)} fila(s) en "
+                            f"{n_pag + 1} pág · {no_leidas} no-leída(s).", "OK")
+                    else:
+                        log(f"SUNAFIL '{cat}': {len(filas_cat)} notificación(es), "
+                            f"{no_leidas} no-leída(s) [forma {etq}].", "OK")
+                    for f in filas_cat:
+                        cod = str(f["cod_mensaje"])
+                        if cod in vistos:
+                            continue                     # ya visto en otra categoría
+                        vistos.add(cod)
+                        if conocidos is not None and cod in conocidos:
                             continue
-                        f.pop("_row_handle", None)   # no serializable
+                        for k in ("_estado_icono", "_forma", "_validado"):
+                            f.pop(k, None)               # metadatos internos, no se ingestan
                         resultado["mensajes"].append(f)
                 except Exception as e:
                     log(f"SUNAFIL '{cat}': error ({e}).", "WARN")
