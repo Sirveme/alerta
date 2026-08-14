@@ -78,10 +78,11 @@ def _leer_pdf_local(pdfs, nombre_archivo: str) -> bytes | None:
 
 
 def _parse_fecha_publica(valor: str | None) -> datetime | None:
-    """fecPublica viene como 'dd/MM/YYYY HH:MM:SS' → datetime tz Lima."""
+    """fecPublica SUNAT viene 'dd/MM/YYYY HH:MM:SS'; SUNAFIL 'dd/MM/YYYY HH:MM'
+    (sin segundos) o solo fecha → datetime tz Lima."""
     if not valor:
         return None
-    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y"):
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
         try:
             return datetime.strptime(valor, fmt).replace(tzinfo=TZ_LIMA)
         except ValueError:
@@ -247,6 +248,11 @@ async def ingestar_resultado(
                 fuente=origen,
                 categoria_fuente=msg.get("categoria"),
                 plazo_dias=(int(msg["plazo_dias"]) if str(msg.get("plazo_dias") or "").isdigit() else None),
+                # Alerta SOLO por NO-LEÍDAS (SUNAFIL): si el buzón ya la marca leída,
+                # la notificación NACE 'notificada' (notificado_push=True) → NO dispara
+                # push. SUNAT no trae 'no_leida' (queda False) → alerta como siempre.
+                # SOLO LECTURA: esto decide si alertamos en NUESTRA base; jamás toca SUNAFIL.
+                notificado_push=bool(origen == "sunafil" and msg.get("no_leida") is False),
                 asunto=msg.get("asunto"),
                 texto_html=msg.get("texto_html"),
                 cant_adjuntos=int(msg.get("cant_adjuntos") or 0),

@@ -423,6 +423,10 @@ class Contribuyente(Base, TimestampMixin):
     # índice). Dice el tamaño del trabajo antes de hacerlo. + fecha del censo.
     censo_json: Mapped[dict | None] = mapped_column(JSONB)
     censo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Actividad SUNAFIL en categorías de FORMA DESCONOCIDA (aún sin parser propio):
+    # mapa {categoria: {primera_vez, ultima_vez, filas, columnas}} para saber cuándo
+    # se empiezan a poblar y mapearlas. NO se ingiere hasta tener su parser (SUNAFIL-1).
+    sunafil_desconocidas_json: Mapped[dict | None] = mapped_column(JSONB)
     # Aviso (push) "tu credencial dejó de servir" enviado UNA vez al entrar en
     # ERROR_CREDENCIAL (zAlerta-13 P2). Se limpia al reconectar.
     credencial_error_avisada: Mapped[bool] = mapped_column(
