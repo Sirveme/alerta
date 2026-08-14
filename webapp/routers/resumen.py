@@ -143,7 +143,17 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                    or_(_anio_doc.is_(None),
                        _anio_doc >= func.coalesce(
                            Contribuyente.anio_deuda_desde, desde_default)))))
-        todos_ids = recientes_ids | deuda_ids
+        # SUNAFIL (SUNAFIL-1): la casilla SUNAFIL es de MUCHO menor volumen que SUNAT
+        # y sus notificaciones (fiscalización, plazos) NO deben quedar sepultadas bajo
+        # el LIMIT global dominado por SUNAT. Se incluyen las 40 SUNAFIL más recientes
+        # aparte, para que siempre aparezcan en el panel junto a las de SUNAT.
+        recientes_sunafil = set(await session.scalars(
+            select(Notificacion.id)
+            .where(Notificacion.contribuyente_id.in_(sub),
+                   Notificacion.fuente == "sunafil")
+            .order_by(Notificacion.fecha_publica_sunat.desc().nullslast(),
+                      Notificacion.creado_at.desc()).limit(40)))
+        todos_ids = recientes_ids | deuda_ids | recientes_sunafil
         rows = (await session.execute(
             select(Notificacion, Contribuyente.ruc, Contribuyente.razon_social)
             .join(Contribuyente, Contribuyente.id == Notificacion.contribuyente_id)
