@@ -215,7 +215,9 @@ async def dashboard(request: Request,
     if user is None:
         return templates.TemplateResponse(request, "home.html", {
             "logueado": False, "whatsapp_soporte": WHATSAPP_SOPORTE,
-            "video_url": os.getenv("HOME_VIDEO_URL", ""),
+            # Ruta pública del video de la home (editable por env; default = el video
+            # ya subido en webapp/static/vid/). StaticFiles sirve /static (main.py).
+            "video_url": os.getenv("HOME_VIDEO_URL", "/static/vid/video_portal_alertape.mp4"),
             "video_poster": os.getenv("HOME_VIDEO_POSTER", "")})
     # El empresario aterriza en su BUZÓN (zAlerta-47): es lo que quiere ver,
     # y adonde lleva el push. "Mi Cuenta" queda accesible desde el nav.
