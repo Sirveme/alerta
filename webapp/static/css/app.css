@@ -2477,35 +2477,47 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 .home-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
 .home-entrar { color:var(--texto-suave); text-decoration:none; font-size:.86rem; }
 .home-entrar:hover { color:var(--marca); }
-.home-hero { text-align:center; margin:8px 0 22px; }
-.home-titular { font-size:clamp(1.6rem,5vw,2.3rem); line-height:1.15; margin:0; }
+/* Hero reordenado: subtítulo (orienta) → video → botones (conversión) → título. */
+/* 1. Subtítulo arriba: dice QUÉ es (SUNAT) antes del video. */
+.home-sub { text-align:center; color:var(--texto-suave); font-size:1rem;
+  line-height:1.4; margin:0 auto 12px; max-width:560px; }
+/* 4. Título grande DEBAJO: emocional, ya contextualizado por el subtítulo. */
+.home-titular { text-align:center; font-size:clamp(1.5rem,5vw,2.2rem); line-height:1.15;
+  margin:20px auto 0; max-width:640px; }
 .home-titular .hl { color:var(--marca); }
-.home-sub { color:var(--texto-suave); font-size:1rem; margin:12px 0 0; }
-.home-video { margin:0 auto 26px; max-width:680px; }
-/* Video vertical 9:16 (portal): centrado, capado a 80vh, sin deformar. En móvil el
-   ancho manda (max-width:100%); en escritorio la altura manda (max-height:80vh) y el
-   ancho se deriva del aspect-ratio. object-fit:contain evita el estirado. */
-.home-video-player { display:block; aspect-ratio:9/16; height:auto; max-height:80vh;
-  width:auto; max-width:100%; margin:0 auto; object-fit:contain; background:#0A1E16;
-  border-radius:14px; border:1px solid var(--borde); }
+
+/* 2. Video vertical 9:16, GRANDE. max-height ajustable por --home-video-maxh (el
+   usuario elige el trade-off video↔botones). En MÓVIL suele mandar el ancho
+   (max-width:100% → ~74vh); en ESCRITORIO manda la altura (--home-video-maxh). */
+.home-video { --home-video-maxh:70vh; margin:0 auto 14px; max-width:680px; }
+.home-video-player { display:block; aspect-ratio:9/16; height:auto;
+  max-height:var(--home-video-maxh); width:auto; max-width:100%; margin:0 auto;
+  object-fit:contain; background:#0A1E16; border-radius:14px; border:1px solid var(--borde); }
 .home-video-ph { display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:10px; aspect-ratio:16/9; border:1px dashed var(--borde); border-radius:14px;
-  background:var(--superficie); color:var(--texto-suave); text-align:center; padding:16px; }
+  gap:10px; aspect-ratio:9/16; max-height:var(--home-video-maxh); margin:0 auto;
+  /* ancho derivado de la altura (como el <video>): 9:16, centrado, no ancho en escritorio */
+  max-width:min(100%, calc(var(--home-video-maxh) * 9 / 16));
+  border:1px dashed var(--borde); border-radius:14px; background:var(--superficie);
+  color:var(--texto-suave); text-align:center; padding:16px; }
 .home-video-ph .material-symbols-outlined { font-size:44px; opacity:.6; }
-.home-puertas { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.home-puerta { display:flex; flex-direction:column; gap:6px; text-decoration:none; color:inherit;
-  background:var(--superficie); border:1px solid var(--borde); border-radius:14px; padding:20px 18px;
-  transition:border-color .12s, transform .12s; }
+
+/* 3. Botones de avatar: solo etiquetas apiladas, lado a lado. Compactos para que
+   asomen en la primera pantalla móvil (la conversión). */
+.home-puertas { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.home-puerta { display:flex; flex-direction:column; align-items:center; gap:2px; text-align:center;
+  text-decoration:none; color:var(--texto); background:var(--superficie); border:1px solid var(--borde);
+  border-radius:14px; padding:14px 10px; transition:border-color .12s, transform .12s; }
 .home-puerta:hover { transform:translateY(-2px); }
-.home-puerta-ico { font-size:1.5rem; }
-.home-puerta b { font-size:1.05rem; }
-.home-puerta p { color:var(--texto-suave); font-size:.86rem; margin:0; line-height:1.4; }
-.home-puerta-ir { margin-top:6px; font-weight:600; font-size:.86rem; }
-.home-puerta--emp:hover { border-color:var(--marca); } .home-puerta--emp .home-puerta-ir { color:var(--marca); }
+.home-puerta-rol { font-size:1.15rem; font-weight:700; line-height:1.1; }
+.home-puerta-alt { font-size:.82rem; color:var(--texto-suave); line-height:1.2; }
+.home-puerta-cta { margin-top:6px; font-size:.72rem; font-weight:700; letter-spacing:.08em; color:var(--marca); }
+.home-puerta--emp:hover { border-color:var(--marca); }
 .home-puerta--con { border-radius:6px; }   /* recto = mundo del contador */
-.home-puerta--con:hover { border-color:var(--u-aldia); } .home-puerta--con .home-puerta-ir { color:var(--u-aldia); }
-.home-pie { text-align:center; color:var(--texto-suave); font-size:.76rem; margin-top:30px; }
-@media (max-width:560px){ .home-puertas { grid-template-columns:1fr; } }
+.home-puerta--con:hover { border-color:var(--u-aldia); }
+.home-puerta--con .home-puerta-cta { color:var(--u-aldia); }
+.home-pie { text-align:center; color:var(--texto-suave); font-size:.76rem; margin-top:22px; }
+/* Solo apilan si de verdad no caben (muy angosto); side-by-side ayuda al 1er scroll. */
+@media (max-width:340px){ .home-puertas { grid-template-columns:1fr; } }
 
 /* Conversión CONTADOR (hoja de cálculo: recto, verde, ordenado) */
 .con-valor { display:flex; flex-direction:column; gap:2px; margin:18px 0 4px;
