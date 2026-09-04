@@ -2461,6 +2461,14 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 .rsm-chip--sunafil { background:color-mix(in srgb, #8B5CF6 22%, transparent);
   color:#B79CF6; font-weight:600; }
 .rsm-tag--plazo { color:#F0863B; border-color:color-mix(in srgb,#F0863B 34%,transparent) !important; }
+/* SUNAFIL-1: documento oficial (no se descarga; abrirlo en SUNAFIL acusa). Ámbar de
+   advertencia para que la CONSECUENCIA se lea antes de entrar. */
+.rsm-tag--doc { color:#F0863B; border-color:color-mix(in srgb,#F0863B 34%,transparent) !important; }
+.rsm-mod-sunafil-doc { border:1px solid color-mix(in srgb,#F0863B 40%,transparent);
+  background:color-mix(in srgb,#F0863B 10%,transparent); border-radius:10px;
+  padding:.7rem .8rem; margin-top:.3rem; }
+.rsm-mod-sunafil-doc p { margin:0 0 .55rem; font-size:.85rem; line-height:1.35; }
+.rsm-mod-sunafil-doc b { color:#F0863B; }
 
 /* ══════════════════════════════════════════════════════════════════
    HOME DISTRIBUIDORA + rutas por avatar (zAlerta-Landing). Orienta, no vende.
@@ -2474,7 +2482,12 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 .home-titular .hl { color:var(--marca); }
 .home-sub { color:var(--texto-suave); font-size:1rem; margin:12px 0 0; }
 .home-video { margin:0 auto 26px; max-width:680px; }
-.home-video-player { width:100%; border-radius:14px; border:1px solid var(--borde); background:#000; }
+/* Video vertical 9:16 (portal): centrado, capado a 80vh, sin deformar. En móvil el
+   ancho manda (max-width:100%); en escritorio la altura manda (max-height:80vh) y el
+   ancho se deriva del aspect-ratio. object-fit:contain evita el estirado. */
+.home-video-player { display:block; aspect-ratio:9/16; height:auto; max-height:80vh;
+  width:auto; max-width:100%; margin:0 auto; object-fit:contain; background:#0A1E16;
+  border-radius:14px; border:1px solid var(--borde); }
 .home-video-ph { display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:10px; aspect-ratio:16/9; border:1px dashed var(--borde); border-radius:14px;
   background:var(--superficie); color:var(--texto-suave); text-align:center; padding:16px; }
