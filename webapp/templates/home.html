@@ -56,9 +56,12 @@
     var v = document.querySelector('.home-video-player');
     var box = document.querySelector('.home-video');
     if (!v || !box) return;
-    v.addEventListener('play',  function () { box.classList.add('video-activo'); });
-    v.addEventListener('pause', function () { box.classList.remove('video-activo'); });
-    v.addEventListener('ended', function () { box.classList.remove('video-activo'); });
+    var ocultar = function () { box.classList.add('video-activo'); };
+    var mostrar = function () { box.classList.remove('video-activo'); };
+    v.addEventListener('play', ocultar);      // al iniciar
+    v.addEventListener('playing', ocultar);   // al reanudar tras buffer
+    v.addEventListener('pause', mostrar);
+    v.addEventListener('ended', mostrar);
   })();
 </script>
 {% endblock %}
