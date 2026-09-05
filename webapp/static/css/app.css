@@ -2477,20 +2477,20 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
    —verde selva + verde #26D07C / cian #16B0D8 del logo—, SIN chicha (el chicha es
    solo de /empresarios; inclinar la home hacia allá enfriaría al contador). ═══ */
 .home { max-width:1060px; margin:0 auto;
-  /* Menos aire arriba (sube el contenido) + padding-bottom para la BARRA FIJA. */
-  padding:8px 18px calc(118px + env(safe-area-inset-bottom, 0px));
+  /* Menos aire arriba aún (sube el video) + padding-bottom para la BARRA FIJA. */
+  padding:4px 18px calc(120px + env(safe-area-inset-bottom, 0px));
   background:
     radial-gradient(55% 42% at 14% 20%, rgba(38,208,124,.07), transparent 60%),
     radial-gradient(52% 44% at 92% 80%, rgba(22,176,216,.06), transparent 62%); }
-.home-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.home-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
 .home-entrar { color:var(--texto-suave); text-decoration:none; font-size:.86rem; }
 .home-entrar:hover { color:#26D07C; }
 /* Logo un poco más chico (aire para el subtítulo). */
 .home-top .logo-selva { font-size:clamp(1.2rem, 5.4vw, 2rem); }
 
-/* Subtítulo ARRIBA (entre logo y video): orienta (es SUNAT). */
-.home-sub { text-align:center; color:var(--texto-suave); font-size:1rem;
-  line-height:1.4; margin:0 auto 16px; max-width:560px; }
+/* Subtítulo ARRIBA (entre logo y video): más claro y un poco más chico. */
+.home-sub { text-align:center; color:#C7D0DB; font-size:.92rem; font-weight:500;
+  line-height:1.35; margin:0 auto 10px; max-width:560px; }
 
 /* HERO: el VIDEO con su PORTADA + el TÍTULO superpuesto (abajo-izq, sobre un scrim).
    Los botones NO van aquí — van en la BARRA FIJA (.home-barra), así no compiten por
@@ -2507,13 +2507,17 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
    portada. Casi transparente en el centro → no tapa el play. No intercepta clics. */
 .home-video-scrim { position:absolute; left:0; right:0; bottom:0; height:60%; z-index:1;
   background:linear-gradient(to top, rgba(10,30,22,.9) 0%, rgba(10,30,22,.55) 44%, transparent 100%);
-  pointer-events:none; }
+  pointer-events:none; transition:opacity .3s ease; }
 /* Título SOBRE la portada, abajo-izquierda. Blanco puro + doble sombra (crisp+suave)
    para que resalte BRILLANTE sobre la foto. pointer-events:none → play nativo OK. */
-.home-titular { position:absolute; left:18px; right:18px; bottom:16px; z-index:2; margin:0;
+.home-titular { position:absolute; left:18px; right:18px; bottom:22px; z-index:2; margin:0;
   text-align:left; color:#F5F8F6; font-weight:800; letter-spacing:-.01em; line-height:1.1;
-  font-size:clamp(1.5rem,5.6vw,2.05rem); pointer-events:none;
-  text-shadow:0 1px 2px rgba(0,0,0,.6), 0 2px 16px rgba(0,0,0,.45); }
+  font-size:clamp(1.35rem,5vw,1.85rem); pointer-events:none;
+  text-shadow:0 1px 2px rgba(0,0,0,.6), 0 2px 16px rgba(0,0,0,.45); transition:opacity .3s ease; }
+/* Durante la reproducción, título+scrim se desvanecen (tapaban los subtítulos del
+   video); al pausar o terminar reaparecen (JS toggle .video-activo en home.html). */
+.home-video.video-activo .home-titular,
+.home-video.video-activo .home-video-scrim { opacity:0; }
 .home-titular .hl { background:linear-gradient(90deg,#5EEA8C,#22D3D2);
   -webkit-background-clip:text; background-clip:text;
   -webkit-text-fill-color:transparent; color:transparent; }
@@ -2527,12 +2531,14 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
   padding:10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   background:#0F241C; border-top:1px solid rgba(94,234,140,.22);
   box-shadow:0 -10px 30px rgba(0,0,0,.38); }
-.home-barra-lbl { margin:0 0 8px; text-align:center; color:#8FE0C4; font-size:.82rem;
-  font-weight:600; letter-spacing:.01em; }
-.home-barra-btns { display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:680px; margin:0 auto; }
+.home-barra-lbl { margin:0 0 8px; text-align:center; color:#C7D0DB; font-size:.76rem;
+  font-weight:500; line-height:1.2; }
+.home-barra-lbl b { display:inline-block; font-weight:800; font-size:1rem; letter-spacing:.03em; color:#EAF7EF; }
+.home-barra-lbl i { font-style:italic; color:#5EEA8C; }
+.home-barra-btns { display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:680px; margin:0 auto; }
 .home-btn { display:flex; align-items:center; justify-content:center; text-align:center;
-  text-decoration:none; font-style:normal; font-weight:800; font-size:1.02rem; line-height:1.15;
-  padding:15px 12px; border-radius:12px; border:none; color:#06251A;
+  text-decoration:none; font-style:normal; font-weight:800; font-size:.96rem; line-height:1.15;
+  padding:14px 14px; border-radius:12px; border:none; color:#06251A;
   transition:transform .12s, box-shadow .12s, filter .12s; }
 .home-btn:hover { transform:translateY(-2px); filter:brightness(1.06); box-shadow:0 8px 22px rgba(0,0,0,.32); }
 .home-btn--con { background:#5EEA8C; }   /* verde del logo */
@@ -2540,10 +2546,10 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 
 /* ESCRITORIO: los dos botones centrados con ancho acotado. */
 @media (min-width:860px){
-  .home-barra-btns { grid-template-columns:repeat(2, minmax(220px, 320px)); justify-content:center;
-    max-width:none; }
-  .home-btn { font-size:1.1rem; padding:16px 22px; }
-  .home-titular { font-size:clamp(1.6rem,2.4vw,2.2rem); left:22px; bottom:20px; }
+  .home-barra-btns { grid-template-columns:repeat(2, minmax(200px, 280px)); justify-content:center;
+    gap:24px; max-width:none; }
+  .home-btn { font-size:1.02rem; padding:15px 20px; }
+  .home-titular { font-size:clamp(1.45rem,2.2vw,2rem); left:22px; bottom:26px; }
 }
 
 /* Conversión CONTADOR (hoja de cálculo: recto, verde, ordenado) */
