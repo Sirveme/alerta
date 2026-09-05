@@ -2477,8 +2477,8 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
    —verde selva + verde #26D07C / cian #16B0D8 del logo—, SIN chicha (el chicha es
    solo de /empresarios; inclinar la home hacia allá enfriaría al contador). ═══ */
 .home { max-width:1060px; margin:0 auto;
-  /* Menos aire arriba aún (sube el video) + padding-bottom para la BARRA FIJA. */
-  padding:4px 18px calc(120px + env(safe-area-inset-bottom, 0px));
+  /* Menos aire arriba aún (sube el video) + padding-bottom para la BARRA FIJA compacta. */
+  padding:4px 18px calc(94px + env(safe-area-inset-bottom, 0px));
   background:
     radial-gradient(55% 42% at 14% 20%, rgba(38,208,124,.07), transparent 60%),
     radial-gradient(52% 44% at 92% 80%, rgba(22,176,216,.06), transparent 62%); }
@@ -2528,27 +2528,31 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
    "Toca y prueba gratis" y DOS botones RELLENOS con los colores del logo (verde
    #5EEA8C · cian #22D3D2), MISMA forma y tamaño, texto oscuro para contraste. */
 .home-barra { position:fixed; left:0; right:0; bottom:0; z-index:50;
-  padding:10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding:8px 14px calc(9px + env(safe-area-inset-bottom, 0px));
   background:#0F241C; border-top:1px solid rgba(94,234,140,.22);
   box-shadow:0 -10px 30px rgba(0,0,0,.38); }
-.home-barra-lbl { margin:0 0 8px; text-align:center; color:#C7D0DB; font-size:.76rem;
-  font-weight:500; line-height:1.2; }
-.home-barra-lbl b { display:inline-block; font-weight:800; font-size:1rem; letter-spacing:.03em; color:#EAF7EF; }
+/* Etiqueta en UNA sola línea, compacta. */
+.home-barra-lbl { margin:0 0 6px; text-align:center; color:#C7D0DB; font-size:.72rem;
+  font-weight:500; line-height:1.1; white-space:nowrap; }
+.home-barra-lbl b { font-weight:800; font-size:.84rem; letter-spacing:.02em; color:#EAF7EF; }
 .home-barra-lbl i { font-style:italic; color:#5EEA8C; }
-.home-barra-btns { display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:680px; margin:0 auto; }
+/* Botones SIEMPRE en una fila (2 columnas), compactos. */
+.home-barra-btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:520px; margin:0 auto; }
 .home-btn { display:flex; align-items:center; justify-content:center; text-align:center;
-  text-decoration:none; font-style:normal; font-weight:800; font-size:.96rem; line-height:1.15;
-  padding:14px 14px; border-radius:12px; border:none; color:#06251A;
+  text-decoration:none; font-style:normal; font-weight:800; font-size:.9rem; line-height:1.1;
+  padding:11px 8px; border-radius:10px; border:none; color:#06251A; white-space:nowrap;
   transition:transform .12s, box-shadow .12s, filter .12s; }
-.home-btn:hover { transform:translateY(-2px); filter:brightness(1.06); box-shadow:0 8px 22px rgba(0,0,0,.32); }
+.home-btn:hover { transform:translateY(-2px); filter:brightness(1.06); box-shadow:0 8px 20px rgba(0,0,0,.3); }
 .home-btn--con { background:#5EEA8C; }   /* verde del logo */
 .home-btn--emp { background:#22D3D2; }   /* cian del logo */
 
-/* ESCRITORIO: los dos botones centrados con ancho acotado. */
+/* ESCRITORIO: los dos botones centrados con ancho acotado (un poco más grandes). */
 @media (min-width:860px){
-  .home-barra-btns { grid-template-columns:repeat(2, minmax(200px, 280px)); justify-content:center;
-    gap:24px; max-width:none; }
-  .home-btn { font-size:1.02rem; padding:15px 20px; }
+  .home-barra-lbl { font-size:.8rem; margin-bottom:7px; }
+  .home-barra-lbl b { font-size:.92rem; }
+  .home-barra-btns { grid-template-columns:repeat(2, minmax(190px, 260px)); justify-content:center;
+    gap:22px; max-width:none; }
+  .home-btn { font-size:.98rem; padding:13px 18px; }
   .home-titular { font-size:clamp(1.45rem,2.2vw,2rem); left:22px; bottom:26px; }
 }
 
