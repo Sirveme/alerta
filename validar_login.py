@@ -19,6 +19,8 @@ Uso (desde el worker):
 
 from __future__ import annotations
 
+import re
+
 from playwright.sync_api import sync_playwright
 
 # Reutilizamos el motor validado SIN tocarlo: misma config y mismo login.
@@ -131,6 +133,88 @@ def validar_login_sync(ruc: str, usuario_sol: str, clave_sol: str) -> bool:
             return bool(scraper.login_sol(page, cfg))
         finally:
             # Cerrar siempre, pase lo que pase (no dejar Chromium colgado).
+            try:
+                contexto.close()
+            except Exception:
+                pass
+            try:
+                navegador.close()
+            except Exception:
+                pass
+
+
+def _peek_ultimo_aviso(contexto, page) -> str | None:
+    """Trae SOLO el 1er mensaje del buzón como evidencia de lectura real.
+
+    Best-effort y READ-ONLY: entra al buzón (visor) y hace UNA llamada JSON a
+    listNotiMenPag(page=1) — NO pagina el buzón entero, NO abre mensajes, NO
+    pulsa acuse. Devuelve "dd/mm · asunto" del primer registro, o None si algo
+    falla (buzón vacío, timeout, cambio de DOM). NUNCA lanza: un fallo del peek
+    no debe convertir un login válido en "no conecta" (login es la verdad).
+
+    Costo medido: +~4 s sobre el login-only (entrar_buzon ~3 s + 1 API ~1 s).
+    """
+    try:
+        visor_frame = scraper.entrar_buzon(page)
+        if not visor_frame:
+            return None
+        m = re.search(r"(https?://[^/]+/ol-ti-itvisornoti)",
+                      visor_frame.url or "")
+        visor_base = m.group(1) if m else scraper.VISOR_BASE
+        url = (f"{visor_base}/visor/listNotiMenPag?tipoMsj=1&codCarpeta=00"
+               f"&codEtiqueta=&page=1&des_asunto=&codMensaje=&tipoOrden=NADA")
+        data = scraper.fetch_json(contexto.request, url, "peek-ultimo")
+        rows = (data.get("rows") if isinstance(data, dict) else data) or []
+        if not rows:
+            return None
+        r0 = rows[0]
+        # fecEnvio viene "dd/mm/yyyy" → nos quedamos con "dd/mm".
+        fecha = str(r0.get("fecEnvio") or r0.get("fecPublica") or "")[:5]
+        asunto = str(r0.get("desAsunto") or "").strip()
+        if not asunto:
+            return None
+        if len(asunto) > 70:
+            asunto = asunto[:69].rstrip() + "…"
+        etiqueta = f"{fecha} · {asunto}" if fecha else asunto
+        return etiqueta[:140]
+    except Exception:
+        return None
+
+
+def comprobar_conexion_sync(ruc: str, usuario_sol: str,
+                            clave_sol: str) -> dict:
+    """Login-only + peek del último aviso, en UNA sola sesión de navegador.
+
+    Devuelve {"conecta": bool, "ultimo": str | None}. `conecta` sale
+    EXCLUSIVAMENTE de `login_sol` (autoritativo, ver validar_login_sync); el
+    peek del buzón es un extra best-effort que solo se intenta si el login
+    entró, y su fallo deja "ultimo": None sin afectar "conecta".
+
+    Reutiliza el MISMO arranque de navegador que validar_login_sync para que
+    el login se comporte idéntico. Cualquier excepción del LOGIN se relanza
+    (el worker la marca ERROR); el peek nunca lanza.
+    """
+    cfg = scraper.SunatConfig(
+        ruc=ruc, usuario_sol=usuario_sol, clave_sol=clave_sol, headless=True)
+
+    with sync_playwright() as p:
+        navegador = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+        )
+        contexto = navegador.new_context(
+            locale="es-PE",
+            timezone_id="America/Lima",
+            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"),
+        )
+        page = contexto.new_page()
+        try:
+            conecta = bool(scraper.login_sol(page, cfg))
+            ultimo = _peek_ultimo_aviso(contexto, page) if conecta else None
+            return {"conecta": conecta, "ultimo": ultimo}
+        finally:
             try:
                 contexto.close()
             except Exception:

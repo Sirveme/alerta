@@ -581,6 +581,11 @@ class Notificacion(Base, TimestampMixin):
     # marca, se reintenta.
     valorado_no_disponible: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False)
+    # SUNAFIL-1: la fila trae un DOCUMENTO oficial (botón "Ver Documento"). alerta.pe
+    # NO lo descarga (abrirlo en SUNAFIL registra el acuse e inicia el plazo) → solo
+    # marca su PRESENCIA para que el panel avise y enlace a la casilla SUNAFIL.
+    tiene_documento: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False)
     # zAlerta-94: cuerpo FIEL capturado del generador SUNAT (gendocS01Alias,
     # accion=genhtml) para avisos cuyo texto_html es solo cabecera JSON (el cuerpo
     # real "Estimada/o Contribuyente…" se genera on-demand). Se PIDE a SUNAT y se
@@ -832,6 +837,12 @@ class SolicitudValidacionCredencial(Base):
     creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
     procesado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Evidencia de LECTURA real del buzón (zAlerta — "Comprobar conexión"):
+    # además de confirmar el login, el worker trae el 1er mensaje de la lista
+    # ("dd/mm · asunto") como prueba de que sí lee. Best-effort: si el peek
+    # falla, queda NULL y la conexión sigue siendo válida (login es la verdad).
+    ultimo_aviso: Mapped[str | None] = mapped_column(String(140))
 
 
 # ═════════════════════════════════════════════════════════════════════

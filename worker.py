@@ -65,7 +65,7 @@ from run_scraper import (procesar_contribuyente, procesar_sunafil, log,
                          FRESCURA_HORAS_DEFAULT)
 from cifrado import descifrar_clave_sol
 # Login-only para "Comprobar conexión" (reusa el login del scraper, no lo toca).
-from validar_login import validar_login_sync
+from validar_login import comprobar_conexion_sync
 import push_service
 
 TZ_LIMA = ZoneInfo("America/Lima")
@@ -247,11 +247,18 @@ async def _procesar_validaciones_credencial(session) -> int:
         await session.commit()
         try:
             clave = descifrar_clave_sol(sol.clave_sol_cifrada)
-            conecta = await asyncio.to_thread(
-                validar_login_sync, sol.ruc, sol.usuario_sol, clave)
+            # login-only + peek del último aviso (evidencia de LECTURA real).
+            # `conecta` sale solo del login; `ultimo` es best-effort (o None).
+            res = await asyncio.to_thread(
+                comprobar_conexion_sync, sol.ruc, sol.usuario_sol, clave)
+            conecta = bool(res.get("conecta"))
             sol.estado = (EstadoValidacion.CONECTA if conecta
                           else EstadoValidacion.NO_CONECTA)
-            log(f"  {sol.ruc}: {'conecta' if conecta else 'NO conecta'}.",
+            if conecta and res.get("ultimo"):
+                sol.ultimo_aviso = res["ultimo"]
+            log(f"  {sol.ruc}: {'conecta' if conecta else 'NO conecta'}"
+                + (f" · último: {res['ultimo']}"
+                   if conecta and res.get("ultimo") else "") + ".",
                 "OK" if conecta else "WARN")
         except Exception as e:
             sol.estado = EstadoValidacion.ERROR
