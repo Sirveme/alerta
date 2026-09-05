@@ -2477,12 +2477,12 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
    —verde selva + verde #26D07C / cian #16B0D8 del logo—, SIN chicha (el chicha es
    solo de /empresarios; inclinar la home hacia allá enfriaría al contador). ═══ */
 .home { max-width:1060px; margin:0 auto;
-  /* padding-bottom deja aire para la BARRA FIJA de botones (~72px + safe-area). */
-  padding:16px 18px calc(96px + env(safe-area-inset-bottom, 0px));
+  /* Menos aire arriba (sube el contenido) + padding-bottom para la BARRA FIJA. */
+  padding:8px 18px calc(118px + env(safe-area-inset-bottom, 0px));
   background:
     radial-gradient(55% 42% at 14% 20%, rgba(38,208,124,.07), transparent 60%),
     radial-gradient(52% 44% at 92% 80%, rgba(22,176,216,.06), transparent 62%); }
-.home-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.home-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
 .home-entrar { color:var(--texto-suave); text-decoration:none; font-size:.86rem; }
 .home-entrar:hover { color:#26D07C; }
 /* Logo un poco más chico (aire para el subtítulo). */
@@ -2505,45 +2505,43 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
   object-fit:cover; background:#0A1E16; }
 /* Scrim: degradado oscuro abajo→arriba, legibilidad del título sobre cualquier
    portada. Casi transparente en el centro → no tapa el play. No intercepta clics. */
-.home-video-scrim { position:absolute; left:0; right:0; bottom:0; height:58%; z-index:1;
-  background:linear-gradient(to top, rgba(10,30,22,.85) 0%, rgba(10,30,22,.5) 42%, transparent 100%);
+.home-video-scrim { position:absolute; left:0; right:0; bottom:0; height:60%; z-index:1;
+  background:linear-gradient(to top, rgba(10,30,22,.9) 0%, rgba(10,30,22,.55) 44%, transparent 100%);
   pointer-events:none; }
-/* Título SOBRE la portada, abajo-izquierda. pointer-events:none → el play nativo
-   (centrado) sigue funcionando. */
+/* Título SOBRE la portada, abajo-izquierda. Blanco puro + doble sombra (crisp+suave)
+   para que resalte BRILLANTE sobre la foto. pointer-events:none → play nativo OK. */
 .home-titular { position:absolute; left:18px; right:18px; bottom:16px; z-index:2; margin:0;
   text-align:left; color:#F5F8F6; font-weight:800; letter-spacing:-.01em; line-height:1.1;
-  font-size:clamp(1.5rem,5.6vw,2.05rem); pointer-events:none; text-shadow:0 2px 12px rgba(0,0,0,.5); }
+  font-size:clamp(1.5rem,5.6vw,2.05rem); pointer-events:none;
+  text-shadow:0 1px 2px rgba(0,0,0,.6), 0 2px 16px rgba(0,0,0,.45); }
 .home-titular .hl { background:linear-gradient(90deg,#5EEA8C,#22D3D2);
   -webkit-background-clip:text; background-clip:text;
   -webkit-text-fill-color:transparent; color:transparent; }
 
 .home-pie { text-align:center; color:var(--texto-suave); font-size:.76rem; margin-top:18px; }
 
-/* BARRA FIJA de botones (abajo). Superficie propia (#0F241C) + borde superior sutil
-   → se lee como barra de acciones, no como texto flotando. Dos botones con BORDE y
-   FONDO propios: Contador (verde, recto) · Empresario/Gestor (azul, redondeado). */
+/* BARRA FIJA (abajo): superficie propia (#0F241C) + borde superior + una línea
+   "Toca y prueba gratis" y DOS botones RELLENOS con los colores del logo (verde
+   #5EEA8C · cian #22D3D2), MISMA forma y tamaño, texto oscuro para contraste. */
 .home-barra { position:fixed; left:0; right:0; bottom:0; z-index:50;
-  display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:stretch;
-  padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-  background:#0F241C; border-top:1px solid rgba(94,234,140,.20);
-  box-shadow:0 -10px 30px rgba(0,0,0,.35); }
+  padding:10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background:#0F241C; border-top:1px solid rgba(94,234,140,.22);
+  box-shadow:0 -10px 30px rgba(0,0,0,.38); }
+.home-barra-lbl { margin:0 0 8px; text-align:center; color:#8FE0C4; font-size:.82rem;
+  font-weight:600; letter-spacing:.01em; }
+.home-barra-btns { display:grid; grid-template-columns:1fr 1fr; gap:12px; max-width:680px; margin:0 auto; }
 .home-btn { display:flex; align-items:center; justify-content:center; text-align:center;
-  text-decoration:none; font-weight:800; font-size:1.02rem; line-height:1.1; padding:15px 12px;
-  border:1.5px solid; transition:transform .12s, box-shadow .12s, background .12s; }
-.home-btn:hover { transform:translateY(-2px); }
-.home-btn--con { border-radius:6px; color:#EAF7EF; border-color:#26D07C;
-  background:linear-gradient(180deg, rgba(38,208,124,.22), rgba(38,208,124,.10)); }
-.home-btn--con:hover { box-shadow:0 8px 22px rgba(38,208,124,.30);
-  background:linear-gradient(180deg, rgba(38,208,124,.32), rgba(38,208,124,.16)); }
-.home-btn--emp { border-radius:14px; color:#EAF1FF; border-color:#5B8DEF;
-  background:linear-gradient(180deg, rgba(91,141,239,.22), rgba(91,141,239,.10)); }
-.home-btn--emp:hover { box-shadow:0 8px 22px rgba(91,141,239,.30);
-  background:linear-gradient(180deg, rgba(91,141,239,.32), rgba(91,141,239,.16)); }
+  text-decoration:none; font-style:normal; font-weight:800; font-size:1.02rem; line-height:1.15;
+  padding:15px 12px; border-radius:12px; border:none; color:#06251A;
+  transition:transform .12s, box-shadow .12s, filter .12s; }
+.home-btn:hover { transform:translateY(-2px); filter:brightness(1.06); box-shadow:0 8px 22px rgba(0,0,0,.32); }
+.home-btn--con { background:#5EEA8C; }   /* verde del logo */
+.home-btn--emp { background:#22D3D2; }   /* cian del logo */
 
-/* ESCRITORIO: la barra fija centra sus dos botones con ancho acotado. */
+/* ESCRITORIO: los dos botones centrados con ancho acotado. */
 @media (min-width:860px){
-  .home-barra { grid-template-columns:repeat(2, minmax(220px, 320px)); justify-content:center;
-    padding-left:0; padding-right:0; }
+  .home-barra-btns { grid-template-columns:repeat(2, minmax(220px, 320px)); justify-content:center;
+    max-width:none; }
   .home-btn { font-size:1.1rem; padding:16px 22px; }
   .home-titular { font-size:clamp(1.6rem,2.4vw,2.2rem); left:22px; bottom:20px; }
 }
