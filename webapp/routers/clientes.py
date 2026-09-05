@@ -530,9 +530,12 @@ async def estado_validacion(
         if not sol:
             return JSONResponse({"ok": False}, status_code=404)
         estado = sol.estado.value if hasattr(sol.estado, "value") else sol.estado
+        ultimo_aviso = sol.ultimo_aviso
     listo = estado in ("conecta", "no_conecta", "error")
+    # ultimo_aviso: evidencia de lectura real ("dd/mm · asunto") cuando conecta.
     return JSONResponse({"ok": True, "estado": estado,
-                         "conecta": estado == "conecta", "listo": listo})
+                         "conecta": estado == "conecta", "listo": listo,
+                         "ultimo_aviso": ultimo_aviso})
 
 
 # ── Carga por archivo (Parte C): Excel / TXT / CSV → filas para la Fase 1 ──
