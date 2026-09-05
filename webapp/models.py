@@ -477,9 +477,15 @@ class CredencialSol(Base, TimestampMixin):
     clave_sol_cifrada: Mapped[str] = mapped_column(Text, nullable=False)
     tipo_usuario: Mapped[int] = mapped_column(Integer, default=2, nullable=False)  # 2=RUC+SOL
 
-    # Trazabilidad legal (cumplimiento constitucional)
+    # Trazabilidad legal (cumplimiento constitucional). Migración usuarios→personas
+    # (zAlerta-67): las cuentas nuevas (login por DNI) NO tienen fila en `usuarios`,
+    # así que quien_cargo (FK→usuarios) no puede apuntarlas. Se usa quien_cargo para
+    # logins legacy y quien_cargo_persona_id (FK→personas) para el nuevo. Mismo
+    # patrón que push_suscripciones/reacciones. Ver UsuarioActual.cargo_trazabilidad().
     quien_cargo: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="SET NULL"))
+    quien_cargo_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"))
     cargado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
 
@@ -580,6 +586,11 @@ class Notificacion(Base, TimestampMixin):
     # esto es NO-DISPONIBLE honesto (no reintentar). Si SÍ está y falló → NO se
     # marca, se reintenta.
     valorado_no_disponible: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False)
+    # SUNAFIL-1: la fila trae un DOCUMENTO oficial (botón "Ver Documento"). alerta.pe
+    # NO lo descarga (abrirlo en SUNAFIL registra el acuse e inicia el plazo) → solo
+    # marca su PRESENCIA para que el panel avise y enlace a la casilla SUNAFIL.
+    tiene_documento: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False)
     # zAlerta-94: cuerpo FIEL capturado del generador SUNAT (gendocS01Alias,
     # accion=genhtml) para avisos cuyo texto_html es solo cabecera JSON (el cuerpo
@@ -702,6 +713,9 @@ class Reaccion(Base):
     __tablename__ = "reacciones"
     __table_args__ = (
         UniqueConstraint("usuario_id", "notificacion_id", name="uq_reaccion"),
+        # Hermana por PERSONA (migración usuarios→personas): un login por DNI no
+        # colisiona por usuario_id (NULL), así que su unicidad va por persona.
+        UniqueConstraint("persona_id", "notificacion_id", name="uq_reaccion_persona"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -709,8 +723,12 @@ class Reaccion(Base):
     estudio_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
         nullable=False, index=True)
+    # usuario_id: login legacy. persona_id: login por DNI (sin fila en usuarios).
+    # Se escribe UNO u OTRO (ver UsuarioActual.autoria); lectura por filtro_autoria.
     usuario_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="SET NULL"))
+    persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"))
     notificacion_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
         nullable=True, index=True)
@@ -832,6 +850,12 @@ class SolicitudValidacionCredencial(Base):
     creado_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=ahora_lima, nullable=False)
     procesado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Evidencia de LECTURA real del buzón (zAlerta — "Comprobar conexión"):
+    # además de confirmar el login, el worker trae el 1er mensaje de la lista
+    # ("dd/mm · asunto") como prueba de que sí lee. Best-effort: si el peek
+    # falla, queda NULL y la conexión sigue siendo válida (login es la verdad).
+    ultimo_aviso: Mapped[str | None] = mapped_column(String(140))
 
 
 # ═════════════════════════════════════════════════════════════════════
