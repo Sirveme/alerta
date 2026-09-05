@@ -9,61 +9,37 @@
     <a href="/login" class="home-entrar">Iniciar sesión</a>
   </header>
 
-  <!-- HERO: en ESCRITORIO va a dos columnas (video a la izquierda; subtítulo,
-       botones y título a la derecha, llenando el hueco). En MÓVIL se apila:
-       subtítulo → video → botones → título (grid-template-areas reordena). -->
-  <section class="home-hero">
+  <!-- Subtítulo ARRIBA (entre el logo y el video): orienta (es SUNAT) antes de todo. -->
+  <p class="home-sub">Vigilamos tu buzón SUNAT y te avisamos a diario. Elige por dónde entrar.</p>
 
-    <!-- Video de FILOSOFÍA (9:16), grande. Reproductor listo; el video se graba después. -->
-    <section class="home-video">
-      {% if video_url %}
-      <video class="home-video-player" controls preload="metadata" playsinline
-             {% if video_poster %}poster="{{ video_poster }}"{% endif %}>
-        <!-- FALLBACK: si el video no carga (404/formato), el <source> dispara onerror →
-             se oculta el player y se muestra el placeholder. style.display gana a las
-             reglas .home-video-player{display:block}/.home-video-ph{display:flex}. -->
-        <source src="{{ video_url }}" type="video/mp4"
-                onerror="var s=this.closest('.home-video'); s.querySelector('.home-video-player').style.display='none'; s.querySelector('.home-video-ph').style.display='flex';">
+  <!-- HERO: el VIDEO con su PORTADA y el TÍTULO superpuesto (abajo-izquierda, sobre un
+       scrim para legibilidad). Los botones NO van aquí: van en una barra fija abajo,
+       así el título y los botones no compiten por espacio. -->
+  <section class="home-hero">
+    <div class="home-video">
+      <video class="home-video-player" controls playsinline preload="metadata"
+             poster="{{ video_poster or '/static/vid/poster_alertape.jpg' }}">
+        {% if video_url %}<source src="{{ video_url }}" type="video/mp4">{% endif %}
         Tu navegador no reproduce el video.
       </video>
-      <div class="home-video-ph" role="img" aria-label="Video no disponible" style="display:none">
-        <span class="material-symbols-outlined">movie</span>
-        <span>Video: por qué construimos alerta.pe distinto para cada uno</span>
-      </div>
-      {% else %}
-      <div class="home-video-ph" role="img" aria-label="Video próximamente">
-        <span class="material-symbols-outlined">movie</span>
-        <span>Video: por qué construimos alerta.pe distinto para cada uno</span>
-      </div>
-      {% endif %}
-    </section>
-
-    <!-- Lado derecho (escritorio) / apilado (móvil): subtítulo, botones, título. -->
-    <div class="home-hero-side">
-      <!-- Subtítulo: orienta (es SUNAT) antes de todo. -->
-      <p class="home-sub">Vigilamos tu buzón SUNAT y te avisamos a diario. Elige por dónde entrar.</p>
-
-      <!-- Botones de avatar: solo etiquetas apiladas. Son la conversión. -->
-      <section class="home-puertas">
-        <a href="/empresarios" class="home-puerta home-puerta--emp" data-avatar="empresario">
-          <b class="home-puerta-rol">Empresario</b>
-          <span class="home-puerta-alt">Gestor de Negocio</span>
-          <span class="home-puerta-cta">TOCA AQUÍ</span>
-        </a>
-        <a href="/contadores" class="home-puerta home-puerta--con" data-avatar="contador">
-          <b class="home-puerta-rol">Contador</b>
-          <span class="home-puerta-alt">Estudio Contable</span>
-          <span class="home-puerta-cta">TOCA AQUÍ</span>
-        </a>
-      </section>
-
-      <!-- Título grande, emocional, ya contextualizado por el subtítulo. -->
+      <!-- Scrim: oscurece la zona baja para que el título sea legible sobre cualquier
+           portada (rgba(10,30,22,.85) → transparente). No intercepta clics. -->
+      <div class="home-video-scrim" aria-hidden="true"></div>
+      <!-- Título SOBRE la portada (abajo-izquierda). pointer-events:none → el botón
+           play nativo del video (centrado) sigue funcionando. -->
       <h1 class="home-titular">Nunca vuelvas a perder una <span class="hl">notificación importante</span>.</h1>
     </div>
   </section>
 
   <p class="home-pie">alerta.pe · Perú · Vigilancia del buzón SUNAT</p>
 </div>
+
+<!-- BARRA FIJA de botones (abajo). Dos perfiles → dos destinos. Empresario y Gestor
+     comparten destino (/empresarios), por eso UN solo botón, no dos. -->
+<nav class="home-barra" aria-label="Elige tu perfil">
+  <a href="/contadores" class="home-btn home-btn--con">Soy Contador</a>
+  <a href="/empresarios" class="home-btn home-btn--emp">Soy Empresario o Gestor</a>
+</nav>
 {% endblock %}
 {% block scripts %}
 <script>document.documentElement.setAttribute('data-color', 'dark');</script>
