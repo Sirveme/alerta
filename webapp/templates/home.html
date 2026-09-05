@@ -9,49 +9,58 @@
     <a href="/login" class="home-entrar">Iniciar sesión</a>
   </header>
 
-  <!-- 1. Subtítulo arriba: orienta (es SUNAT) antes de todo. -->
-  <p class="home-sub">Vigilamos tu buzón SUNAT y te avisamos a diario. Elige por dónde entrar.</p>
+  <!-- HERO: en ESCRITORIO va a dos columnas (video a la izquierda; subtítulo,
+       botones y título a la derecha, llenando el hueco). En MÓVIL se apila:
+       subtítulo → video → botones → título (grid-template-areas reordena). -->
+  <section class="home-hero">
 
-  <!-- 2. Video de FILOSOFÍA (9:16), grande. Reproductor listo; el video se graba después. -->
-  <section class="home-video">
-    {% if video_url %}
-    <video class="home-video-player" controls preload="metadata" playsinline
-           {% if video_poster %}poster="{{ video_poster }}"{% endif %}>
-      <!-- FALLBACK: si el video no carga (404/formato), el <source> dispara onerror →
-           se oculta el player y se muestra el placeholder. style.display gana a las
-           reglas .home-video-player{display:block}/.home-video-ph{display:flex}. -->
-      <source src="{{ video_url }}" type="video/mp4"
-              onerror="var s=this.closest('.home-video'); s.querySelector('.home-video-player').style.display='none'; s.querySelector('.home-video-ph').style.display='flex';">
-      Tu navegador no reproduce el video.
-    </video>
-    <div class="home-video-ph" role="img" aria-label="Video no disponible" style="display:none">
-      <span class="material-symbols-outlined">movie</span>
-      <span>Video: por qué construimos alerta.pe distinto para cada uno</span>
+    <!-- Video de FILOSOFÍA (9:16), grande. Reproductor listo; el video se graba después. -->
+    <section class="home-video">
+      {% if video_url %}
+      <video class="home-video-player" controls preload="metadata" playsinline
+             {% if video_poster %}poster="{{ video_poster }}"{% endif %}>
+        <!-- FALLBACK: si el video no carga (404/formato), el <source> dispara onerror →
+             se oculta el player y se muestra el placeholder. style.display gana a las
+             reglas .home-video-player{display:block}/.home-video-ph{display:flex}. -->
+        <source src="{{ video_url }}" type="video/mp4"
+                onerror="var s=this.closest('.home-video'); s.querySelector('.home-video-player').style.display='none'; s.querySelector('.home-video-ph').style.display='flex';">
+        Tu navegador no reproduce el video.
+      </video>
+      <div class="home-video-ph" role="img" aria-label="Video no disponible" style="display:none">
+        <span class="material-symbols-outlined">movie</span>
+        <span>Video: por qué construimos alerta.pe distinto para cada uno</span>
+      </div>
+      {% else %}
+      <div class="home-video-ph" role="img" aria-label="Video próximamente">
+        <span class="material-symbols-outlined">movie</span>
+        <span>Video: por qué construimos alerta.pe distinto para cada uno</span>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- Lado derecho (escritorio) / apilado (móvil): subtítulo, botones, título. -->
+    <div class="home-hero-side">
+      <!-- Subtítulo: orienta (es SUNAT) antes de todo. -->
+      <p class="home-sub">Vigilamos tu buzón SUNAT y te avisamos a diario. Elige por dónde entrar.</p>
+
+      <!-- Botones de avatar: solo etiquetas apiladas. Son la conversión. -->
+      <section class="home-puertas">
+        <a href="/empresarios" class="home-puerta home-puerta--emp" data-avatar="empresario">
+          <b class="home-puerta-rol">Empresario</b>
+          <span class="home-puerta-alt">Gestor de Negocio</span>
+          <span class="home-puerta-cta">TOCA AQUÍ</span>
+        </a>
+        <a href="/contadores" class="home-puerta home-puerta--con" data-avatar="contador">
+          <b class="home-puerta-rol">Contador</b>
+          <span class="home-puerta-alt">Estudio Contable</span>
+          <span class="home-puerta-cta">TOCA AQUÍ</span>
+        </a>
+      </section>
+
+      <!-- Título grande, emocional, ya contextualizado por el subtítulo. -->
+      <h1 class="home-titular">Nunca vuelvas a perder una <span class="hl">notificación importante</span>.</h1>
     </div>
-    {% else %}
-    <div class="home-video-ph" role="img" aria-label="Video próximamente">
-      <span class="material-symbols-outlined">movie</span>
-      <span>Video: por qué construimos alerta.pe distinto para cada uno</span>
-    </div>
-    {% endif %}
   </section>
-
-  <!-- 3. Botones de avatar: solo etiquetas apiladas, sin texto. Son la conversión. -->
-  <section class="home-puertas">
-    <a href="/empresarios" class="home-puerta home-puerta--emp" data-avatar="empresario">
-      <b class="home-puerta-rol">Empresario</b>
-      <span class="home-puerta-alt">Gestor de Negocio</span>
-      <span class="home-puerta-cta">TOCA AQUÍ</span>
-    </a>
-    <a href="/contadores" class="home-puerta home-puerta--con" data-avatar="contador">
-      <b class="home-puerta-rol">Contador</b>
-      <span class="home-puerta-alt">Estudio Contable</span>
-      <span class="home-puerta-cta">TOCA AQUÍ</span>
-    </a>
-  </section>
-
-  <!-- 4. Título grande DEBAJO del video: emocional, ya contextualizado por el subtítulo. -->
-  <h1 class="home-titular">Nunca vuelvas a perder una <span class="hl">notificación importante</span>.</h1>
 
   <p class="home-pie">alerta.pe · Perú · Vigilancia del buzón SUNAT</p>
 </div>
