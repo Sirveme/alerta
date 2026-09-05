@@ -2473,50 +2473,89 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 /* ══════════════════════════════════════════════════════════════════
    HOME DISTRIBUIDORA + rutas por avatar (zAlerta-Landing). Orienta, no vende.
    ══════════════════════════════════════════════════════════════════ */
-.home { max-width:820px; margin:0 auto; padding:16px 18px 48px; }
-.home-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+/* ═══ HOME (distribuidora NEUTRAL): vida con los colores propios de alerta.pe
+   —verde selva + verde #26D07C / cian #16B0D8 del logo—, SIN chicha (el chicha es
+   solo de /empresarios; inclinar la home hacia allá enfriaría al contador). ═══ */
+.home { max-width:1060px; margin:0 auto; padding:16px 18px 48px;
+  background:
+    radial-gradient(55% 42% at 14% 20%, rgba(38,208,124,.07), transparent 60%),
+    radial-gradient(52% 44% at 92% 80%, rgba(22,176,216,.06), transparent 62%); }
+.home-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
 .home-entrar { color:var(--texto-suave); text-decoration:none; font-size:.86rem; }
-.home-entrar:hover { color:var(--marca); }
-/* Hero reordenado: subtítulo (orienta) → video → botones (conversión) → título. */
-/* 1. Subtítulo arriba: dice QUÉ es (SUNAT) antes del video. */
+.home-entrar:hover { color:#26D07C; }
+/* Logo un poco más chico (aire para el subtítulo). */
+.home-top .logo-selva { font-size:clamp(1.2rem, 5.4vw, 2rem); }
+
+/* HERO: MÓVIL apilado (subtítulo→video→botones→título, vía grid-areas); ESCRITORIO
+   dos columnas (video izq · subtítulo+botones+título der, llenando el hueco). */
+.home-hero { --home-video-maxh:70vh; display:grid; grid-template-columns:1fr;
+  align-items:center; grid-template-areas:"sub" "vid" "btn" "ttl"; }
+.home-hero-side { display:contents; }          /* móvil: sus hijos fluyen al grid */
+.home-sub    { grid-area:sub; }
+.home-video  { grid-area:vid; }
+.home-puertas{ grid-area:btn; }
+.home-titular{ grid-area:ttl; }
+
+/* Subtítulo: orienta (es SUNAT). */
 .home-sub { text-align:center; color:var(--texto-suave); font-size:1rem;
   line-height:1.4; margin:0 auto 12px; max-width:560px; }
-/* 4. Título grande DEBAJO: emocional, ya contextualizado por el subtítulo. */
-.home-titular { text-align:center; font-size:clamp(1.5rem,5vw,2.2rem); line-height:1.15;
-  margin:20px auto 0; max-width:640px; }
-.home-titular .hl { color:var(--marca); }
+/* Título con VIDA: degradado de marca verde→cian en la palabra clave + más peso. */
+.home-titular { text-align:center; font-weight:800; letter-spacing:-.01em;
+  font-size:clamp(1.6rem,5vw,2.3rem); line-height:1.12; margin:20px auto 0; max-width:640px; }
+.home-titular .hl { background:linear-gradient(92deg,#26D07C 0%,#16B0D8 100%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  color:#26D07C; /* fallback si el navegador no soporta clip */ }
 
-/* 2. Video vertical 9:16, GRANDE. max-height ajustable por --home-video-maxh (el
-   usuario elige el trade-off video↔botones). En MÓVIL suele mandar el ancho
-   (max-width:100% → ~74vh); en ESCRITORIO manda la altura (--home-video-maxh). */
-.home-video { --home-video-maxh:70vh; margin:0 auto 14px; max-width:680px; }
+/* Video vertical 9:16, GRANDE (--home-video-maxh:70vh, elegido). */
+.home-video { margin:0 auto 14px; max-width:680px; }
 .home-video-player { display:block; aspect-ratio:9/16; height:auto;
   max-height:var(--home-video-maxh); width:auto; max-width:100%; margin:0 auto;
-  object-fit:contain; background:#0A1E16; border-radius:14px; border:1px solid var(--borde); }
+  object-fit:contain; background:#0A1E16; border-radius:14px; border:1px solid var(--borde);
+  box-shadow:0 12px 40px rgba(0,0,0,.35), 0 0 0 1px rgba(38,208,124,.07); }
 .home-video-ph { display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:10px; aspect-ratio:9/16; max-height:var(--home-video-maxh); margin:0 auto;
-  /* ancho derivado de la altura (como el <video>): 9:16, centrado, no ancho en escritorio */
   max-width:min(100%, calc(var(--home-video-maxh) * 9 / 16));
   border:1px dashed var(--borde); border-radius:14px; background:var(--superficie);
   color:var(--texto-suave); text-align:center; padding:16px; }
 .home-video-ph .material-symbols-outlined { font-size:44px; opacity:.6; }
 
-/* 3. Botones de avatar: solo etiquetas apiladas, lado a lado. Compactos para que
-   asomen en la primera pantalla móvil (la conversión). */
+/* Botones de avatar: etiquetas apiladas + CARÁCTER (franja de color arriba, borde
+   teñido, hover con glow). Distinción: empresario azul redondeado / contador verde recto. */
 .home-puertas { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.home-puerta { display:flex; flex-direction:column; align-items:center; gap:2px; text-align:center;
-  text-decoration:none; color:var(--texto); background:var(--superficie); border:1px solid var(--borde);
-  border-radius:14px; padding:14px 10px; transition:border-color .12s, transform .12s; }
-.home-puerta:hover { transform:translateY(-2px); }
+.home-puerta { position:relative; overflow:hidden; display:flex; flex-direction:column;
+  align-items:center; gap:2px; text-align:center; text-decoration:none; color:var(--texto);
+  background:linear-gradient(180deg,var(--superficie-2),var(--superficie));
+  border:1px solid var(--borde); border-radius:14px; padding:15px 10px 14px;
+  transition:border-color .14s, transform .14s, box-shadow .14s; }
+.home-puerta::before { content:""; position:absolute; inset:0 0 auto 0; height:3px; }
+.home-puerta:hover { transform:translateY(-3px); }
 .home-puerta-rol { font-size:1.15rem; font-weight:700; line-height:1.1; }
 .home-puerta-alt { font-size:.82rem; color:var(--texto-suave); line-height:1.2; }
-.home-puerta-cta { margin-top:6px; font-size:.72rem; font-weight:700; letter-spacing:.08em; color:var(--marca); }
-.home-puerta--emp:hover { border-color:var(--marca); }
-.home-puerta--con { border-radius:6px; }   /* recto = mundo del contador */
-.home-puerta--con:hover { border-color:var(--u-aldia); }
-.home-puerta--con .home-puerta-cta { color:var(--u-aldia); }
+.home-puerta-cta { margin-top:7px; font-size:.72rem; font-weight:800; letter-spacing:.09em; }
+.home-puerta--emp { border-color:color-mix(in srgb,#5B8DEF 38%,var(--borde)); }
+.home-puerta--emp::before { background:linear-gradient(90deg,#5B8DEF,#8AB4FF); }
+.home-puerta--emp:hover { border-color:#5B8DEF; box-shadow:0 10px 26px rgba(91,141,239,.22); }
+.home-puerta--emp .home-puerta-cta { color:#7CA6F5; }
+.home-puerta--con { border-radius:6px; border-color:color-mix(in srgb,#26D07C 38%,var(--borde)); }
+.home-puerta--con::before { background:linear-gradient(90deg,#26D07C,#16B0D8); }
+.home-puerta--con:hover { border-color:#26D07C; box-shadow:0 10px 26px rgba(38,208,124,.20); }
+.home-puerta--con .home-puerta-cta { color:#39D98C; }
 .home-pie { text-align:center; color:var(--texto-suave); font-size:.76rem; margin-top:22px; }
-/* Solo apilan si de verdad no caben (muy angosto); side-by-side ayuda al 1er scroll. */
+
+/* ESCRITORIO: hero a DOS COLUMNAS. Video izq (ancho = altura·9/16), lado der con
+   subtítulo+botones+título centrado, llenando el hueco que antes quedaba vacío. */
+@media (min-width:860px){
+  .home-hero { grid-template-columns:calc(var(--home-video-maxh) * 9 / 16) 1fr;
+    column-gap:52px; grid-template-areas:"vid side"; }
+  .home-hero-side { display:flex; flex-direction:column; justify-content:center; gap:26px;
+    grid-area:side; text-align:left; }
+  .home-video { margin:0; }
+  .home-sub { text-align:left; margin:0; max-width:none; font-size:1.05rem; }
+  .home-titular { text-align:left; margin:0; max-width:none; font-size:clamp(2rem,3.2vw,2.9rem); }
+  .home-puerta { padding:18px 16px; }
+  .home-puerta-rol { font-size:1.3rem; }
+}
+/* Muy angosto: los dos botones apilan. */
 @media (max-width:340px){ .home-puertas { grid-template-columns:1fr; } }
 
 /* Conversión CONTADOR (hoja de cálculo: recto, verde, ordenado) */
