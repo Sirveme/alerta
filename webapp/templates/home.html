@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% block titulo %}alerta.pe · Nunca vuelvas a perder una notificación importante{% endblock %}
+{% block titulo %}alerta.pe — Vigilamos tu buzón SUNAT y te avisamos a diario{% endblock %}
+{% block descripcion %}alerta.pe vigila tu buzón de SUNAT y te avisa a diario de notificaciones, multas, órdenes de pago y cobranzas. Para empresarios y contadores en Perú.{% endblock %}
+{% block og_image %}https://alerta.pe/static/vid/poster_alertape.jpg{% endblock %}
 {% block contenido %}
 <div class="home" id="home">
 
@@ -18,6 +20,7 @@
   <section class="home-hero">
     <div class="home-video">
       <video class="home-video-player" controls playsinline preload="metadata"
+             aria-label="Video: un empresario junto a una pizarra que pregunta ¿Quién revisa hoy el buzón de SUNAT de tu empresa?"
              poster="{{ video_poster or '/static/vid/poster_alertape.jpg' }}">
         {% if video_url %}<source src="{{ video_url }}" type="video/mp4">{% endif %}
         Tu navegador no reproduce el video.
@@ -46,4 +49,16 @@
 {% endblock %}
 {% block scripts %}
 <script>document.documentElement.setAttribute('data-color', 'dark');</script>
+<script>
+  // Al reproducir, ocultar el título/scrim (tapan los subtítulos del video);
+  // al pausar o terminar, volver a mostrarlos (se ve el título sobre la portada).
+  (function () {
+    var v = document.querySelector('.home-video-player');
+    var box = document.querySelector('.home-video');
+    if (!v || !box) return;
+    v.addEventListener('play',  function () { box.classList.add('video-activo'); });
+    v.addEventListener('pause', function () { box.classList.remove('video-activo'); });
+    v.addEventListener('ended', function () { box.classList.remove('video-activo'); });
+  })();
+</script>
 {% endblock %}

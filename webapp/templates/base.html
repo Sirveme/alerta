@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0E1117">
   <title>{% block titulo %}alerta.pe{% endblock %}</title>
+  <meta name="description" content="{% block descripcion %}alerta.pe vigila tu buzón electrónico de SUNAT y te avisa a diario de notificaciones, multas, órdenes de pago y cobranzas.{% endblock %}">
+  <!-- Open Graph (previsualización al compartir en WhatsApp / redes). og:title y
+       og:description reutilizan los bloques de arriba; og:image lo fija cada página. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="alerta.pe">
+  <meta property="og:title" content="{% block og_title %}{{ self.titulo() }}{% endblock %}">
+  <meta property="og:description" content="{% block og_desc %}{{ self.descripcion() }}{% endblock %}">
+  <meta property="og:image" content="{% block og_image %}https://alerta.pe/static/img/favicon.svg{% endblock %}">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
 
