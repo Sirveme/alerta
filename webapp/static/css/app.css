@@ -2476,7 +2476,9 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 /* ═══ HOME (distribuidora NEUTRAL): vida con los colores propios de alerta.pe
    —verde selva + verde #26D07C / cian #16B0D8 del logo—, SIN chicha (el chicha es
    solo de /empresarios; inclinar la home hacia allá enfriaría al contador). ═══ */
-.home { max-width:1060px; margin:0 auto; padding:16px 18px 48px;
+.home { max-width:1060px; margin:0 auto;
+  /* padding-bottom deja aire para la BARRA FIJA de botones (~72px + safe-area). */
+  padding:16px 18px calc(96px + env(safe-area-inset-bottom, 0px));
   background:
     radial-gradient(55% 42% at 14% 20%, rgba(38,208,124,.07), transparent 60%),
     radial-gradient(52% 44% at 92% 80%, rgba(22,176,216,.06), transparent 62%); }
@@ -2486,77 +2488,65 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 /* Logo un poco más chico (aire para el subtítulo). */
 .home-top .logo-selva { font-size:clamp(1.2rem, 5.4vw, 2rem); }
 
-/* HERO: MÓVIL apilado (subtítulo→video→botones→título, vía grid-areas); ESCRITORIO
-   dos columnas (video izq · subtítulo+botones+título der, llenando el hueco). */
-.home-hero { --home-video-maxh:70vh; display:grid; grid-template-columns:1fr;
-  align-items:center; grid-template-areas:"sub" "vid" "btn" "ttl"; }
-.home-hero-side { display:contents; }          /* móvil: sus hijos fluyen al grid */
-.home-sub    { grid-area:sub; }
-.home-video  { grid-area:vid; }
-.home-puertas{ grid-area:btn; }
-.home-titular{ grid-area:ttl; }
-
-/* Subtítulo: orienta (es SUNAT). */
+/* Subtítulo ARRIBA (entre logo y video): orienta (es SUNAT). */
 .home-sub { text-align:center; color:var(--texto-suave); font-size:1rem;
-  line-height:1.4; margin:0 auto 12px; max-width:560px; }
-/* Título con VIDA: degradado de marca verde→cian en la palabra clave + más peso. */
-.home-titular { text-align:center; font-weight:800; letter-spacing:-.01em;
-  font-size:clamp(1.6rem,5vw,2.3rem); line-height:1.12; margin:20px auto 0; max-width:640px; }
-.home-titular .hl { background:linear-gradient(92deg,#26D07C 0%,#16B0D8 100%);
-  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
-  color:#26D07C; /* fallback si el navegador no soporta clip */ }
+  line-height:1.4; margin:0 auto 16px; max-width:560px; }
 
-/* Video vertical 9:16, GRANDE (--home-video-maxh:70vh, elegido). */
-.home-video { margin:0 auto 14px; max-width:680px; }
+/* HERO: el VIDEO con su PORTADA + el TÍTULO superpuesto (abajo-izq, sobre un scrim).
+   Los botones NO van aquí — van en la BARRA FIJA (.home-barra), así no compiten por
+   espacio con el título. --home-video-maxh:70vh (elegido antes). */
+.home-hero { --home-video-maxh:70vh; }
+/* Contenedor a la MEDIDA del video (fit-content) → scrim y título calzan exacto. */
+.home-video { position:relative; width:fit-content; max-width:100%; margin:0 auto;
+  border-radius:16px; overflow:hidden;
+  box-shadow:0 14px 44px rgba(0,0,0,.42), 0 0 0 1px rgba(38,208,124,.08); }
 .home-video-player { display:block; aspect-ratio:9/16; height:auto;
-  max-height:var(--home-video-maxh); width:auto; max-width:100%; margin:0 auto;
-  object-fit:contain; background:#0A1E16; border-radius:14px; border:1px solid var(--borde);
-  box-shadow:0 12px 40px rgba(0,0,0,.35), 0 0 0 1px rgba(38,208,124,.07); }
-.home-video-ph { display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:10px; aspect-ratio:9/16; max-height:var(--home-video-maxh); margin:0 auto;
-  max-width:min(100%, calc(var(--home-video-maxh) * 9 / 16));
-  border:1px dashed var(--borde); border-radius:14px; background:var(--superficie);
-  color:var(--texto-suave); text-align:center; padding:16px; }
-.home-video-ph .material-symbols-outlined { font-size:44px; opacity:.6; }
+  max-height:var(--home-video-maxh); width:auto; max-width:100%; margin:0;
+  object-fit:cover; background:#0A1E16; }
+/* Scrim: degradado oscuro abajo→arriba, legibilidad del título sobre cualquier
+   portada. Casi transparente en el centro → no tapa el play. No intercepta clics. */
+.home-video-scrim { position:absolute; left:0; right:0; bottom:0; height:58%; z-index:1;
+  background:linear-gradient(to top, rgba(10,30,22,.85) 0%, rgba(10,30,22,.5) 42%, transparent 100%);
+  pointer-events:none; }
+/* Título SOBRE la portada, abajo-izquierda. pointer-events:none → el play nativo
+   (centrado) sigue funcionando. */
+.home-titular { position:absolute; left:18px; right:18px; bottom:16px; z-index:2; margin:0;
+  text-align:left; color:#F5F8F6; font-weight:800; letter-spacing:-.01em; line-height:1.1;
+  font-size:clamp(1.5rem,5.6vw,2.05rem); pointer-events:none; text-shadow:0 2px 12px rgba(0,0,0,.5); }
+.home-titular .hl { background:linear-gradient(90deg,#5EEA8C,#22D3D2);
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:transparent; }
 
-/* Botones de avatar: etiquetas apiladas + CARÁCTER (franja de color arriba, borde
-   teñido, hover con glow). Distinción: empresario azul redondeado / contador verde recto. */
-.home-puertas { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.home-puerta { position:relative; overflow:hidden; display:flex; flex-direction:column;
-  align-items:center; gap:2px; text-align:center; text-decoration:none; color:var(--texto);
-  background:linear-gradient(180deg,var(--superficie-2),var(--superficie));
-  border:1px solid var(--borde); border-radius:14px; padding:15px 10px 14px;
-  transition:border-color .14s, transform .14s, box-shadow .14s; }
-.home-puerta::before { content:""; position:absolute; inset:0 0 auto 0; height:3px; }
-.home-puerta:hover { transform:translateY(-3px); }
-.home-puerta-rol { font-size:1.15rem; font-weight:700; line-height:1.1; }
-.home-puerta-alt { font-size:.82rem; color:var(--texto-suave); line-height:1.2; }
-.home-puerta-cta { margin-top:7px; font-size:.72rem; font-weight:800; letter-spacing:.09em; }
-.home-puerta--emp { border-color:color-mix(in srgb,#5B8DEF 38%,var(--borde)); }
-.home-puerta--emp::before { background:linear-gradient(90deg,#5B8DEF,#8AB4FF); }
-.home-puerta--emp:hover { border-color:#5B8DEF; box-shadow:0 10px 26px rgba(91,141,239,.22); }
-.home-puerta--emp .home-puerta-cta { color:#7CA6F5; }
-.home-puerta--con { border-radius:6px; border-color:color-mix(in srgb,#26D07C 38%,var(--borde)); }
-.home-puerta--con::before { background:linear-gradient(90deg,#26D07C,#16B0D8); }
-.home-puerta--con:hover { border-color:#26D07C; box-shadow:0 10px 26px rgba(38,208,124,.20); }
-.home-puerta--con .home-puerta-cta { color:#39D98C; }
-.home-pie { text-align:center; color:var(--texto-suave); font-size:.76rem; margin-top:22px; }
+.home-pie { text-align:center; color:var(--texto-suave); font-size:.76rem; margin-top:18px; }
 
-/* ESCRITORIO: hero a DOS COLUMNAS. Video izq (ancho = altura·9/16), lado der con
-   subtítulo+botones+título centrado, llenando el hueco que antes quedaba vacío. */
+/* BARRA FIJA de botones (abajo). Superficie propia (#0F241C) + borde superior sutil
+   → se lee como barra de acciones, no como texto flotando. Dos botones con BORDE y
+   FONDO propios: Contador (verde, recto) · Empresario/Gestor (azul, redondeado). */
+.home-barra { position:fixed; left:0; right:0; bottom:0; z-index:50;
+  display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:stretch;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  background:#0F241C; border-top:1px solid rgba(94,234,140,.20);
+  box-shadow:0 -10px 30px rgba(0,0,0,.35); }
+.home-btn { display:flex; align-items:center; justify-content:center; text-align:center;
+  text-decoration:none; font-weight:800; font-size:1.02rem; line-height:1.1; padding:15px 12px;
+  border:1.5px solid; transition:transform .12s, box-shadow .12s, background .12s; }
+.home-btn:hover { transform:translateY(-2px); }
+.home-btn--con { border-radius:6px; color:#EAF7EF; border-color:#26D07C;
+  background:linear-gradient(180deg, rgba(38,208,124,.22), rgba(38,208,124,.10)); }
+.home-btn--con:hover { box-shadow:0 8px 22px rgba(38,208,124,.30);
+  background:linear-gradient(180deg, rgba(38,208,124,.32), rgba(38,208,124,.16)); }
+.home-btn--emp { border-radius:14px; color:#EAF1FF; border-color:#5B8DEF;
+  background:linear-gradient(180deg, rgba(91,141,239,.22), rgba(91,141,239,.10)); }
+.home-btn--emp:hover { box-shadow:0 8px 22px rgba(91,141,239,.30);
+  background:linear-gradient(180deg, rgba(91,141,239,.32), rgba(91,141,239,.16)); }
+
+/* ESCRITORIO: la barra fija centra sus dos botones con ancho acotado. */
 @media (min-width:860px){
-  .home-hero { grid-template-columns:calc(var(--home-video-maxh) * 9 / 16) 1fr;
-    column-gap:52px; grid-template-areas:"vid side"; }
-  .home-hero-side { display:flex; flex-direction:column; justify-content:center; gap:26px;
-    grid-area:side; text-align:left; }
-  .home-video { margin:0; }
-  .home-sub { text-align:left; margin:0; max-width:none; font-size:1.05rem; }
-  .home-titular { text-align:left; margin:0; max-width:none; font-size:clamp(2rem,3.2vw,2.9rem); }
-  .home-puerta { padding:18px 16px; }
-  .home-puerta-rol { font-size:1.3rem; }
+  .home-barra { grid-template-columns:repeat(2, minmax(220px, 320px)); justify-content:center;
+    padding-left:0; padding-right:0; }
+  .home-btn { font-size:1.1rem; padding:16px 22px; }
+  .home-titular { font-size:clamp(1.6rem,2.4vw,2.2rem); left:22px; bottom:20px; }
 }
-/* Muy angosto: los dos botones apilan. */
-@media (max-width:340px){ .home-puertas { grid-template-columns:1fr; } }
 
 /* Conversión CONTADOR (hoja de cálculo: recto, verde, ordenado) */
 .con-valor { display:flex; flex-direction:column; gap:2px; margin:18px 0 4px;
