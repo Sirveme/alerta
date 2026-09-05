@@ -94,9 +94,14 @@ async def detalle_notificacion(
             notif.leida_at = ahora_lima()
             await session.commit()
 
+        # "Mi" reacción: por usuario_id (legacy) o persona_id (login por DNI).
+        def _es_mia(r):
+            return ((user.tiene_usuario and r.usuario_id
+                     and str(r.usuario_id) == str(user.id))
+                    or (user.persona_id and r.persona_id
+                        and str(r.persona_id) == str(user.persona_id)))
         mi_reaccion = next(
-            (r.tipo.value for r in notif.reacciones if str(r.usuario_id) == str(user.id)),
-            None)
+            (r.tipo.value for r in notif.reacciones if _es_mia(r)), None)
 
     return templates.TemplateResponse(request, "notificacion.html", {
         "user": user, "notif": notif, "mi_reaccion": mi_reaccion,
@@ -124,7 +129,7 @@ async def reaccionar(
 
         existente = await session.scalar(
             select(Reaccion).where(
-                Reaccion.usuario_id == user.id,
+                user.filtro_autoria(Reaccion.usuario_id, Reaccion.persona_id),
                 Reaccion.notificacion_id == notif_id))
         quitada = False
         if existente:
@@ -135,12 +140,10 @@ async def reaccionar(
             else:
                 existente.tipo = tipo
         else:
-            # Personas sin fila en `usuarios` (acceso institucional) no reaccionan.
-            if not user.tiene_usuario:
-                return JSONResponse({"ok": False, "error": "Solo lectura."}, status_code=403)
+            # Login por DNI → persona_id; legacy → usuario_id (ver autoria()).
             session.add(Reaccion(
-                estudio_id=user.estudio_id, usuario_id=user.id,
-                notificacion_id=notif_id, tipo=tipo))
+                estudio_id=user.estudio_id, notificacion_id=notif_id,
+                tipo=tipo, **user.autoria()))
         await session.commit()
     return JSONResponse({"ok": True, "tipo": None if quitada else tipo.value})
 

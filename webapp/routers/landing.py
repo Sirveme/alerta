@@ -393,7 +393,7 @@ async def bienvenida_credenciales(
                 contribuyente_id=contrib.id, estudio_id=user.estudio_id,
                 usuario_sol=usuario_sol,
                 clave_sol_cifrada=cifrar_clave_sol(clave_sol),
-                tipo_usuario=2, quien_cargo=user.id, valida=True))
+                tipo_usuario=2, valida=True, **user.cargo_trazabilidad()))
         # Reconectar reactiva el RUC (zAlerta-51): venga de ERROR_CREDENCIAL o de
         # INACTIVO, para que vuelva al ciclo automático de vigilancia.
         if contrib.estado in (EstadoContribuyente.ERROR_CREDENCIAL,

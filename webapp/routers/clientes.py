@@ -277,7 +277,7 @@ async def crear_contribuyente(
         session.add(CredencialSol(
             contribuyente_id=contrib.id, estudio_id=user.estudio_id,
             usuario_sol=usuario_sol, clave_sol_cifrada=cifrar_clave_sol(clave_sol),
-            tipo_usuario=2, quien_cargo=user.id, valida=True))
+            tipo_usuario=2, valida=True, **user.cargo_trazabilidad()))
 
         # ── Cuenta del empresario (onboarding viral, zAlerta-06 C.2) ──
         cuenta_emp = await _crear_cuenta_empresario(
@@ -407,7 +407,7 @@ async def _crear_uno(session, user, estudio, fila: dict, restantes: int) -> dict
     session.add(CredencialSol(
         contribuyente_id=contrib.id, estudio_id=user.estudio_id,
         usuario_sol=usuario_sol, clave_sol_cifrada=cifrar_clave_sol(clave_sol),
-        tipo_usuario=2, quien_cargo=user.id, valida=True))
+        tipo_usuario=2, valida=True, **user.cargo_trazabilidad()))
 
     # Cuenta-empresario gratis (onboarding viral) SOLO si dieron WhatsApp válido.
     invitacion = None

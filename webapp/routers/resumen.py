@@ -328,6 +328,9 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "fuente": n.fuente,
             "categoria_fuente": n.categoria_fuente,
             "plazo_dias": n.plazo_dias,
+            # SUNAFIL-1: hay documento oficial en SUNAFIL. alerta.pe NO lo descarga
+            # (abrirlo acusa e inicia el plazo). El panel avisa + enlaza a la casilla.
+            "tiene_documento": bool(n.tiene_documento),
             # Cuerpo FIEL del mensaje SUNAT (zAlerta-82): literal, sin resumir.
             "cuerpo": _cuerpo_lista,
             # Cuerpo renderizado (zAlerta-92/93): JSON por subtipo o, si no lo
@@ -514,8 +517,8 @@ async def cred_guardar(contribuyente_id: uuid.UUID, request: Request,
                 contribuyente_id=contrib.id, estudio_id=contrib.estudio_id,
                 usuario_sol=usuario_sol,
                 clave_sol_cifrada=cifrar_clave_sol(clave_sol),
-                tipo_usuario=2, quien_cargo=user.id, valida=True,
-                ultimo_login_ok_at=ahora_lima()))
+                tipo_usuario=2, valida=True,
+                ultimo_login_ok_at=ahora_lima(), **user.cargo_trazabilidad()))
         # Guardar una credencial válida es RECONECTAR: reactiva el RUC venga de
         # ERROR_CREDENCIAL o de INACTIVO (zAlerta-51: antes quedaba pegado en
         # INACTIVO tras desconectar+reconectar → el fondo, que filtra estado=ACTIVO,
