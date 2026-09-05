@@ -284,7 +284,17 @@
       catch (_) { est = null; }
       if (est && est.ok && est.listo) {
         clearInterval(timer); btn.disabled = false;
-        if (est.estado === 'conecta') pintarConexion(i, 'ok', '✓ Conecta');
+        if (est.estado === 'conecta') {
+          // Evidencia de LECTURA real: además de "Conecta", el último aviso
+          // del buzón (fecha + asunto). Confirma que sí leemos, no solo que
+          // el login entra. Si el peek no vino, mostramos solo "Conecta".
+          let txt = '✓ Conecta';
+          if (est.ultimo_aviso) {
+            txt += ' · <span class="conx-aviso">Último aviso: '
+                 + esc(est.ultimo_aviso) + '</span>';
+          }
+          pintarConexion(i, 'ok', txt);
+        }
         else if (est.estado === 'no_conecta') pintarConexion(i, 'no', '✗ No conecta — revisa la clave');
         else pintarConexion(i, 'no', '✗ No se pudo comprobar ahora');
       } else if (intentos >= 18) {
