@@ -9,8 +9,8 @@
     <a href="/login" class="home-entrar">Iniciar sesión</a>
   </header>
 
-  <!-- Subtítulo ARRIBA (entre el logo y el video): orienta (es SUNAT) antes de todo. -->
-  <p class="home-sub">Vigilamos tu buzón SUNAT y te avisamos a diario. Elige por dónde entrar.</p>
+  <!-- Subtítulo ARRIBA (entre el logo y el video): orienta (es SUNAT). -->
+  <p class="home-sub">Vigilamos tu buzón SUNAT y te avisamos a diario.</p>
 
   <!-- HERO: el VIDEO con su PORTADA y el TÍTULO superpuesto (abajo-izquierda, sobre un
        scrim para legibilidad). Los botones NO van aquí: van en una barra fija abajo,
@@ -37,8 +37,11 @@
 <!-- BARRA FIJA de botones (abajo). Dos perfiles → dos destinos. Empresario y Gestor
      comparten destino (/empresarios), por eso UN solo botón, no dos. -->
 <nav class="home-barra" aria-label="Elige tu perfil">
-  <a href="/contadores" class="home-btn home-btn--con">Soy Contador</a>
-  <a href="/empresarios" class="home-btn home-btn--emp">Soy Empresario o Gestor</a>
+  <p class="home-barra-lbl">Toca y prueba gratis</p>
+  <div class="home-barra-btns">
+    <a href="/contadores" class="home-btn home-btn--con">Soy Contador</a>
+    <a href="/empresarios" class="home-btn home-btn--emp">Soy Empresario o Gestor</a>
+  </div>
 </nav>
 {% endblock %}
 {% block scripts %}
