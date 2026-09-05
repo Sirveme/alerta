@@ -635,6 +635,10 @@ a.tarjeta-link { display:block; color:inherit; }
 .alta-conexion.ok { color:var(--u-aldia); }
 .alta-conexion.no { color:var(--u-urgente); }
 .alta-conexion.run { color:var(--texto-suave); }
+/* Con evidencia de lectura ("Último aviso: …") el texto crece: dejar envolver
+   y que la evidencia lea como secundaria (peso/color más suaves). */
+.alta-conexion.ok { white-space:normal; }
+.conx-aviso { font-weight:500; color:var(--texto-suave); }
 .ti-loader-2 { animation:girar 1s linear infinite; }
 @keyframes girar { to { transform:rotate(360deg); } }
 
