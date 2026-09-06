@@ -24,7 +24,7 @@ import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, update, or_, and_, exists, cast, Text
+from sqlalchemy import select, update, or_, and_, exists, cast, Text, func
 from sqlalchemy.orm import selectinload
 
 from db import get_session
@@ -374,6 +374,20 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
             "FULL" if hacer_full else f"incremental ({len(conocidos)} conocidos)")
     log(f"  {contrib.ruc}: scrapeando [{modo}]...")
 
+    # Arranque SILENCIOSO del backlog SUNAT (espejo de SUNAFIL): ¿es la PRIMERA
+    # ingesta SUNAT de este cliente? Detección ROBUSTA por conteo en BD (no flag
+    # frágil): 0 filas sunat → primera vez. Si la 1ª corrida no trae nada, la base
+    # sigue en 0 → la próxima sí silencia; en cuanto guarda ≥1 deja de ser primera.
+    # Se calcula ANTES de ingestar. (En censo/backfill no aplica: censo no ingesta y
+    # backfill solo corre sobre clientes con histórico ya existente.)
+    primera_ingesta_sunat = False
+    if not solo_censo and not backfill:
+        ya_en_base = await session.scalar(
+            select(func.count(Notificacion.id)).where(
+                Notificacion.contribuyente_id == contrib.id,
+                Notificacion.fuente == "sunat")) or 0
+        primera_ingesta_sunat = (ya_en_base == 0)
+
     # Año-desde de deuda POR BUZÓN (zAlerta-72): el scraper baja desde el año
     # CUBIERTO (piso de descarga); si no hay, default año_actual − 2.
     anio_desde = (contrib.anio_deuda_cubierto_desde
@@ -415,6 +429,29 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
 
     stats = await ingestar_resultado(
         session, contrib.estudio_id, contrib.id, resultado)
+
+    # Arranque SILENCIOSO del backlog SUNAT (default ON): en la PRIMERA ingesta de
+    # este cliente marca TODO su histórico como ya notificado (notificado_push=True)
+    # → NO alerta el backlog acumulado de golpe cuando el contador lo agrega. Las
+    # notifs quedan GUARDADAS y VISIBLES en el panel (esto solo cambia el flag de
+    # alerta, no oculta contenido); el primer push real llega con lo NUEVO de la 2ª
+    # corrida en adelante. NO toca la lógica de envío del worker: el backlog
+    # simplemente nunca entra a su query (que selecciona notificado_push=False).
+    # Escape: SUNAT_SILENCIAR_BACKLOG=0 lo desactiva.
+    silenciados_sunat = 0
+    if primera_ingesta_sunat and os.getenv("SUNAT_SILENCIAR_BACKLOG", "1").strip().lower() \
+            in ("1", "true", "yes", "on"):
+        res = await session.execute(
+            update(Notificacion)
+            .where(Notificacion.contribuyente_id == contrib.id,
+                   Notificacion.fuente == "sunat",
+                   Notificacion.notificado_push.is_(False))
+            .values(notificado_push=True, notificado_push_at=datetime.now(TZ_LIMA)))
+        silenciados_sunat = res.rowcount or 0
+        if silenciados_sunat:
+            log(f"  {contrib.ruc}: BACKLOG SUNAT SILENCIADO ({silenciados_sunat} "
+                f"marcada(s) como ya notificadas — visibles en panel, no alertan).", "OK")
+
     # ── Métricas de barrido + censo (zAlerta-83): tablero de riesgo de ban ──
     met = resultado.get("metricas") or {}
     session.add(BarridoMetrica(
