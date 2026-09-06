@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from fastapi import Depends, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, or_, false
 
 from models import RolUsuario, TipoCuenta, Contribuyente
 from .auth import COOKIE_NOMBRE, leer_sesion
@@ -76,6 +76,37 @@ class UsuarioActual:
         if self.rol == RolUsuario.ASISTENTE:
             return "asistente"
         return "contador"
+
+    def autoria(self) -> dict:
+        """Columnas de identidad (usuario_id/persona_id) para INSERTs en tablas
+        con columnas hermanas (reacciones, recordatorios, push_suscripciones).
+        Login por DNI → persona_id (NO hay fila en `usuarios`, la FK reventaría);
+        login legacy → usuario_id. Migración usuarios→personas (zAlerta-67).
+        Se usa como Reaccion(..., **user.autoria())."""
+        if self.persona_id:
+            return {"usuario_id": None, "persona_id": self.persona_id}
+        return {"usuario_id": self.id, "persona_id": None}
+
+    def cargo_trazabilidad(self) -> dict:
+        """Igual que autoria() pero con los nombres de columna de credenciales_sol
+        (quien_cargo / quien_cargo_persona_id). CredencialSol(..., **user.cargo_trazabilidad())."""
+        a = self.autoria()
+        return {"quien_cargo": a["usuario_id"],
+                "quien_cargo_persona_id": a["persona_id"]}
+
+    def filtro_autoria(self, col_usuario, col_persona):
+        """Condición para LEER filas de ESTA identidad en tablas con columnas
+        hermanas. OR sobre ambas columnas: reconoce filas viejas (usuario_id) y
+        nuevas (persona_id) de la misma persona durante la transición. Ej.:
+        select(Reaccion).where(user.filtro_autoria(Reaccion.usuario_id,
+                                                    Reaccion.persona_id))."""
+        conds = []
+        if self.tiene_usuario:
+            conds.append(col_usuario == self.id)
+        if self.persona_id:
+            conds.append(col_persona == self.persona_id)
+        # Toda sesión tiene al menos una identidad; si no, no casar nada.
+        return or_(*conds) if conds else false()
 
 
 def _desde_sesion(sesion: dict) -> UsuarioActual:
