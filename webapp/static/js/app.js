@@ -157,10 +157,19 @@ document.addEventListener('click', async (e) => {
         setTimeout(() => location.reload(), 1400);
       } else {
         const antes = _horaCorta(prev.ultimo_scrapeo_at), ahora = _horaCorta(est.ultimo_scrapeo_at);
-        const sub = antes
-          ? 'No hay notificaciones nuevas entre ' + antes + ' y ' + ahora + '.'
-          : 'Tu Buzón quedó al día a las ' + (ahora || '') + '.';
-        _resBloque(out, 'ok', 'ti-circle-check', 'Todo revisado · sin novedades', sub);
+        // Distinguir "nada NUEVO desde la última vez" de "buzón vacío": si hay
+        // historial (est.total>0) el buzón NO está vacío, solo sin novedades nuevas.
+        const hist = est.total || 0;
+        const titulo = hist > 0
+          ? 'Buzón al día · sin novedades nuevas'
+          : 'Todo revisado · sin novedades';
+        const sub = hist > 0
+          ? ('Sin avisos nuevos desde ' + (antes || 'la última revisión') + '. Tienes '
+             + hist + (hist === 1 ? ' aviso' : ' avisos') + ' en tu historial.')
+          : (antes
+              ? 'No hay notificaciones nuevas entre ' + antes + ' y ' + ahora + '.'
+              : 'Tu Buzón quedó al día a las ' + (ahora || '') + '.');
+        _resBloque(out, 'ok', 'ti-circle-check', titulo, sub);
       }
     } else if (intentos >= maxIntentos) {
       clearInterval(timer); ind.stop();
