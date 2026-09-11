@@ -953,21 +953,49 @@ a.tarjeta-link { display:block; color:inherit; }
 .act-titulo { font-size:1.6rem; margin:14px 0 4px; letter-spacing:-.01em; }
 .act-bloque { margin-top:16px; }
 .act-label { font-weight:600; display:block; margin-bottom:8px; }
-#act-ruc { width:100%; padding:13px; font-size:1.15rem; letter-spacing:.06em;
+#act-ruc { width:100%; padding:13px 14px; font-size:1.15rem; letter-spacing:.06em;
   background:var(--superficie-2); color:var(--texto);
-  border:1.5px solid var(--borde); border-radius:var(--radio); }
-#act-ruc:focus { outline:none; border-color:#1D9E75; }
+  border:1.5px solid var(--borde); border-radius:12px; outline:none;
+  transition:border-color .12s ease, box-shadow .12s ease, background .12s ease; }
+#act-ruc:focus { border-color:#5EEA8C; background:var(--superficie);
+  box-shadow:0 0 0 3px color-mix(in srgb,#5EEA8C 24%,transparent),
+             0 0 16px color-mix(in srgb,#22D3D2 26%,transparent); }
+/* Caja VALIDADO (RUC y DNI comparten .act-ruc-ok): verde de marca + ✓ verde/cian. */
 .act-ruc-ok { display:flex; align-items:flex-start; gap:10px; margin-top:12px;
-  padding:11px; border-radius:var(--radio);
-  background:color-mix(in srgb,#1D9E75 12%,transparent);
-  border:1px solid color-mix(in srgb,#1D9E75 45%,transparent); }
-.act-ruc-ok .ti { color:#1D9E75; font-size:22px; }
+  padding:11px 13px; border-radius:12px;
+  background:color-mix(in srgb,#5EEA8C 12%,var(--superficie));
+  border:1px solid color-mix(in srgb,#5EEA8C 42%,transparent); }
+.act-ruc-ok .ti { color:#5EEA8C; font-size:22px; }
 .act-rs { font-weight:700; }
 .act-rs-edit { width:100%; margin-top:10px; padding:10px; background:var(--superficie-2);
   color:var(--texto); border:1.5px solid var(--u-importante); border-radius:var(--radio); }
 .act-estado { margin-top:8px; font-size:.9rem; min-height:1em; }
 .act-estado.ok { color:var(--u-aldia); } .act-estado.warn { color:var(--u-importante); }
 .act-estado.err { color:var(--u-urgente); }
+
+/* ════════ CAMPOS DE LAS PUERTAS (unificado, tema oscuro) ════════
+   /activar (.act), /contadores (.reg-form) y /activar-identidad (.ai-wrap):
+   relleno teñido que se distingue del fondo, borde visible, esquinas 12px,
+   padding cómodo, y FOCO que se ilumina en el verde/cian del logo. Nunca #fff.
+   Segmentados (.act-wa-campo) y validados se estilan aparte, más abajo. */
+.act input:not([type=checkbox]):not([type=radio]),
+.reg-form input:not([type=checkbox]):not([type=radio]),
+.ai-wrap input:not([type=checkbox]):not([type=radio]) {
+  width:100%; background:var(--superficie-2); color:var(--texto);
+  border:1.5px solid var(--borde); border-radius:12px;
+  padding:13px 14px; font-size:1rem; font-family:inherit; outline:none;
+  transition:border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.act input:not([type=checkbox]):not([type=radio])::placeholder,
+.reg-form input::placeholder,
+.ai-wrap input::placeholder { color:var(--texto-suave); }
+.act input:not([type=checkbox]):not([type=radio]):focus,
+.reg-form input:not([type=checkbox]):not([type=radio]):focus,
+.ai-wrap input:not([type=checkbox]):not([type=radio]):focus {
+  border-color:#5EEA8C; background:var(--superficie);
+  box-shadow:0 0 0 3px color-mix(in srgb,#5EEA8C 24%,transparent),
+             0 0 16px color-mix(in srgb,#22D3D2 26%,transparent);
+}
 
 .act-pregunta { font-weight:700; font-size:1.1rem; margin-bottom:12px; }
 .act-bifurca { display:flex; gap:10px; }
@@ -1077,12 +1105,19 @@ a.tarjeta-link { display:block; color:inherit; }
 
 /* B · WhatsApp temprano (prefijo +51 fijo; el usuario escribe solo su número) */
 .act-label--mt { margin-top:16px; }
-.act-wa-campo { display:flex; align-items:stretch; }
+/* Segmentado (+51 | número): el BORDE y el foco viven en el WRAPPER; el input
+   interno va sin borde para no duplicar la caja ni el halo. */
+.act-wa-campo { display:flex; align-items:stretch; border:1.5px solid var(--borde);
+  border-radius:12px; background:var(--superficie-2); overflow:hidden;
+  transition:border-color .12s ease, box-shadow .12s ease, background .12s ease; }
+.act-wa-campo:focus-within { border-color:#5EEA8C; background:var(--superficie);
+  box-shadow:0 0 0 3px color-mix(in srgb,#5EEA8C 24%,transparent),
+             0 0 16px color-mix(in srgb,#22D3D2 26%,transparent); }
 .act-wa-pre { display:flex; align-items:center; padding:0 12px; font-weight:700;
-  background:var(--superficie-2); color:var(--texto);
-  border:1.5px solid var(--borde); border-right:none;
-  border-radius:var(--radio) 0 0 var(--radio); }
-.act-wa-campo input { flex:1; min-width:0; border-radius:0 var(--radio) var(--radio) 0; }
+  color:var(--texto-suave); background:color-mix(in srgb,var(--borde) 45%,transparent);
+  border-right:1px solid var(--borde); }
+.act-wa-campo input { flex:1; min-width:0; border:none !important;
+  background:transparent !important; box-shadow:none !important; border-radius:0 !important; }
 
 /* F · BENEFICIO TANGIBLE — 4 franjas, cada una con su acento chicha */
 .act-benef-tit { font-weight:700; display:flex; align-items:center; gap:8px; margin-bottom:10px; }
@@ -2447,9 +2482,11 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
 .reg-form { display:flex; flex-direction:column; gap:12px; }
 .reg-grupo { display:flex; flex-direction:column; gap:5px; }
 .reg-grupo label { font-size:.8rem; color:var(--texto-suave); }
-.reg-grupo input { padding:11px 12px; border-radius:10px; border:1px solid var(--borde);
-  background:var(--superficie); color:var(--texto); font:inherit; }
-.reg-grupo input:focus { outline:none; border-color:var(--acento); }
+/* Los inputs de /contadores los estiliza la regla compartida .reg-form input
+   (relleno + borde + foco verde/cian). Aquí solo el feedback del DNI validado. */
+.reg-dni-msg { font-size:.85rem; min-height:1em; margin-top:2px; }
+.reg-dni-msg.ok { color:#5EEA8C; font-weight:600; }
+.reg-dni-msg.warn { color:var(--u-importante); }
 .reg-fila { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .reg-cta { margin-top:6px; justify-content:center; background:var(--acento);
   color:#06210f; border:0; }
