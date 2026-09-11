@@ -295,6 +295,11 @@ class EstudioContable(Base, TimestampMixin):
     # Segmento comercial (zAlerta-99): 'estudio' | 'independiente'. Mismo camino;
     # se guarda solo para segmentar después. NULL en cuentas viejas.
     segmento: Mapped[str | None] = mapped_column(String(20))
+    # Identidad DIFERIDA (unificación, Fase 1): en el alta VIRAL el contador crea la
+    # org empresario SIN Persona (no sabe el DNI). Este token de un solo uso viaja en
+    # el link de activación; el empresario lo abre, pone su DNI + clave y ahí se crea
+    # su Persona+Acceso. Se limpia al activar. NULL = ya tiene identidad / no aplica.
+    activacion_token: Mapped[str | None] = mapped_column(String(64), unique=True)
     # MARCA BLANCA (reservado, zAlerta-89): solo el espacio; NO se desarrolla aún.
     # La arquitectura no debe impedir marca blanca luego.
     marca_nombre: Mapped[str | None] = mapped_column(String(120))
@@ -1172,6 +1177,10 @@ class Persona(Base, TimestampMixin):
     # Cuando el empresario/socio sean Persona, estas viven aquí y no en usuarios.
     ultima_visita_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ultima_alerta_vista_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Evidencia de la declaración de responsabilidad (P3, zAlerta-12), heredada de
+    # Usuario al unificar: el empresario-Persona acepta estar autorizado al RUC.
+    responsabilidad_aceptada_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    responsabilidad_ruc: Mapped[str | None] = mapped_column(String(11))
 
     accesos: Mapped[list["Acceso"]] = relationship(
         back_populates="persona", cascade="all, delete-orphan")
