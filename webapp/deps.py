@@ -40,6 +40,10 @@ class UsuarioActual:
     solo_lectura_ctx: bool = False            # es_solo_lectura del acceso activo
     multi_contexto: bool = False              # tiene >1 buzón → mostrar "cambiar buzón"
     cargo: str | None = None                  # cargo del acceso activo (DECANO, DUENO, …)
+    # RUC único al que se limita el acceso (SOCIO, contribuyente-scoped). None para
+    # accesos de estudio. Latente en Fase 0 (el filtrado de vista por este id se
+    # cablea en Fase 1); hoy siempre None porque no hay accesos contribuyente-scoped.
+    contribuyente_scope: uuid.UUID | None = None
 
     @property
     def es_admin(self) -> bool:
@@ -113,6 +117,7 @@ def _desde_sesion(sesion: dict) -> UsuarioActual:
     """Construye UsuarioActual desde el payload de la cookie. Tolera cookies
     viejas (sin los campos de Fase 3) con defaults."""
     pid = sesion.get("pid")
+    cid = sesion.get("cid")
     return UsuarioActual(
         id=uuid.UUID(sesion["uid"]),
         estudio_id=uuid.UUID(sesion["eid"]),
@@ -125,6 +130,7 @@ def _desde_sesion(sesion: dict) -> UsuarioActual:
         solo_lectura_ctx=sesion.get("sl", False),
         multi_contexto=sesion.get("mc", False),
         cargo=sesion.get("cg"),
+        contribuyente_scope=uuid.UUID(cid) if cid else None,
     )
 
 

@@ -35,7 +35,7 @@ from sqlalchemy import or_
 from db import get_session
 from models import (
     Usuario, EstudioContable, RolUsuario, ahora_lima,
-    Persona, Acceso, AuditoriaSoporte,
+    Persona, Acceso, AuditoriaSoporte, Contribuyente,
 )
 
 from .core import templates
@@ -119,9 +119,24 @@ def crear_token_persona(persona: "Persona", estudio: "EstudioContable",
         "sl": bool(acceso.es_solo_lectura) if acceso else True,
         "mc": multi,
         "cg": (acceso.cargo.name if acceso and acceso.cargo else None),  # zAlerta-75
+        # cid: RUC al que se limita el acceso (SOCIO, contribuyente-scoped). NULL
+        # para accesos de estudio (contador/empresario). Hoy siempre NULL; el
+        # filtrado de vista por cid se cablea en Fase 1. Claim latente = sin efecto.
+        "cid": (str(acceso.contribuyente_id)
+                if acceso and acceso.contribuyente_id else None),
         "nombre": persona.nombre_completo or "",
         "exp": int(time.time()) + DURACION_SESION,
     })
+
+
+def destino_por_acceso(acceso, multi: bool) -> str:
+    """Aterrizaje por ROL (zAlerta-99): el equipo del estudio entra a /cartera
+    (contador dueño / supervisor / asistente). Cierra la nota de z-91. Multi-buzón
+    → selector. El resto (empresario/soporte) mantiene su destino existente."""
+    rol = acceso.rol if acceso else None
+    if rol in (RolUsuario.CONTADOR_DUENO, RolUsuario.SUPERVISOR, RolUsuario.ASISTENTE):
+        return "/cartera"
+    return "/seleccionar-buzon" if multi else "/"
 
 
 async def accesos_vigentes(session, persona_id):
@@ -134,6 +149,24 @@ async def accesos_vigentes(session, persona_id):
     )).scalars().all()
 
 
+async def _estudio_de_acceso(session, acceso):
+    """Estudio (tenant) de un acceso, según su destino DUAL:
+    - estudio-scoped (contador/asistente/empresario) → estudio_id directo.
+    - contribuyente-scoped (SOCIO, unificación de identidad) → el estudio del
+      RUC compartido (vía Contribuyente.estudio_id).
+    Antes el resolver solo miraba estudio_id → un acceso contribuyente-scoped daba
+    None y no dejaba entrar. Nota: el FILTRADO de la vista a ese único RUC (para que
+    el socio no vea todo el estudio) se cablea en Fase 1; hoy no hay accesos
+    contribuyente-scoped, así que esto no cambia ningún login actual."""
+    if acceso.estudio_id:
+        return await session.get(EstudioContable, acceso.estudio_id)
+    if acceso.contribuyente_id:
+        contrib = await session.get(Contribuyente, acceso.contribuyente_id)
+        if contrib:
+            return await session.get(EstudioContable, contrib.estudio_id)
+    return None
+
+
 async def _resolver_contexto_persona(session, persona) -> "tuple | None":
     """Resuelve el contexto de entrada de una persona: (estudio, acceso, multi,
     tiene_usuario). Devuelve None si no tiene accesos vigentes ni es soporte."""
@@ -143,7 +176,7 @@ async def _resolver_contexto_persona(session, persona) -> "tuple | None":
         select(Usuario.id).where(Usuario.dni == persona.dni)))
     if accesos:
         acceso = accesos[0]
-        estudio = await session.get(EstudioContable, acceso.estudio_id)
+        estudio = await _estudio_de_acceso(session, acceso)
     elif soporte:
         estudio = await session.scalar(
             select(EstudioContable).where(EstudioContable.activo == True)  # noqa: E712
@@ -216,8 +249,10 @@ async def login_post(
             # Clave-DNI temporal → forzar cambio antes de operar.
             if persona.debe_cambiar_clave:
                 destino = "/cambiar-clave"
+            elif multi:
+                destino = "/seleccionar-buzon"
             else:
-                destino = "/seleccionar-buzon" if multi else "/"
+                destino = destino_por_acceso(acceso, multi)   # rol → /cartera (z-99)
             resp = RedirectResponse(destino, status_code=303)
             set_cookie_sesion(resp, token)
             return resp
