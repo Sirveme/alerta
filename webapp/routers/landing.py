@@ -205,6 +205,7 @@ async def api_activar(request: Request):
     # DNI del que va a entrar; para RUC 10… se pre-llena en el front. Clave la
     # ELIGE él aquí (nunca clave puesta por otro); regla ≠ DNI.
     dni = re.sub(r"\D", "", data.get("dni") or "")
+    nombres = (data.get("nombres") or "").strip()
     clave = data.get("clave") or ""
     clave_repetir = data.get("clave_repetir") or data.get("clave2") or ""
 
@@ -295,7 +296,7 @@ async def api_activar(request: Request):
         # rol EMPRESARIO_LECTURA a su propia org (es_solo_lectura); el scope real al
         # RUC lo da cuenta_empresario_id, y es_empresario sale de tipo_cuenta.
         persona = Persona(
-            dni=dni, nombre_completo=nombre, whatsapp=whatsapp,
+            dni=dni, nombre_completo=(nombres or nombre), whatsapp=whatsapp,
             clave_hash=hash_clave(clave), debe_cambiar_clave=False,
             rol_sistema=None,
             responsabilidad_aceptada_at=ahora, responsabilidad_ruc=ruc)
