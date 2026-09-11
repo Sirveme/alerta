@@ -22,7 +22,7 @@ from sqlalchemy import select, func
 from db import get_session
 from models import (
     Grupo, Contribuyente, ContribuyenteGrupo, Notificacion, Urgencia, Usuario,
-    CredencialSol, ETIQUETA_TIPO_DOCUMENTO, ahora_lima,
+    CredencialSol, ETIQUETA_TIPO_DOCUMENTO, ahora_lima, Persona,
 )
 from ..core import templates, WHATSAPP_SOPORTE
 from ..estados import estado_conexion
@@ -167,12 +167,18 @@ async def _calcular_resumen(session, user: UsuarioActual, desde):
 
 
 async def _resumen_y_marcar_visita(session, user: UsuarioActual) -> dict:
-    """Calcula el resumen con la última visita ANTERIOR y luego la actualiza."""
-    usuario_db = await session.get(Usuario, user.id)
-    desde = usuario_db.ultima_visita_at if usuario_db else None
+    """Calcula el resumen con la última visita ANTERIOR y luego la actualiza.
+    Unificación Fase 1: la marca vive en Persona (login por DNI) o, respaldo, en
+    Usuario (login viejo). Enruta por persona_id de la sesión."""
+    obj = None
+    if user.persona_id:
+        obj = await session.get(Persona, user.persona_id)
+    if obj is None:
+        obj = await session.get(Usuario, user.id)
+    desde = obj.ultima_visita_at if obj else None
     resumen = await _calcular_resumen(session, user, desde)
-    if usuario_db:                       # actualizar DESPUÉS de calcular
-        usuario_db.ultima_visita_at = ahora_lima()
+    if obj:                              # actualizar DESPUÉS de calcular
+        obj.ultima_visita_at = ahora_lima()
         await session.commit()
     return resumen
 

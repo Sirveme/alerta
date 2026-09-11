@@ -31,12 +31,14 @@ from models import (
     EstadoContribuyente, RolUsuario, TipoCuenta, PlanComercial,
     EstadoSuscripcion, SolicitudValidacionCredencial, EstadoValidacion,
     LeadActivacion, limites_de, ahora_lima,
+    Persona, Acceso,
 )
 from cifrado import cifrar_clave_sol
 from datetime import timedelta
+import re
 from ..core import templates, WHATSAPP_SOPORTE
 from ..auth import (
-    hash_clave, crear_token_usuario, set_cookie_sesion,
+    hash_clave, crear_token_usuario, crear_token_persona, set_cookie_sesion,
     leer_sesion, COOKIE_NOMBRE,
 )
 from ..deps import usuario_actual, UsuarioActual
@@ -199,10 +201,30 @@ async def api_activar(request: Request):
     whatsapp = _norm_whatsapp(data.get("whatsapp"))
     # P3 (zAlerta-12): declaración de responsabilidad OBLIGATORIA.
     responsabilidad = bool(data.get("responsabilidad"))
+    # Identidad (unificación Fase 1): el empresario nace Persona (login por DNI).
+    # DNI del que va a entrar; para RUC 10… se pre-llena en el front. Clave la
+    # ELIGE él aquí (nunca clave puesta por otro); regla ≠ DNI.
+    dni = re.sub(r"\D", "", data.get("dni") or "")
+    clave = data.get("clave") or ""
+    clave_repetir = data.get("clave_repetir") or data.get("clave2") or ""
 
     if not (ruc.isdigit() and len(ruc) == 11):
         return JSONResponse({"ok": False, "error": "RUC inválido (11 dígitos)."},
                             status_code=400)
+    if not (dni.isdigit() and len(dni) == 8):
+        return JSONResponse({"ok": False, "error": "Ingresa tu DNI (8 dígitos)."},
+                            status_code=400)
+    if len(clave) < 6:
+        return JSONResponse(
+            {"ok": False, "error": "Crea una clave de al menos 6 caracteres."},
+            status_code=400)
+    if clave != clave_repetir:
+        return JSONResponse({"ok": False, "error": "Las claves no coinciden."},
+                            status_code=400)
+    if clave == dni:
+        return JSONResponse(
+            {"ok": False, "error": "La clave no puede ser igual a tu DNI."},
+            status_code=400)
     # C (zAlerta-11c): el WhatsApp es obligatorio (es el activo para no perder
     # el lead y avisarle). El front también lo valida; aquí se asegura.
     if not whatsapp:
@@ -219,7 +241,13 @@ async def api_activar(request: Request):
                                    "«Pido al contador»."}, status_code=400)
 
     async with get_session() as session:
-        # P2 (zAlerta-12): el WhatsApp es el acceso UNIVERSAL → único por cuenta.
+        # Identidad por DNI (Fase 1): una Persona = un DNI. Si ya existe, no se
+        # duplica: inicia sesión (o suma un Acceso a su otra empresa desde dentro).
+        if await session.scalar(select(Persona.id).where(Persona.dni == dni)):
+            return JSONResponse(
+                {"ok": False, "error": "Ya existe una cuenta con ese DNI. "
+                                       "Inicia sesión con tu DNI."}, status_code=409)
+        # P2 (respaldo dual-read): WhatsApp seguía siendo único en el modelo viejo.
         ya = await session.scalar(
             select(Usuario.id).where(Usuario.whatsapp == whatsapp))
         if ya:
@@ -261,19 +289,24 @@ async def api_activar(request: Request):
         session.add(estudio)
         await session.flush()
 
-        # Usuario del empresario. Acceso UNIVERSAL por WhatsApp (P2). Clave
-        # inicial de baja fricción = últimos 6 dígitos de su WhatsApp (algo que
-        # recuerda); debe_cambiar_clave la cambia en el primer login manual.
-        clave_inicial = (whatsapp or "000000")[-6:]
-        usuario = Usuario(
-            estudio_id=estudio.id, nombre=nombre,
-            dni=_dni_desde_ruc(ruc), whatsapp=whatsapp,
-            access_code=hash_clave(clave_inicial),
-            rol=RolUsuario.ADMIN, cargo=cargo,
-            debe_cambiar_clave=True, clave_pendiente=False,
-            # P3: evidencia de la declaración de responsabilidad.
+        # IDENTIDAD = PERSONA (Fase 1). El empresario nace Persona (login por DNI)
+        # con la clave que ÉL eligió arriba (nunca clave puesta por otro; ≠ DNI ya
+        # validado) → debe_cambiar_clave=False. Su vínculo al buzón es un Acceso
+        # rol EMPRESARIO_LECTURA a su propia org (es_solo_lectura); el scope real al
+        # RUC lo da cuenta_empresario_id, y es_empresario sale de tipo_cuenta.
+        persona = Persona(
+            dni=dni, nombre_completo=nombre, whatsapp=whatsapp,
+            clave_hash=hash_clave(clave), debe_cambiar_clave=False,
+            rol_sistema=None,
             responsabilidad_aceptada_at=ahora, responsabilidad_ruc=ruc)
-        session.add(usuario)
+        session.add(persona)
+        await session.flush()   # persona.id
+
+        acceso = Acceso(
+            persona_id=persona.id, estudio_id=estudio.id,
+            rol=RolUsuario.EMPRESARIO_LECTURA, cargo=None,
+            vigencia_inicio=ahora.date(), es_solo_lectura=True)
+        session.add(acceso)
         await session.flush()
 
         # Contribuyente: el empresario se vigila a sí mismo. estudio_id y
@@ -291,7 +324,7 @@ async def api_activar(request: Request):
                 contribuyente_id=contrib.id, estudio_id=estudio.id,
                 usuario_sol=usuario_sol,
                 clave_sol_cifrada=cifrar_clave_sol(clave_sol),
-                tipo_usuario=2, quien_cargo=usuario.id,
+                tipo_usuario=2, quien_cargo_persona_id=persona.id,
                 # valida=True para que el worker SÍ la scrapee y la verifique en
                 # la 1ª consulta (BUG 3). El "verificada vs pendiente" lo marca
                 # ultimo_login_ok_at: con sello solo si la comprobación pasó.
@@ -305,16 +338,112 @@ async def api_activar(request: Request):
             contrib.actualizar_solicitado_at = ahora
 
         await session.commit()
-        await session.refresh(usuario)
+        await session.refresh(persona)
+        await session.refresh(acceso)
+        await session.refresh(estudio)
 
         # Cerrar el lead: completó el alta (zAlerta-11bb B).
         await _upsert_lead(session, ruc, whatsapp, razon_social,
                            estado="activado")
+        # Token de sesión ANTES de salir del contexto (evita objetos detached).
+        token = crear_token_persona(persona, estudio, acceso,
+                                    tiene_usuario=False, multi=False)
 
     # D (zAlerta-11c): redirigir SIEMPRE a la pantalla de confirmación (no a la
     # landing). La propia /bienvenida decide D.1/D.2/D.3 según el estado real.
     resp = JSONResponse({"ok": True, "redirect": "/bienvenida"})
-    set_cookie_sesion(resp, crear_token_usuario(usuario, TipoCuenta.EMPRESARIO.value))
+    set_cookie_sesion(resp, token)
+    return resp
+
+
+# ── Identidad DIFERIDA (unificación Fase 1) · el empresario del alta viral activa
+#    su identidad: abre el link con su token, pone DNI + clave (que ÉL elige). ──
+@router.get("/activar-identidad", response_class=HTMLResponse)
+async def activar_identidad_form(request: Request, t: str = ""):
+    if leer_sesion(request.cookies.get(COOKIE_NOMBRE)):
+        return RedirectResponse("/", status_code=303)
+    t = (t or "").strip()
+    razon_social, ruc, valido = "", "", False
+    async with get_session() as session:
+        org = (await session.scalar(select(EstudioContable).where(
+            EstudioContable.activacion_token == t))) if t else None
+        if org:
+            valido = True
+            razon_social = org.razon_social or ""
+            contrib = await session.scalar(select(Contribuyente).where(
+                Contribuyente.cuenta_empresario_id == org.id)
+                .order_by(Contribuyente.creado_at).limit(1))
+            ruc = contrib.ruc if contrib else ""
+    return templates.TemplateResponse(request, "activar_identidad.html", {
+        "token": t, "valido": valido, "razon_social": razon_social, "ruc": ruc,
+        "whatsapp_soporte": WHATSAPP_SOPORTE,
+    })
+
+
+@router.post("/api/activar-identidad")
+async def activar_identidad_post(request: Request):
+    data = await request.json()
+    t = (data.get("token") or "").strip()
+    dni = re.sub(r"\D", "", data.get("dni") or "")
+    nombres = (data.get("nombres") or "").strip()
+    clave = data.get("clave") or ""
+    clave_repetir = data.get("clave_repetir") or ""
+    responsabilidad = bool(data.get("responsabilidad"))
+    if not (dni.isdigit() and len(dni) == 8):
+        return JSONResponse({"ok": False, "error": "Ingresa tu DNI (8 dígitos)."},
+                            status_code=400)
+    if len(clave) < 6:
+        return JSONResponse(
+            {"ok": False, "error": "Crea una clave de al menos 6 caracteres."},
+            status_code=400)
+    if clave != clave_repetir:
+        return JSONResponse({"ok": False, "error": "Las claves no coinciden."},
+                            status_code=400)
+    if clave == dni:
+        return JSONResponse(
+            {"ok": False, "error": "La clave no puede ser igual a tu DNI."},
+            status_code=400)
+    if not responsabilidad:
+        return JSONResponse(
+            {"ok": False, "error": "Debes aceptar la declaración de "
+                                   "responsabilidad."}, status_code=400)
+    async with get_session() as session:
+        org = (await session.scalar(select(EstudioContable).where(
+            EstudioContable.activacion_token == t))) if t else None
+        if not org:
+            return JSONResponse(
+                {"ok": False, "error": "Link de activación inválido o ya usado."},
+                status_code=404)
+        if await session.scalar(select(Persona.id).where(Persona.dni == dni)):
+            return JSONResponse(
+                {"ok": False, "error": "Ya existe una cuenta con ese DNI. "
+                                       "Inicia sesión con tu DNI."}, status_code=409)
+        contrib = await session.scalar(select(Contribuyente).where(
+            Contribuyente.cuenta_empresario_id == org.id)
+            .order_by(Contribuyente.creado_at).limit(1))
+        ahora = ahora_lima()
+        persona = Persona(
+            dni=dni, nombre_completo=(nombres or org.razon_social),
+            whatsapp=org.whatsapp, clave_hash=hash_clave(clave),
+            debe_cambiar_clave=False, rol_sistema=None,
+            responsabilidad_aceptada_at=ahora,
+            responsabilidad_ruc=(contrib.ruc if contrib else None))
+        session.add(persona)
+        await session.flush()
+        acceso = Acceso(
+            persona_id=persona.id, estudio_id=org.id,
+            rol=RolUsuario.EMPRESARIO_LECTURA, cargo=None,
+            vigencia_inicio=ahora.date(), es_solo_lectura=True)
+        session.add(acceso)
+        org.activacion_token = None      # un solo uso: se quema al activar
+        await session.commit()
+        await session.refresh(persona)
+        await session.refresh(acceso)
+        await session.refresh(org)
+        token = crear_token_persona(persona, org, acceso,
+                                    tiene_usuario=False, multi=False)
+    resp = JSONResponse({"ok": True, "redirect": "/"})
+    set_cookie_sesion(resp, token)
     return resp
 
 

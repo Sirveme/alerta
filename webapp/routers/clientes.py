@@ -35,7 +35,7 @@ from models import (
 )
 from cifrado import cifrar_clave_sol
 from ..auth import hash_clave
-from ..core import WHATSAPP_SOPORTE, templates
+from ..core import WHATSAPP_SOPORTE, templates, BASE_URL
 from ..deps import UsuarioActual, usuario_actual, requiere_escritura
 
 logger = logging.getLogger("alertape.clientes")
@@ -58,26 +58,35 @@ def _solo_digitos(valor: str) -> str:
 
 def construir_invitacion_whatsapp(
     nombre_empresario: str, nombre_estudio: str, ruc: str,
-    whatsapp_empresario: str) -> dict:
+    whatsapp_empresario: str, activacion_url: str | None = None) -> dict:
     """Arma el mensaje de invitación del onboarding viral (zAlerta-06 C.3).
 
     Devuelve:
       - wa_url: link wa.me AL EMPRESARIO con el texto de invitación pre-armado
         (lo abre el contador para enviárselo).
-      - El texto de invitación CONTIENE el link wa.me al SOPORTE, donde el
-        empresario pide su clave (invierte el sentido del contacto).
+      - Unificación Fase 1: si hay `activacion_url` (identidad diferida), el texto
+        lleva ese LINK DE ACTIVACIÓN self-serve (el empresario pone su DNI + su
+        propia clave). Si no, cae al flujo viejo (pedir clave a Soporte).
     """
-    solicitud = (f"Hola, a indicación de {nombre_estudio} solicito mi clave de "
-                 f"acceso a alerta.pe. Mi nombre es {nombre_empresario} y mi "
-                 f"RUC {ruc}.")
-    soporte_link = f"https://wa.me/{WHATSAPP_SOPORTE}?text={quote(solicitud)}"
+    soporte_link = (
+        f"https://wa.me/{WHATSAPP_SOPORTE}?text="
+        + quote(f"Hola, a indicación de {nombre_estudio} solicito mi acceso a "
+                f"alerta.pe. Mi nombre es {nombre_empresario} y mi RUC {ruc}."))
 
-    invitacion = (
-        f"Estimado/a {nombre_empresario}:\n"
-        f"Como parte de nuestros servicios profesionales, le otorgamos acceso "
-        f"exclusivo a su información tributaria, las 24 horas, sin costo.\n"
-        f"Para activar su clave personal, escríbanos por WhatsApp aquí:\n"
-        f"{soporte_link}")
+    if activacion_url:
+        invitacion = (
+            f"Estimado/a {nombre_empresario}:\n"
+            f"Como parte de nuestros servicios profesionales, le damos acceso "
+            f"gratuito a su información tributaria, las 24 horas.\n"
+            f"Active su acceso (con su DNI y una clave que usted elige) aquí:\n"
+            f"{activacion_url}")
+    else:
+        invitacion = (
+            f"Estimado/a {nombre_empresario}:\n"
+            f"Como parte de nuestros servicios profesionales, le otorgamos acceso "
+            f"exclusivo a su información tributaria, las 24 horas, sin costo.\n"
+            f"Para activar su clave personal, escríbanos por WhatsApp aquí:\n"
+            f"{soporte_link}")
 
     wa_url = f"https://wa.me/{whatsapp_empresario}?text={quote(invitacion)}"
     return {"wa_url": wa_url, "mensaje_invitacion": invitacion,
@@ -176,15 +185,28 @@ async def _crear_cuenta_empresario(
     whatsapp: str) -> EstudioContable:
     """Crea (o reutiliza) la cuenta-empresario GRATIS dueña del RUC.
 
-    Si ya existe un usuario con ese WhatsApp, reutiliza su organización
-    (evita cuentas duplicadas y login ambiguo). Si no, crea una organización
-    tipo empresario (plan gratis) + su usuario (login por WhatsApp, clave
-    pendiente de entregar por Soporte).
+    IDENTIDAD DIFERIDA (unificación Fase 1): el contador NO sabe el DNI del
+    empresario, así que NO se crea identidad (ni Usuario ni Persona) aquí. Se crea
+    solo la organización empresario con un `activacion_token` de un solo uso. La
+    vigilancia arranca por credencial; el empresario abre el link de activación,
+    pone su DNI + clave, y ahí nace su Persona + Acceso (EMPRESARIO_LECTURA).
+
+    Si ya existe una org empresario para ese WhatsApp (viejo Usuario o una org
+    ya creada), se reutiliza para no duplicar. El token vive en la org.
     """
+    # Reuso: ¿ya hay un Usuario viejo con ese WhatsApp? (respaldo dual-read) →
+    # su organización. Evita duplicar cuando el empresario ya existía.
     usuario_existente = await session.scalar(
         select(Usuario).where(Usuario.whatsapp == whatsapp))
     if usuario_existente:
         return await session.get(EstudioContable, usuario_existente.estudio_id)
+    # ¿O ya hay una org empresario con ese WhatsApp (creada en un alta previa)?
+    org_existente = await session.scalar(
+        select(EstudioContable).where(
+            EstudioContable.whatsapp == whatsapp,
+            EstudioContable.tipo_cuenta == TipoCuenta.EMPRESARIO.value))
+    if org_existente:
+        return org_existente
 
     lim = limites_de(PlanComercial.CLIENTE_DE_ESTUDIO.value)
     cuenta_emp = EstudioContable(
@@ -197,17 +219,11 @@ async def _crear_cuenta_empresario(
         estado_suscripcion=EstadoSuscripcion.ACTIVA.value,
         whatsapp=whatsapp,
         creado_por_estudio_id=estudio_actual.id,
+        # Token de activación de identidad (un solo uso). El link viral lo lleva.
+        activacion_token=secrets.token_urlsafe(32),
     )
     session.add(cuenta_emp)
     await session.flush()
-
-    # Usuario del empresario: login por WhatsApp, clave aleatoria pendiente
-    # (Soporte la entrega manualmente, zAlerta-06 C.4). Rol asistente = solo
-    # lectura; el scope al RUC lo da cuenta_empresario_id.
-    session.add(Usuario(
-        estudio_id=cuenta_emp.id, nombre=nombre_empresario, dni=None,
-        whatsapp=whatsapp, access_code=hash_clave(secrets.token_urlsafe(24)),
-        rol=RolUsuario.ASISTENTE, debe_cambiar_clave=True, clave_pendiente=True))
     return cuenta_emp
 
 
@@ -283,6 +299,9 @@ async def crear_contribuyente(
         cuenta_emp = await _crear_cuenta_empresario(
             session, estudio, emp_nombre, emp_whatsapp)
         contrib.cuenta_empresario_id = cuenta_emp.id
+        # Token de activación de identidad (identidad diferida) capturado ANTES del
+        # commit (evita lazy-load sobre objeto expirado). None si la org se reusó.
+        activacion_token = cuenta_emp.activacion_token
 
         # Asignar a grupo(s) válidos del estudio
         for gid in grupos_ids:
@@ -300,11 +319,15 @@ async def crear_contribuyente(
 
         await session.commit()
 
-        # Armar la invitación de WhatsApp (lo muestra el front como botón).
+        # Armar la invitación de WhatsApp (lo muestra el front como botón). Con
+        # identidad diferida → lleva el link de activación self-serve (DNI + clave).
+        activacion_url = (f"{BASE_URL}/activar-identidad?t={activacion_token}"
+                          if activacion_token else None)
         invitacion = construir_invitacion_whatsapp(
             nombre_empresario=emp_nombre,
             nombre_estudio=(estudio.razon_social if estudio else "tu contador"),
-            ruc=ruc, whatsapp_empresario=emp_whatsapp)
+            ruc=ruc, whatsapp_empresario=emp_whatsapp,
+            activacion_url=activacion_url)
 
         return JSONResponse({
             "ok": True, "id": str(contrib.id),
@@ -415,10 +438,13 @@ async def _crear_uno(session, user, estudio, fila: dict, restantes: int) -> dict
         cuenta_emp = await _crear_cuenta_empresario(
             session, estudio, emp_nombre, emp_whatsapp)
         contrib.cuenta_empresario_id = cuenta_emp.id
+        activacion_url = (f"{BASE_URL}/activar-identidad?t={cuenta_emp.activacion_token}"
+                          if cuenta_emp.activacion_token else None)
         invitacion = construir_invitacion_whatsapp(
             nombre_empresario=emp_nombre,
             nombre_estudio=(estudio.razon_social if estudio else "tu contador"),
-            ruc=ruc, whatsapp_empresario=emp_whatsapp)
+            ruc=ruc, whatsapp_empresario=emp_whatsapp,
+            activacion_url=activacion_url)
 
     # Asignar a grupo(s) válidos del estudio
     for gid in grupos_ids:

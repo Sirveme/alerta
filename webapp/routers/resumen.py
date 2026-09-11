@@ -187,25 +187,56 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
                 select(LecturaNotificacion.notificacion_id).where(
                     LecturaNotificacion.persona_id == user.persona_id,
                     LecturaNotificacion.notificacion_id.in_(notif_ids))))
-        # Estado de lectura de EQUIPO (Capa 2, zAlerta-68): personas del buzón
-        # (accesos nominales vigentes al estudio activo), SIN soporte. En lote.
-        equipo_personas: list = []
+        # Estado de lectura de EQUIPO (Capa 2, zAlerta-68) — POR RUC, CRUZANDO ORGS
+        # (unificación Fase 1, sub-tarea 1c). El equipo de un buzón NO es el del
+        # estudio del que mira: es toda persona con acceso NOMINAL a ESE RUC —
+        # el estudio que lo vigila, la org empresario dueña (cuenta_empresario_id) y
+        # accesos por contribuyente (socio). Mismo criterio que personas_del_buzon,
+        # para que empresario↔contador (y socio) se VEAN las lecturas mutuamente.
+        # equipos_por_contrib: contrib_id -> [(persona_id, nombre)]. SIN soporte.
+        equipos_por_contrib: dict = {}
         lecturas_equipo: set = set()
         if notif_ids:
             hoy = ahora_lima().date()
-            equipo_personas = (await session.execute(
-                select(Persona.id, Persona.nombre_completo)
+            contrib_ids = {n.contribuyente_id for n, _, _ in rows}
+            # Metadatos de cada contrib en vista: sus dos orgs posibles.
+            meta = (await session.execute(
+                select(Contribuyente.id, Contribuyente.estudio_id,
+                       Contribuyente.cuenta_empresario_id)
+                .where(Contribuyente.id.in_(contrib_ids)))).all()
+            orgs_de_contrib = {cid: [e for e in (eid, ceid) if e]
+                               for cid, eid, ceid in meta}
+            all_orgs = {o for lst in orgs_de_contrib.values() for o in lst}
+            # Accesos vigentes (persona, org|contrib) a esos buzones, sin soporte.
+            accesos = (await session.execute(
+                select(Persona.id, Persona.nombre_completo,
+                       Acceso.estudio_id, Acceso.contribuyente_id)
                 .join(Acceso, Acceso.persona_id == Persona.id)
-                .where(Acceso.estudio_id == user.estudio_id,
+                .where(or_(Acceso.estudio_id.in_(all_orgs),
+                           Acceso.contribuyente_id.in_(contrib_ids)),
                        or_(Acceso.vigencia_fin.is_(None), Acceso.vigencia_fin >= hoy),
-                       Persona.rol_sistema.is_(None))   # excluir SOPORTE_GLOBAL
+                       Persona.rol_sistema.is_(None))
                 .distinct())).all()
-            if len(equipo_personas) >= 2:
+            for cid in contrib_ids:
+                equipos_por_contrib[cid] = []
+            for pid, nom, a_eid, a_cid in accesos:
+                if a_cid is not None and a_cid in equipos_por_contrib:
+                    equipos_por_contrib[a_cid].append((pid, nom))
+                elif a_eid is not None:
+                    for cid, orgs in orgs_de_contrib.items():
+                        if a_eid in orgs:
+                            equipos_por_contrib[cid].append((pid, nom))
+            # Dedup por (persona, contrib) preservando nombre.
+            for cid, lst in equipos_por_contrib.items():
+                equipos_por_contrib[cid] = list(dict(
+                    (pid, (pid, nom)) for pid, nom in lst).values())
+            team_ids = {pid for lst in equipos_por_contrib.values()
+                        for pid, _ in lst}
+            if team_ids:
                 lecturas_equipo = set((await session.execute(
                     select(LecturaNotificacion.persona_id,
                            LecturaNotificacion.notificacion_id)
-                    .where(LecturaNotificacion.persona_id.in_(
-                               [p.id for p in equipo_personas]),
+                    .where(LecturaNotificacion.persona_id.in_(team_ids),
                            LecturaNotificacion.notificacion_id.in_(notif_ids)))).all())
         # Señal UNIFICADA de lectura activa (zAlerta-42/43): cubre la primera
         # lectura (ultimo_scrapeo_at NULL) Y las re-lecturas del botón "Actualizar
@@ -342,15 +373,17 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             "cuerpo_html": _cuerpo_html,
             **deuda,
         }
-        # Estado de equipo (Capa 2): solo si el buzón tiene 2+ personas.
-        if len(equipo_personas) >= 2:
+        # Estado de equipo (Capa 2): el equipo de ESTE RUC (cruza orgs, 1c). Solo
+        # si el buzón tiene 2+ personas (p. ej. contador + empresario, o + socio).
+        equipo = equipos_por_contrib.get(n.contribuyente_id, [])
+        if len(equipo) >= 2:
             miembros, leidos = [], 0
-            for pid, nom in equipo_personas:
+            for pid, nom in equipo:
                 vio = (pid, n.id) in lecturas_equipo
                 if vio:
                     leidos += 1
                 miembros.append({"nombre": _nombre_corto(nom), "leida": vio})
-            fila["equipo"] = {"total": len(equipo_personas),
+            fila["equipo"] = {"total": len(equipo),
                               "leidos": leidos, "miembros": miembros}
         filas.append(fila)
 
@@ -575,9 +608,15 @@ async def api_alerta_vista(user: UsuarioActual = Depends(usuario_actual)):
     """Registra que el usuario confirmó la lectura del push (botón GRACIAS).
     Métrica sutil; no obligatorio. Solo sella la fecha en el usuario."""
     async with get_session() as session:
-        u = await session.get(Usuario, user.id)
-        if u:
-            u.ultima_alerta_vista_at = ahora_lima()
+        # Unificación Fase 1: la métrica vive en Persona (login por DNI) o, como
+        # respaldo, en Usuario (login viejo). Enruta por persona_id de la sesión.
+        obj = None
+        if user.persona_id:
+            obj = await session.get(Persona, user.persona_id)
+        if obj is None:
+            obj = await session.get(Usuario, user.id)
+        if obj:
+            obj.ultima_alerta_vista_at = ahora_lima()
             await session.commit()
     return JSONResponse({"ok": True})
 
