@@ -66,6 +66,7 @@
       <label>DNI</label>
       <input name="dni" inputmode="numeric" maxlength="8" required
              value="{{ dni or '' }}" placeholder="Tu DNI (es tu usuario)">
+      <div class="reg-dni-msg muted" id="reg-dni-msg" aria-live="polite"></div>
     </div>
     <div class="reg-grupo">
       <label>Apellidos y nombres</label>
@@ -115,6 +116,38 @@
         lbl.textContent = b.dataset.tipo === 'independiente'
           ? 'Nombre para tu cuenta' : 'Nombre de tu estudio';
       });
+    });
+  })();
+
+  // Validación en vivo DNI→nombres (RENIEC vía backend, sin caché/PII).
+  (function () {
+    var inDni = document.querySelector('input[name=dni]');
+    var inNom = document.querySelector('input[name=nombres]');
+    var msg = document.getElementById('reg-dni-msg');
+    if (!inDni || !inNom) return;
+    var nombresAuto = false, ctrl = null;
+    inNom.addEventListener('input', function () { nombresAuto = false; });
+    inDni.addEventListener('input', async function () {
+      inDni.value = (inDni.value || '').replace(/\D/g, '');
+      if (inDni.value.length !== 8) { if (msg) msg.textContent = ''; return; }
+      var dni = inDni.value;
+      if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+      ctrl = new AbortController();
+      if (msg) { msg.textContent = 'Validando…'; msg.className = 'reg-dni-msg muted'; }
+      var j = null;
+      try {
+        var corte = setTimeout(function () { ctrl.abort(); }, 5000);
+        var r = await fetch('/api/reniec/dni/' + dni, { signal: ctrl.signal });
+        clearTimeout(corte); j = await r.json();
+      } catch (e) { j = null; }
+      if (inDni.value !== dni) return;
+      if (j && j.ok && j.nombre_completo) {
+        if (msg) { msg.textContent = '✓ ' + j.nombre_completo + ' · VALIDADO'; msg.className = 'reg-dni-msg ok'; }
+        if (!inNom.value || nombresAuto) { inNom.value = j.nombre_completo; nombresAuto = true; }
+      } else if (msg) {
+        msg.textContent = 'No pudimos validar el DNI. Escribe tu nombre a mano.';
+        msg.className = 'reg-dni-msg warn';
+      }
     });
   })();
 </script>
