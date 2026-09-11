@@ -33,21 +33,56 @@
   const inClaveAcc2 = $('#act-clave-acceso2');
   const claveMsg = $('#act-clave-msg');
 
+  const dniNombreEl = $('#act-dni-nombre');
+  let nombresAuto = false;      // #act-nombres autollenado (no editado a mano)
+  let dniCtrl = null;
+
+  // Validación en vivo DNI→nombres (RENIEC vía backend, sin caché/PII).
+  async function lookupDni(dni) {
+    if (dniCtrl) { try { dniCtrl.abort(); } catch (_) {} }
+    dniCtrl = new AbortController();
+    dniMsg.textContent = 'Validando…'; dniMsg.className = 'act-estado muted';
+    if (dniOk) dniOk.hidden = true;
+    let j = null;
+    try {
+      const corte = setTimeout(() => dniCtrl.abort(), 5000);
+      const r = await fetch('/api/reniec/dni/' + dni, { signal: dniCtrl.signal });
+      clearTimeout(corte);
+      j = await r.json();
+    } catch (_) { j = null; }
+    if (estado.dni !== dni) return;          // el usuario ya cambió el DNI
+    if (j && j.ok && j.nombre_completo) {
+      if (dniNombreEl) dniNombreEl.textContent = j.nombre_completo;
+      if (dniOk) dniOk.hidden = false;
+      dniMsg.textContent = ''; dniMsg.className = 'act-estado muted';
+      // Auto-rellenar nombres (EDITABLE): solo si está vacío o fue autollenado.
+      if (inNombres && (!inNombres.value || nombresAuto)) {
+        inNombres.value = j.nombre_completo;
+        estado.nombres = j.nombre_completo;
+        nombresAuto = true;
+      }
+    } else {
+      if (dniOk) dniOk.hidden = true;
+      dniMsg.textContent = 'No pudimos validar el DNI. Escribe tu nombre a mano.';
+      dniMsg.className = 'act-estado warn';
+    }
+  }
+
   if (inDni) inDni.addEventListener('input', (e) => {
     e.target.value = (e.target.value || '').replace(/\D/g, '');
     estado.dni = e.target.value;
-    // NO existe endpoint DNI→nombres aún: validamos FORMATO y confirmamos a mano.
     if (estado.dni.length === 8) {
-      dniMsg.textContent = ''; dniMsg.className = 'act-estado muted';
-      if (dniOk) dniOk.hidden = false;
-      if (inNombres && !inNombres.value) { try { inNombres.focus(); } catch (_) {} }
+      lookupDni(estado.dni);                 // consulta en vivo al 8º dígito
     } else {
       if (dniOk) dniOk.hidden = true;
       dniMsg.textContent = estado.dni ? 'El DNI tiene 8 dígitos.' : '';
       dniMsg.className = 'act-estado muted';
     }
   });
-  if (inNombres) inNombres.addEventListener('input', (e) => { estado.nombres = e.target.value; });
+  if (inNombres) inNombres.addEventListener('input', (e) => {
+    estado.nombres = e.target.value;
+    nombresAuto = false;                     // editado a mano → no sobreescribir
+  });
   function verClaveAcc() {
     estado.clave_acceso = inClaveAcc ? inClaveAcc.value : '';
     estado.clave_acceso2 = inClaveAcc2 ? inClaveAcc2.value : '';
