@@ -122,6 +122,48 @@ async def notificar_usuario(session, usuario_id, title: str, body: str,
         return 0
 
 
+async def _enviar_a_persona(session, persona_id, payload: str) -> int:
+    """Igual que _enviar_a_usuario pero por PERSONA (login por DNI). Envía a TODAS
+    sus suscripciones activas; desactiva las muertas (400/404/410)."""
+    subs = list(await session.scalars(
+        select(PushSuscripcion).where(
+            PushSuscripcion.persona_id == persona_id,
+            PushSuscripcion.activa.is_(True))))
+    enviadas = 0
+    for sub in subs:
+        try:
+            status = await asyncio.to_thread(_enviar_webpush_sync, sub, payload)
+        except Exception as e:
+            logger.warning("push: error enviando a sub %s: %s", sub.id, e)
+            continue
+        if status in (400, 404, 410):
+            sub.activa = False
+            logger.info("push: suscripción %s desactivada (status %s)", sub.id, status)
+        else:
+            enviadas += 1
+    return enviadas
+
+
+async def notificar_persona(session, persona_id, title: str, body: str,
+                            url: str = "/resumen", acciones: bool = False,
+                            tag: str | None = None, requiere: bool = False) -> int:
+    """Push genérico a TODAS las suscripciones de una PERSONA (login por DNI).
+    Espejo de notificar_usuario para el modelo nuevo (recordatorios creados por
+    login-persona). Seguro ante fallos. Devuelve cuántas salieron OK."""
+    if not _vapid_private_key():
+        return 0
+    payload = json.dumps({"title": title, "body": body, "url": url,
+                          "acciones": acciones,
+                          "tag": tag or "alertape-buzon", "requiere": requiere})
+    try:
+        n = await _enviar_a_persona(session, persona_id, payload)
+        await session.commit()
+        return n
+    except Exception as e:
+        logger.warning("push: notificar_persona %s falló: %s", persona_id, e)
+        return 0
+
+
 async def personas_del_buzon(session, contrib: Contribuyente) -> list:
     """persona_ids con acceso NOMINAL vigente al buzón (zAlerta-67).
 
