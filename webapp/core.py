@@ -28,6 +28,10 @@ STATIC_DIR = _DIR / "static"
 # pedir su clave (zAlerta-06 C.3). CONFIGURABLE por env, no hardcodeado disperso.
 WHATSAPP_SOPORTE = os.getenv("WHATSAPP_SOPORTE", "51967317946")
 
+# URL pública base (sin barra final), para links absolutos que viajan fuera de la
+# app (WhatsApp, correo): p. ej. el link de activación de identidad diferida.
+BASE_URL = os.getenv("BASE_URL", "https://alerta.pe").rstrip("/")
+
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
