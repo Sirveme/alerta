@@ -162,10 +162,12 @@ async def api_resumen(user: UsuarioActual = Depends(usuario_actual)):
             .order_by(Notificacion.fecha_publica_sunat.desc().nullslast(),
                       Notificacion.creado_at.desc()))).all()
         # Recordatorios activos del usuario (notif_id → modo) para pintar estado.
+        # filtro_autoria: reconoce filas por usuario_id (legacy) y persona_id (DNI).
         recs = {str(nid): (modo.value if hasattr(modo, "value") else modo)
                 for nid, modo in (await session.execute(
                     select(Recordatorio.notificacion_id, Recordatorio.modo)
-                    .where(Recordatorio.usuario_id == user.id,
+                    .where(user.filtro_autoria(Recordatorio.usuario_id,
+                                               Recordatorio.persona_id),
                            Recordatorio.activo.is_(True)))).all()}
         # Deuda valorada por notificación (zAlerta-38): mapa notif_id → DocumentoValorado.
         # El monto se extrae del pdf_texto (provisional; el parser de zAlerta-39
@@ -429,25 +431,24 @@ async def api_recordatorio(request: Request,
         rec = await session.scalar(
             select(Recordatorio).where(
                 Recordatorio.notificacion_id == notif_id,
-                Recordatorio.usuario_id == user.id))
+                user.filtro_autoria(Recordatorio.usuario_id,
+                                    Recordatorio.persona_id)))
         if modo is None:
             if rec:
                 rec.activo = False
                 await session.commit()
             return JSONResponse({"ok": True, "recordatorio": None})
-        # Personas sin fila en `usuarios` (acceso institucional solo lectura) no
-        # pueden crear recordatorios (FK usuario_id). No-op amable.
-        if not rec and not user.tiene_usuario:
-            return JSONResponse({"ok": False, "error": "Solo lectura."}, status_code=403)
         if rec:
             rec.modo = ModoRecordatorio(modo)
             rec.activo = True
             rec.fecha_vencimiento = notif.plazo_vencimiento
         else:
+            # Login por DNI → persona_id; legacy → usuario_id (ver autoria()).
+            # El worker enruta el push por la columna presente.
             session.add(Recordatorio(
                 estudio_id=notif.estudio_id, notificacion_id=notif_id,
-                usuario_id=user.id, modo=ModoRecordatorio(modo), activo=True,
-                fecha_vencimiento=notif.plazo_vencimiento))
+                modo=ModoRecordatorio(modo), activo=True,
+                fecha_vencimiento=notif.plazo_vencimiento, **user.autoria()))
         await session.commit()
     return JSONResponse({"ok": True, "recordatorio": modo})
 
