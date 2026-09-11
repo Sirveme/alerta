@@ -22,6 +22,30 @@
     te avisamos apenas SUNAT o SUNAFIL te envíen algo.
   </p>
 
+  <!-- ════════ IDENTIDAD · quién eres (persona primero, unificación) ════════
+       Entras con tu DNI; la clave la ELIGES tú (≠ DNI). Va ARRIBA del RUC. -->
+  <section class="tarjeta act-bloque act-borde act-borde--verde">
+    <label class="act-label" for="act-dni">Tu DNI <span class="muted">(con esto entras)</span></label>
+    <input id="act-dni" inputmode="numeric" pattern="[0-9]{8}" maxlength="8"
+           autocomplete="off" placeholder="8 dígitos" enterkeyhint="next">
+    <div class="act-nombre-ok" id="act-dni-ok" hidden>
+      <i class="ti ti-circle-check"></i>
+      <div><div class="act-rs" id="act-dni-nombre">VALIDADO</div></div>
+    </div>
+    <div class="act-estado muted" id="act-dni-msg" aria-live="polite"></div>
+
+    <label class="act-label act-label--mt" for="act-nombres">Tus apellidos y nombres</label>
+    <input id="act-nombres" autocomplete="off" placeholder="Como aparecen en tu DNI">
+
+    <label class="act-label act-label--mt" for="act-clave-acceso">Crea tu clave de acceso
+      <span class="muted">(no uses tu DNI)</span></label>
+    <input id="act-clave-acceso" type="password" autocomplete="new-password"
+           placeholder="mínimo 6 caracteres">
+    <label class="act-label act-label--mt" for="act-clave-acceso2">Repite tu clave</label>
+    <input id="act-clave-acceso2" type="password" autocomplete="new-password">
+    <div class="act-estado muted" id="act-clave-msg" aria-live="polite"></div>
+  </section>
+
   <!-- ════════ B · RUC + WhatsApp TEMPRANO ════════ -->
   <section class="tarjeta act-bloque act-borde act-borde--verde">
     <label class="act-label" for="act-ruc">Tu RUC</label>
