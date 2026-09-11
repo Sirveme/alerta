@@ -20,7 +20,46 @@
     usuario_sol: '', clave_sol: '',
     conexion_verificada: false,   // ✔ real (login verificado) — BUG 1
     whatsapp: '',                 // número local (sin 51); el server antepone 51
+    // Identidad (unificación): entra por DNI, clave que él elige (≠ DNI).
+    dni: '', nombres: '', clave_acceso: '', clave_acceso2: '',
   };
+
+  // ── IDENTIDAD · DNI (persona primero) + clave elegida ──
+  const inDni = $('#act-dni');
+  const dniOk = $('#act-dni-ok');
+  const dniMsg = $('#act-dni-msg');
+  const inNombres = $('#act-nombres');
+  const inClaveAcc = $('#act-clave-acceso');
+  const inClaveAcc2 = $('#act-clave-acceso2');
+  const claveMsg = $('#act-clave-msg');
+
+  if (inDni) inDni.addEventListener('input', (e) => {
+    e.target.value = (e.target.value || '').replace(/\D/g, '');
+    estado.dni = e.target.value;
+    // NO existe endpoint DNI→nombres aún: validamos FORMATO y confirmamos a mano.
+    if (estado.dni.length === 8) {
+      dniMsg.textContent = ''; dniMsg.className = 'act-estado muted';
+      if (dniOk) dniOk.hidden = false;
+      if (inNombres && !inNombres.value) { try { inNombres.focus(); } catch (_) {} }
+    } else {
+      if (dniOk) dniOk.hidden = true;
+      dniMsg.textContent = estado.dni ? 'El DNI tiene 8 dígitos.' : '';
+      dniMsg.className = 'act-estado muted';
+    }
+  });
+  if (inNombres) inNombres.addEventListener('input', (e) => { estado.nombres = e.target.value; });
+  function verClaveAcc() {
+    estado.clave_acceso = inClaveAcc ? inClaveAcc.value : '';
+    estado.clave_acceso2 = inClaveAcc2 ? inClaveAcc2.value : '';
+    if (!claveMsg) return;
+    if (estado.clave_acceso && estado.clave_acceso === estado.dni) {
+      claveMsg.textContent = 'La clave no puede ser igual a tu DNI.'; claveMsg.className = 'act-estado warn';
+    } else if (estado.clave_acceso2 && estado.clave_acceso !== estado.clave_acceso2) {
+      claveMsg.textContent = 'Las claves no coinciden.'; claveMsg.className = 'act-estado warn';
+    } else { claveMsg.textContent = ''; claveMsg.className = 'act-estado muted'; }
+  }
+  if (inClaveAcc) inClaveAcc.addEventListener('input', verClaveAcc);
+  if (inClaveAcc2) inClaveAcc2.addEventListener('input', verClaveAcc);
 
   // ── B.1 · RUC con inteligencia ──
   const inRuc = $('#act-ruc');
@@ -55,6 +94,11 @@
 
   async function lookupRuc(ruc) {
     estado.ruc = ruc;
+    // RUC de persona natural (10 + DNI(8) + verif): pre-llenar el DNI si está vacío.
+    if (ruc.startsWith('10') && inDni && !estado.dni) {
+      inDni.value = ruc.slice(2, 10);
+      inDni.dispatchEvent(new Event('input'));
+    }
     guardarLead();                      // B: lead apenas hay RUC válido
     rucMsg.className = 'act-estado muted'; rucMsg.textContent = 'Consultando…';
     okBox.hidden = true; rsEdit.hidden = true;
@@ -335,6 +379,23 @@
 
   // ── Activar ──
   $('#act-activar').addEventListener('click', async (e) => {
+    // Identidad primero (unificación): DNI + clave elegida (≠ DNI).
+    if (!/^\d{8}$/.test(estado.dni || '')) {
+      confirmarModal('Falta tu DNI', 'Escribe tu DNI de 8 dígitos.', () => {});
+      try { inDni.focus(); } catch (_) {} return;
+    }
+    if ((estado.clave_acceso || '').length < 6) {
+      confirmarModal('Crea tu clave', 'Tu clave de acceso debe tener al menos 6 caracteres.', () => {});
+      try { inClaveAcc.focus(); } catch (_) {} return;
+    }
+    if (estado.clave_acceso !== estado.clave_acceso2) {
+      confirmarModal('Claves distintas', 'Las dos claves no coinciden.', () => {});
+      try { inClaveAcc2.focus(); } catch (_) {} return;
+    }
+    if (estado.clave_acceso === estado.dni) {
+      confirmarModal('Clave insegura', 'La clave no puede ser igual a tu DNI.', () => {});
+      try { inClaveAcc.focus(); } catch (_) {} return;
+    }
     if (!/^\d{11}$/.test(estado.ruc)) { confirmarModal('Falta tu RUC', 'Escribe tu RUC de 11 dígitos.', () => {}); return; }
     // C: el WhatsApp es obligatorio (es el activo para no perder el lead).
     if (!/^\d{8,9}$/.test(estado.whatsapp || '')) {
@@ -364,7 +425,10 @@
           tiene_clave: estado.tiene_clave, usuario_sol: estado.usuario_sol,
           clave_sol: estado.clave_sol,
           conexion_verificada: estado.conexion_verificada,
-          whatsapp: estado.whatsapp, responsabilidad: true }) })).json();
+          whatsapp: estado.whatsapp, responsabilidad: true,
+          // Identidad (unificación Fase 1): DNI + nombre + clave elegida.
+          dni: estado.dni, nombres: estado.nombres,
+          clave: estado.clave_acceso, clave_repetir: estado.clave_acceso2 }) })).json();
       if (j.ok) { location.href = j.redirect || '/'; }
       else { btn.disabled = false; btn.innerHTML = ctaHTML; confirmarModal('No se pudo activar', j.error || 'Inténtalo de nuevo.', () => {}); }
     } catch (_) { btn.disabled = false; btn.innerHTML = ctaHTML; confirmarModal('Error', 'Error de red al activar.', () => {}); }
