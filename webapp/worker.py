@@ -317,10 +317,17 @@ async def _procesar_recordatorios(session) -> int:
             notif.tipo_documento or "Notificación")
         fecha_txt = venc.astimezone(TZ_LIMA).strftime("%d/%m/%Y")
         try:
-            await push_service.notificar_usuario(
-                session, rec.usuario_id, "Recordatorio de alerta.pe",
-                f"{etq} vence el {fecha_txt}. No dejes pasar el plazo.",
-                url="/resumen")
+            # Enrutar por la columna presente: persona_id (login por DNI) o
+            # usuario_id (legacy). Un recordatorio de login-persona lleva
+            # usuario_id NULL → debe notificarse por persona, no se pierde.
+            titulo_rec = "Recordatorio de alerta.pe"
+            body_rec = f"{etq} vence el {fecha_txt}. No dejes pasar el plazo."
+            if rec.persona_id:
+                await push_service.notificar_persona(
+                    session, rec.persona_id, titulo_rec, body_rec, url="/resumen")
+            elif rec.usuario_id:
+                await push_service.notificar_usuario(
+                    session, rec.usuario_id, titulo_rec, body_rec, url="/resumen")
             enviados += 1
         except Exception as e:
             log(f"  recordatorio {rec.id}: push falló (sigo): {e}", "WARN")

@@ -909,6 +909,9 @@ class Recordatorio(Base):
     __tablename__ = "recordatorios"
     __table_args__ = (
         UniqueConstraint("notificacion_id", "usuario_id", name="uq_recordatorio"),
+        # Hermana por PERSONA (migración usuarios→personas): un login por DNI no
+        # colisiona por usuario_id (NULL); su unicidad va por persona.
+        UniqueConstraint("notificacion_id", "persona_id", name="uq_recordatorio_persona"),
         Index("ix_recordatorio_activo", "activo"),
     )
 
@@ -920,9 +923,16 @@ class Recordatorio(Base):
     notificacion_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("notificaciones.id", ondelete="CASCADE"),
         nullable=False, index=True)
-    usuario_id: Mapped[uuid.UUID] = mapped_column(
+    # usuario_id: login legacy. persona_id: login por DNI (sin fila en usuarios).
+    # usuario_id pasa a NULLABLE (antes NOT NULL): un recordatorio de login-persona
+    # lleva persona_id y usuario_id NULL. Se escribe UNO u OTRO (UsuarioActual.autoria);
+    # lectura por filtro_autoria; el worker enruta el push por la columna presente.
+    usuario_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="CASCADE"),
-        nullable=False, index=True)
+        nullable=True, index=True)
+    persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"),
+        nullable=True, index=True)
 
     modo: Mapped[ModoRecordatorio] = mapped_column(
         Enum(ModoRecordatorio, native_enum=False, length=20), nullable=False)
@@ -1156,6 +1166,12 @@ class Persona(Base, TimestampMixin):
     # Rol de sistema (SOPORTE_GLOBAL = ve todo, solo lectura). NULL = normal.
     rol_sistema: Mapped[RolSistema | None] = mapped_column(
         Enum(RolSistema, native_enum=False, length=20), nullable=True)
+
+    # Métricas heredadas de Usuario (unificación de identidad, Fase 0): base para
+    # "nuevas desde tu última visita" (dashboard) y la métrica GRACIAS del push.
+    # Cuando el empresario/socio sean Persona, estas viven aquí y no en usuarios.
+    ultima_visita_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ultima_alerta_vista_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     accesos: Mapped[list["Acceso"]] = relationship(
         back_populates="persona", cascade="all, delete-orphan")
