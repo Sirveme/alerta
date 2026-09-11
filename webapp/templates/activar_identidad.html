@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block titulo %}Activa tu acceso · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="ai-wrap" style="max-width:460px;margin:0 auto;padding-block:24px">
+  {% if not valido %}
+  <div class="tarjeta">
+    <h1 class="titulo-pagina">Link no válido</h1>
+    <p class="muted">Este link de activación ya se usó o no es correcto. Pídele a
+      tu contador que te reenvíe el enlace, o escríbenos por WhatsApp
+      {% if whatsapp_soporte %}(<a href="https://wa.me/{{ whatsapp_soporte }}">soporte</a>){% endif %}.</p>
+  </div>
+  {% else %}
+  <h1 class="titulo-pagina">Activa tu acceso</h1>
+  <p class="subtitulo">{{ razon_social }}{% if ruc %} · RUC {{ ruc }}{% endif %}</p>
+  <p class="muted">Crea tu acceso a alerta.pe. Entras con tu <b>DNI</b> y la clave
+    que tú elijas.</p>
+
+  <form id="ai-form" class="tarjeta" style="display:grid;gap:12px" autocomplete="off">
+    <label>Tu DNI
+      <input id="ai-dni" inputmode="numeric" maxlength="8" placeholder="8 dígitos" required>
+    </label>
+    <label>Tus apellidos y nombres
+      <input id="ai-nombres" placeholder="Como en tu DNI">
+    </label>
+    <label>Crea tu clave
+      <input id="ai-clave" type="password" minlength="6" placeholder="mínimo 6 caracteres" required>
+    </label>
+    <label>Repite tu clave
+      <input id="ai-clave2" type="password" minlength="6" required>
+    </label>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:.9rem">
+      <input id="ai-resp" type="checkbox" required>
+      <span>Declaro que estoy autorizado a acceder a la información tributaria de
+        este RUC. alerta.pe solo la difunde; la responsabilidad del acceso es mía.</span>
+    </label>
+    <div id="ai-error" class="alta-estado" style="color:var(--u-urgente);min-height:1em"></div>
+    <button type="submit" class="btn btn--bloque">Crear mi acceso y entrar</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var f = document.getElementById('ai-form');
+  if (!f) return;
+  var err = document.getElementById('ai-error');
+  var soloDig = function (el) { el.value = (el.value || '').replace(/\D/g, ''); };
+  var dni = document.getElementById('ai-dni');
+  dni.addEventListener('input', function () { soloDig(dni); });
+  f.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    err.textContent = '';
+    var btn = f.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      var r = await fetch('/api/activar-identidad', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: {{ token|tojson }},
+          dni: dni.value,
+          nombres: document.getElementById('ai-nombres').value,
+          clave: document.getElementById('ai-clave').value,
+          clave_repetir: document.getElementById('ai-clave2').value,
+          responsabilidad: document.getElementById('ai-resp').checked,
+        }) });
+      var j = await r.json();
+      if (!j.ok) { err.textContent = j.error || 'No se pudo activar.'; btn.disabled = false; return; }
+      location.href = j.redirect || '/';
+    } catch (_) {
+      err.textContent = 'Error de red, reintenta.'; btn.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}
