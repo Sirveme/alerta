@@ -45,6 +45,9 @@ router = APIRouter(tags=["clientes"])
 # API RUC pública del ecosistema (apis.net.pe). Token por env (no en el repo).
 APIS_NET_PE_TOKEN = os.getenv("APIS_NET_PE_TOKEN", "")
 APIS_NET_PE_URL = "https://api.apis.net.pe/v2/sunat/ruc"
+# RENIEC DNI→nombres (mismo token). OJO: DNI↔nombre es PII → NUNCA se cachea (a
+# diferencia del RUC, que es padrón público). Se consulta en vivo cada vez.
+APIS_NET_PE_DNI_URL = "https://api.apis.net.pe/v2/reniec/dni"
 
 
 async def autocompletar_ficha(ruc: str) -> dict | None:
@@ -143,6 +146,39 @@ async def consultar_ruc_api(session, ruc: str, timeout: float = 8.0) -> dict:
             await session.rollback()
     return {"ruc": ruc, "razon_social": razon_social,
             "estado": estado, "origen": "api"}
+
+
+async def consultar_dni_api(dni: str, timeout: float = 8.0) -> dict:
+    """DNI → nombres vía RENIEC (apis.net.pe). Espejo de consultar_ruc_api PERO
+    SIN CACHÉ: DNI↔nombre es PII (dato personal), no se acumula una base de nombres
+    (política ANPD / minimización de datos). Se consulta EN VIVO cada vez.
+
+    Devuelve {dni, nombre_completo, nombres, apellido_paterno, apellido_materno}.
+    Nunca lanza: ante error/red, nombre_completo = None (la UI deja escribir a mano).
+    """
+    dni = (dni or "").strip()
+    nombre_completo = nombres = ap_pat = ap_mat = None
+    if APIS_NET_PE_TOKEN:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as cli:
+                r = await cli.get(
+                    APIS_NET_PE_DNI_URL,
+                    params={"numero": dni},
+                    headers={"Authorization": f"Bearer {APIS_NET_PE_TOKEN}",
+                             "Accept": "application/json"})
+            if r.status_code == 200:
+                d = r.json()
+                nombres = d.get("nombres") or None
+                ap_pat = d.get("apellidoPaterno") or None
+                ap_mat = d.get("apellidoMaterno") or None
+                nombre_completo = (d.get("nombreCompleto")
+                                   or " ".join(x for x in (ap_pat, ap_mat, nombres) if x)
+                                   or None)
+        except Exception as e:
+            logger.warning("API DNI falló para %s (sigo): %s", dni, e)
+    # NO se cachea: nada de PII persistida.
+    return {"dni": dni, "nombre_completo": nombre_completo, "nombres": nombres,
+            "apellido_paterno": ap_pat, "apellido_materno": ap_mat}
 
 
 @router.get("/api/ruc/{ruc}")

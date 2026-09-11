@@ -44,7 +44,7 @@ from ..auth import (
 from ..deps import usuario_actual, UsuarioActual
 from ..estados import estado_conexion
 from precios import precio_para_fecha
-from .clientes import consultar_ruc_api
+from .clientes import consultar_ruc_api, consultar_dni_api
 
 router = APIRouter(tags=["landing"])
 
@@ -159,6 +159,28 @@ async def api_ruc_publico(ruc: str):
     return JSONResponse({"ok": True, "ruc": ruc,
                          "razon_social": razon_social,
                          "dni": _dni_desde_ruc(ruc)})
+
+
+@router.get("/api/reniec/dni/{dni}")
+async def api_dni_publico(dni: str):
+    """Lookup DNI→nombres PÚBLICO para el alta (sin sesión). Espejo del de RUC,
+    pero SIN CACHÉ (PII): consulta RENIEC en vivo con timeout corto y nunca bloquea
+    (si falla, nombre_completo None → el front deja escribir el nombre a mano).
+    No expone el token al navegador."""
+    dni = (dni or "").strip()
+    if not (dni.isdigit() and len(dni) == 8):
+        return JSONResponse(
+            {"ok": False, "error": "DNI inválido (8 dígitos)."}, status_code=400)
+    try:
+        ficha = await consultar_dni_api(dni, timeout=4.0)
+    except Exception:
+        ficha = {"nombre_completo": None}
+    return JSONResponse({
+        "ok": True, "dni": dni,
+        "nombre_completo": ficha.get("nombre_completo"),
+        "nombres": ficha.get("nombres"),
+        "apellido_paterno": ficha.get("apellido_paterno"),
+        "apellido_materno": ficha.get("apellido_materno")})
 
 
 @router.post("/api/activar/lead")
