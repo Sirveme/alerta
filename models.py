@@ -366,6 +366,10 @@ class Usuario(Base, TimestampMixin):
     ultima_alerta_vista_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     debe_cambiar_clave: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Versión de sesión (revocación server-side): el token lleva `sv`=este valor;
+    # /logout y cambio de clave lo INCREMENTAN → todo token viejo queda inválido al
+    # instante (usuario_actual compara). Cierra el logout que no revocaba.
+    sesion_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Empresario cuya clave aún la entrega Soporte manualmente (zAlerta-06 C.4).
     clave_pendiente: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ultimo_acceso_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -1178,6 +1182,8 @@ class Persona(Base, TimestampMixin):
     clave_hash: Mapped[str | None] = mapped_column(String(255))
     # Clave inicial = DNI → forzar cambio en el primer login (personas nuevas).
     debe_cambiar_clave: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Versión de sesión (revocación server-side): ver Usuario.sesion_version.
+    sesion_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Rol de sistema (SOPORTE_GLOBAL = ve todo, solo lectura). NULL = normal.
     rol_sistema: Mapped[RolSistema | None] = mapped_column(
         Enum(RolSistema, native_enum=False, length=20), nullable=True)
