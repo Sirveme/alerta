@@ -47,6 +47,10 @@ COOKIE_NOMBRE = "alertape_sesion"
 DURACION_SESION = 60 * 60 * 12          # 12 horas
 _SECRET = (os.getenv("JWT_SECRET") or os.getenv("SECRET_KEY")
            or "dev-inseguro-cambiar").encode("utf-8")
+# Cookie Secure: DEFAULT True (prod = HTTPS). En dev local sobre http, exportar
+# COOKIE_SECURE=0. Se aplica al set Y al delete (deben casar para que borre bien).
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "1").strip().lower() not in (
+    "0", "false", "no", "off")
 
 ph = PasswordHasher()   # Argon2 (mismo hashing que el seed)
 
@@ -96,6 +100,7 @@ def crear_token_usuario(usuario: Usuario, tipo_cuenta: str = "estudio") -> str:
         "tc": tipo_cuenta,            # tipo de cuenta (estudio | empresario)
         "nombre": usuario.nombre,
         "tu": True,
+        "sv": usuario.sesion_version,   # revocación server-side (logout/cambio clave)
         "exp": int(time.time()) + DURACION_SESION,
     })
 
@@ -124,6 +129,7 @@ def crear_token_persona(persona: "Persona", estudio: "EstudioContable",
         # filtrado de vista por cid se cablea en Fase 1. Claim latente = sin efecto.
         "cid": (str(acceso.contribuyente_id)
                 if acceso and acceso.contribuyente_id else None),
+        "sv": persona.sesion_version,   # revocación server-side (logout/cambio clave)
         "nombre": persona.nombre_completo or "",
         "exp": int(time.time()) + DURACION_SESION,
     })
@@ -193,7 +199,7 @@ async def _resolver_contexto_persona(session, persona) -> "tuple | None":
 def set_cookie_sesion(resp, token: str) -> None:
     resp.set_cookie(
         COOKIE_NOMBRE, token, max_age=DURACION_SESION,
-        httponly=True, samesite="lax", secure=False,  # secure=True en prod (HTTPS)
+        httponly=True, samesite="lax", secure=COOKIE_SECURE,
         path="/")
 
 
@@ -317,6 +323,8 @@ async def cambiar_clave_post(
     # ── Modo PERSONA (login nuevo): actualiza personas.clave_hash ──
     pid = sesion.get("pid")
     if pid:
+        token = None
+        destino = "/seleccionar-buzon" if sesion.get("mc") else "/"
         async with get_session() as session:
             persona = await session.get(Persona, uuid.UUID(pid))
             if not persona:
@@ -328,25 +336,64 @@ async def cambiar_clave_post(
                     status_code=400)
             persona.clave_hash = hash_clave(clave_nueva)
             persona.debe_cambiar_clave = False
+            persona.sesion_version += 1        # revoca TODAS las sesiones viejas
+            # Reemitir cookie para ESTE dispositivo (con la nueva sv) → no se
+            # autoexpulsa quien cambia; las demás sesiones sí quedan inválidas.
+            # Se construye ANTES del commit (persona.sesion_version ya incrementado
+            # en memoria) para no depender de expire_on_commit.
+            ctx = await _resolver_contexto_persona(session, persona)
+            if ctx:
+                estudio, acceso, multi, tiene_usuario = ctx
+                token = crear_token_persona(persona, estudio, acceso, tiene_usuario, multi)
             await session.commit()
-        # Ya con clave nueva: al selector si tiene varios buzones, si no directo.
-        destino = "/seleccionar-buzon" if sesion.get("mc") else "/"
-        return RedirectResponse(destino, status_code=303)
+        resp = RedirectResponse(destino, status_code=303)
+        if token:
+            set_cookie_sesion(resp, token)
+        return resp
 
     # ── Modo USUARIO (login viejo) ──
+    token = None
     async with get_session() as session:
         usuario = await session.get(Usuario, uuid.UUID(sesion["uid"]))
         if not usuario:
             return RedirectResponse("/login", status_code=303)
         usuario.access_code = hash_clave(clave_nueva)
         usuario.debe_cambiar_clave = False
+        usuario.sesion_version += 1            # revoca TODAS las sesiones viejas
+        token = crear_token_usuario(usuario, sesion.get("tc", "estudio"))
         await session.commit()
-    return RedirectResponse("/", status_code=303)
+    resp = RedirectResponse("/", status_code=303)
+    if token:
+        set_cookie_sesion(resp, token)
+    return resp
 
 
 @router.get("/logout")
 @router.post("/logout")
-async def logout():
-    resp = RedirectResponse("/login", status_code=303)
-    resp.delete_cookie(COOKIE_NOMBRE, path="/")
+async def logout(request: Request):
+    """Logout con revocación REAL: incrementa sesion_version de la identidad → todo
+    token viejo (este y otros dispositivos) queda inválido en el server al instante.
+    Best-effort: pase lo que pase (token inválido, BD lenta/caída), SIEMPRE borra la
+    cookie y redirige — el logout jamás debe fallar."""
+    sesion = leer_sesion(request.cookies.get(COOKIE_NOMBRE))
+    if sesion:
+        try:
+            async with get_session() as session:
+                pid = sesion.get("pid")
+                if pid:
+                    p = await session.get(Persona, uuid.UUID(pid))
+                    if p:
+                        p.sesion_version += 1
+                elif sesion.get("uid"):
+                    u = await session.get(Usuario, uuid.UUID(sesion["uid"]))
+                    if u:
+                        u.sesion_version += 1
+                await session.commit()
+        except Exception:
+            pass   # nunca bloquear el logout por la BD
+    # ?out=1 → la página de login purga Cache Storage + el caché de datos offline
+    # (que no quede ninguna página/datos autenticados tras salir, ni offline).
+    resp = RedirectResponse("/login?out=1", status_code=303)
+    resp.delete_cookie(COOKIE_NOMBRE, path="/", httponly=True,
+                       samesite="lax", secure=COOKIE_SECURE)
     return resp
