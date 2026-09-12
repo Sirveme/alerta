@@ -393,30 +393,84 @@ async def _procesar_fondo(session, full: bool = False) -> int:
     return len(activos)
 
 
-def _copy_push(n_sunat: int, n_sunafil: int, deuda: int) -> tuple[str, str]:
-    """Título y cuerpo del push según la FUENTE de los avisos. SUNAT ≠ SUNAFIL: un
-    contador no debe buscar en el buzón equivocado. 'deuda' es señal SUNAT (la casilla
-    SUNAFIL no la usa). SOLO arma el texto; no cambia el disparo ni la dedup."""
-    total = n_sunat + n_sunafil
-    if n_sunafil and not n_sunat:                       # solo SUNAFIL
-        return ("Novedades en tu Casilla SUNAFIL",
-                f"Tienes {total} notificación(es) nueva(s) en tu Casilla Electrónica "
-                f"SUNAFIL. Toca RESUMEN para revisarlas.")
-    if n_sunat and not n_sunafil:                       # solo SUNAT
-        if deuda > 0:
-            return ("Novedades en tu Buzón SUNAT",
-                    f"Tienes {total} aviso(s) nuevo(s), {deuda} con deuda por atender. "
-                    f"Toca RESUMEN para revisarlos.")
-        return ("Novedades en tu Buzón SUNAT",
-                f"Tienes {total} aviso(s) nuevo(s) en tu Buzón SUNAT.")
-    # mixto: ambas fuentes en el mismo lote del destinatario
-    det = f"{n_sunat} en tu Buzón SUNAT y {n_sunafil} en tu Casilla SUNAFIL"
-    if deuda > 0:
-        return ("Novedades en tus buzones SUNAT y SUNAFIL",
-                f"Tienes {total} aviso(s) nuevo(s) ({det}), {deuda} con deuda por "
-                f"atender. Toca RESUMEN para revisarlos.")
-    return ("Novedades en tus buzones SUNAT y SUNAFIL",
-            f"Tienes {total} aviso(s) nuevo(s): {det}. Toca RESUMEN para revisarlos.")
+def _nombre_contrib(contrib) -> str:
+    """Razón social si la hay; si no, el RUC. Nunca vacío (para el push)."""
+    if contrib is None:
+        return "tu contribuyente"
+    return (contrib.razon_social or "").strip() or contrib.ruc
+
+
+def _copy_push(nuevos, contribs, deuda: int) -> tuple[str, str]:
+    """Título y cuerpo del push. Incluye la RAZÓN SOCIAL del contribuyente para que
+    el contador sepa DE QUÉ empresa es el aviso sin abrir la app. Sigue respetando la
+    FUENTE (SUNAT ≠ SUNAFIL) para no mandarlo al buzón equivocado. Un destinatario
+    puede traer avisos de VARIOS RUCs en el mismo lote → se distingue 1 empresa vs.
+    varias. SOLO arma el texto; no cambia el disparo ni la dedup.
+
+    `nuevos`   : list[Notificacion] del destinatario (ya deduplicadas).
+    `contribs` : dict {contribuyente_id: Contribuyente} para la razón social.
+    `deuda`    : nº de avisos SUNAT con deuda (señal de urgencia)."""
+    total = len(nuevos)
+    por_cid = defaultdict(list)
+    for n in nuevos:
+        por_cid[n.contribuyente_id].append(n)
+
+    n_sunafil = sum(1 for n in nuevos if (n.fuente or "sunat") == "sunafil")
+    n_sunat = total - n_sunafil
+
+    def _buzon() -> str:
+        if n_sunafil and n_sunat:
+            return "tus buzones SUNAT y SUNAFIL"
+        if n_sunafil:
+            return "tu Casilla SUNAFIL"
+        return "tu Buzón SUNAT"
+
+    # ── UN solo contribuyente: título = razón social, cuerpo con el aviso ──
+    if len(por_cid) == 1:
+        cid, lst = next(iter(por_cid.items()))
+        titulo = _nombre_contrib(contribs.get(cid))
+        if total == 1:
+            asunto = (lst[0].asunto or "").strip()
+            body = f"1 aviso nuevo: {asunto}" if asunto else f"1 aviso nuevo en {_buzon()}."
+            if deuda > 0:
+                body = body.rstrip(".") + ". Deuda por atender."
+        else:
+            extra = f", {deuda} con deuda por atender" if deuda > 0 else ""
+            body = f"{total} avisos nuevos en {_buzon()}{extra}. Toca RESUMEN para revisarlos."
+        return (titulo, body)
+
+    # ── VARIOS contribuyentes en el mismo lote del destinatario ──
+    nombres = [_nombre_contrib(contribs.get(cid)) for cid in por_cid]
+    if len(nombres) <= 2:
+        lista = " y ".join(nombres)
+    else:
+        lista = f"{nombres[0]}, {nombres[1]} y {len(nombres) - 2} más"
+    extra = f", {deuda} con deuda" if deuda > 0 else ""
+    titulo = f"Novedades en {_buzon()}"
+    body = (f"{total} avisos nuevos en {len(por_cid)} empresas{extra}: {lista}. "
+            f"Toca RESUMEN para revisarlos.")
+    return (titulo, body)
+
+
+# Ventana de RECENCIA del push (default 30 días, env PUSH_VENTANA_BACKLOG_DIAS):
+# si una notif se PUBLICÓ (fecha_publica) más de N días ANTES de entrar a la BD
+# (creado_at), es BACKLOG histórico recién descubierto por el barrido, no una
+# novedad. 30 cubre notifs legítimamente recientes (y outages largos del worker,
+# donde la brecha publicación↔descubrimiento sigue chica) sin re-anunciar histórico.
+PUSH_VENTANA_BACKLOG = timedelta(days=int(os.getenv("PUSH_VENTANA_BACKLOG_DIAS", "30")))
+
+
+def _es_novedad(n, ahora) -> bool:
+    """True si la notif es NOTICIA reciente; False si es BACKLOG histórico recién
+    descubierto (p.ej. un doc de 2015 que aparece hoy). Señal robusta: brecha entre
+    la publicación oficial (fecha_publica_sunat) y el descubrimiento (creado_at).
+    Sin fecha_publica → se trata como novedad (no arriesgar a callar algo legítimo;
+    SUNAFIL trae su propio silenciado en la ingesta). El backlog NO se anuncia pero
+    SÍ se marca como visto (queda visible en el panel, no vuelve a colar)."""
+    fp = n.fecha_publica_sunat
+    if fp is None:
+        return True
+    return (n.creado_at or ahora) - fp <= PUSH_VENTANA_BACKLOG
 
 
 async def _enviar_push_agrupado(session) -> int:
@@ -438,8 +492,25 @@ async def _enviar_push_agrupado(session) -> int:
     if not notifs:
         return 0
 
+    # Guard de RECENCIA (zAlerta-48): el backlog histórico recién descubierto por el
+    # barrido NO se anuncia como "novedad" (entrena a ignorar el push). Se separa:
+    # no entra al push, pero el bucle de cierre (abajo) lo marca notificado_push=True
+    # igual → queda visible en el panel y no vuelve a colar. Espejo permanente del
+    # arranque-silencioso, que solo cubre la PRIMERA ingesta del cliente.
+    novedades = [n for n in notifs if _es_novedad(n, ahora)]
+    backlog = len(notifs) - len(novedades)
+    if backlog:
+        log(f"PUSH: {backlog} histórica(s) NO anunciada(s) (backlog recién "
+            f"descubierto; se marcan como vistas).", "OK")
+    if not novedades:
+        for n in notifs:                     # nada nuevo real: solo silenciar backlog
+            n.notificado_push = True
+            n.notificado_push_at = ahora
+        await session.commit()
+        return 0
+
     por_contrib = defaultdict(list)
-    for n in notifs:
+    for n in novedades:
         por_contrib[n.contribuyente_id].append(n)
     contribs = {c.id: c for c in await session.scalars(
         select(Contribuyente).where(Contribuyente.id.in_(list(por_contrib.keys()))))}
@@ -481,14 +552,12 @@ async def _enviar_push_agrupado(session) -> int:
                 PushSuscripcion.usuario_id == rid, PushSuscripcion.activa.is_(True))))
         subs = [s for s in subs if s.endpoint not in enviados_endpoints]
 
-        total, deuda = len(nuevos), d["deuda"]
-        # Copy según FUENTE de los avisos del destinatario (SUNAT / SUNAFIL / mixto).
-        n_sunafil = sum(1 for x in nuevos if (x.fuente or "sunat") == "sunafil")
-        titulo, body = _copy_push(total - n_sunafil, n_sunafil, deuda)
+        # Copy según FUENTE + RAZÓN SOCIAL del/los contribuyente(s) del destinatario.
+        titulo, body = _copy_push(nuevos, contribs, d["deuda"])
         payload = json.dumps({
             "title": titulo, "body": body,
             "url": "/resumen?from=push", "acciones": True,
-            "tag": "alertape-buzon", "requiere": (deuda > 0)})
+            "tag": "alertape-buzon", "requiere": (d["deuda"] > 0)})
 
         envio_ok = False
         for s in subs:
@@ -515,8 +584,8 @@ async def _enviar_push_agrupado(session) -> int:
         n.notificado_push = True
         n.notificado_push_at = ahora
     await session.commit()
-    log(f"PUSH AGRUPADO ({ahora.hour}h): {len(notifs)} notif nuevas → "
-        f"{avisados} destinatario(s).", "OK")
+    log(f"PUSH AGRUPADO ({ahora.hour}h): {len(novedades)} novedad(es) "
+        f"(+{backlog} backlog silenciado) → {avisados} destinatario(s).", "OK")
     return avisados
 
 
