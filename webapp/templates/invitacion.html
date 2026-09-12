@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block titulo %}Activa tu acceso · alerta.pe{% endblock %}
+{% block contenido %}
+<div class="ai-wrap" style="max-width:460px;margin:0 auto;padding-block:24px">
+  {% if not valido %}
+  <div class="tarjeta">
+    <h1 class="titulo-pagina">Invitación no válida</h1>
+    <p class="muted">{{ motivo or "Este link no es correcto." }} Pide a quien te
+      invitó que te reenvíe el enlace{% if whatsapp_soporte %}, o escríbenos por
+      <a href="https://wa.me/{{ whatsapp_soporte }}">WhatsApp</a>{% endif %}.</p>
+  </div>
+  {% else %}
+  <h1 class="titulo-pagina">Activa tu acceso</h1>
+  <p class="subtitulo">Te invitan a <b>{{ org_nombre }}</b> como <b>{{ rol_label }}</b>.</p>
+
+  {% if ya_sesion %}
+  <div class="tarjeta" style="display:grid;gap:12px">
+    <p>Ya tienes una sesión iniciada. Puedes <b>sumar este acceso</b> a tu cuenta actual.</p>
+    <div id="ai-error" class="alta-estado" style="color:var(--u-urgente);min-height:1em"></div>
+    <button id="ai-sumar" class="btn btn--bloque">Sumar este acceso a mi cuenta</button>
+    <p class="muted" style="text-align:center">¿Es para otra persona?
+      <a href="/logout">Cierra sesión</a> y abre el link de nuevo.</p>
+  </div>
+  {% else %}
+  <p class="muted">Entra con tu <b>DNI</b> y una clave que tú eliges.</p>
+  <form id="ai-form" class="tarjeta" style="display:grid;gap:12px" autocomplete="off">
+    <label>Tu DNI
+      <input id="ai-dni" inputmode="numeric" maxlength="8"
+             value="{{ dni_esperado }}" placeholder="8 dígitos" required>
+    </label>
+    <div class="act-ruc-ok" id="ai-dni-ok" hidden>
+      <i class="ti ti-circle-check"></i>
+      <div><div class="act-rs" id="ai-dni-nombre">VALIDADO</div>
+        <div class="muted">VALIDADO con RENIEC</div></div>
+    </div>
+    <label>Tus apellidos y nombres
+      <input id="ai-nombres" placeholder="Como en tu DNI">
+    </label>
+    <label>Crea tu clave <span class="muted">(no uses tu DNI)</span>
+      <input id="ai-clave" type="password" minlength="6" placeholder="mínimo 6 caracteres" required>
+    </label>
+    <label>Repite tu clave
+      <input id="ai-clave2" type="password" minlength="6" required>
+    </label>
+
+    {% if es_cliente %}
+    <div class="act-confianza" style="margin-top:4px">
+      <i class="ti ti-shield-lock"></i>
+      <div>
+        <strong>Tu Clave SOL (opcional ahora)</strong>
+        <p class="muted" style="margin:4px 0 0">La pones TÚ, no tu contador. Sin ella
+          guardamos tu acceso, pero aún no vigilamos el buzón; puedes ponerla luego.</p>
+      </div>
+    </div>
+    <label>Usuario SOL <span class="muted">(opcional)</span>
+      <input id="ai-usol" autocomplete="off" placeholder="Usuario SOL">
+    </label>
+    <label>Clave SOL <span class="muted">(opcional)</span>
+      <input id="ai-csol" type="password" autocomplete="new-password" placeholder="Clave SOL">
+    </label>
+    {% endif %}
+
+    <div id="ai-error" class="alta-estado" style="color:var(--u-urgente);min-height:1em"></div>
+    <button type="submit" class="btn btn--bloque">Crear mi acceso y entrar</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var TOKEN = {{ token|tojson }};
+  var err = document.getElementById('ai-error');
+  function fail(m) { if (err) err.textContent = m; }
+
+  async function enviar(body, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      var r = await fetch('/api/invitacion/aceptar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body) });
+      var j = await r.json();
+      if (!j.ok) { fail(j.error || 'No se pudo activar.'); if (btn) btn.disabled = false; return; }
+      location.href = j.redirect || '/';
+    } catch (_) { fail('Error de red, reintenta.'); if (btn) btn.disabled = false; }
+  }
+
+  // Caso "ya logueado → sumar acceso"
+  var sumar = document.getElementById('ai-sumar');
+  if (sumar) sumar.addEventListener('click', function () {
+    enviar({ token: TOKEN }, sumar);   // el backend usa la sesión + suma el Acceso
+  });
+
+  // Caso identidad nueva
+  var f = document.getElementById('ai-form');
+  if (!f) return;
+  var dni = document.getElementById('ai-dni');
+  var nom = document.getElementById('ai-nombres');
+  var dniOk = document.getElementById('ai-dni-ok');
+  var dniNom = document.getElementById('ai-dni-nombre');
+  var nombresAuto = false, ctrl = null;
+  if (nom) nom.addEventListener('input', function () { nombresAuto = false; });
+
+  async function lookupDni() {
+    dni.value = (dni.value || '').replace(/\D/g, '');
+    if (dni.value.length !== 8) { if (dniOk) dniOk.hidden = true; return; }
+    var v = dni.value;
+    if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+    ctrl = new AbortController();
+    var j = null;
+    try {
+      var corte = setTimeout(function () { ctrl.abort(); }, 5000);
+      var r = await fetch('/api/reniec/dni/' + v, { signal: ctrl.signal });
+      clearTimeout(corte); j = await r.json();
+    } catch (e) { j = null; }
+    if (dni.value !== v) return;
+    if (j && j.ok && j.nombre_completo) {
+      if (dniNom) dniNom.textContent = j.nombre_completo;
+      if (dniOk) dniOk.hidden = false;
+      if (nom && (!nom.value || nombresAuto)) { nom.value = j.nombre_completo; nombresAuto = true; }
+    } else if (dniOk) { dniOk.hidden = true; }
+  }
+  dni.addEventListener('input', lookupDni);
+  if (dni.value && dni.value.length === 8) lookupDni();
+
+  f.addEventListener('submit', function (e) {
+    e.preventDefault(); fail('');
+    var body = {
+      token: TOKEN, dni: dni.value,
+      nombres: nom ? nom.value : '',
+      clave: document.getElementById('ai-clave').value,
+      clave_repetir: document.getElementById('ai-clave2').value,
+    };
+    var usol = document.getElementById('ai-usol');
+    var csol = document.getElementById('ai-csol');
+    if (usol) body.usuario_sol = usol.value;
+    if (csol) body.clave_sol = csol.value;
+    enviar(body, f.querySelector('button[type=submit]'));
+  });
+})();
+</script>
+{% endblock %}

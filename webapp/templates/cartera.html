@@ -28,6 +28,18 @@
     </div>
   </header>
 
+  {% if user.rol.name == 'CONTADOR_DUENO' %}
+  <!-- Capa 1 · Invitar ASISTENTE del estudio (solo el contador dueño). -->
+  <section class="cra-invitar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 12px">
+    <div class="act-wa-campo" style="max-width:220px">
+      <span class="act-wa-pre">+51</span>
+      <input id="inv-asis-wa" inputmode="numeric" maxlength="9" placeholder="WhatsApp del asistente (opcional)">
+    </div>
+    <button id="inv-asis-btn" class="btn">Invitar asistente</button>
+    <div id="inv-asis-out" class="act-estado" style="flex-basis:100%" hidden></div>
+  </section>
+  {% endif %}
+
   {% if not clientes %}
   <div class="cra-vacio">
     <span class="material-symbols-outlined">group_add</span>
@@ -78,4 +90,27 @@
 
 {% block scripts %}
 <script src="/static/js/cartera.js"></script>
+<script>
+  // Capa 1 · emitir invitación de ASISTENTE del estudio.
+  (function () {
+    var b = document.getElementById('inv-asis-btn'); if (!b) return;
+    var out = document.getElementById('inv-asis-out');
+    b.addEventListener('click', async function () {
+      b.disabled = true;
+      var wa = (document.getElementById('inv-asis-wa').value || '').replace(/\D/g, '');
+      try {
+        var r = await fetch('/api/invitar/asistente', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ whatsapp: wa ? ('51' + wa) : '' }) });
+        var j = await r.json();
+        out.hidden = false;
+        if (!j.ok) { out.className = 'act-estado warn'; out.textContent = j.error || 'No se pudo.'; b.disabled = false; return; }
+        out.className = 'act-estado ok';
+        out.innerHTML = 'Link: <a href="' + j.link + '">' + j.link + '</a>'
+          + (j.wa_url ? ' · <a href="' + j.wa_url + '">enviar por WhatsApp</a>' : '');
+        b.disabled = false;
+      } catch (_) { out.hidden = false; out.className = 'act-estado warn'; out.textContent = 'Error de red.'; b.disabled = false; }
+    });
+  })();
+</script>
 {% endblock %}

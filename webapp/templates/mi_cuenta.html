@@ -169,6 +169,20 @@
       </section>
     </div>
   </div>
+
+  {% if user.es_empresario %}
+  <!-- Capa 1 · Invitar SOCIO (co-dueño pleno). Solo el dueño/socio lo ve. -->
+  <section class="tarjeta acento mc-invitar" style="margin-top:16px">
+    <div class="mc-estado-tit">Invita a un socio</div>
+    <p class="muted">Un socio es <b>co-dueño</b>: ve el buzón y puede invitar y gestionar como tú.</p>
+    <div class="act-wa-campo" style="margin-top:8px">
+      <span class="act-wa-pre">+51</span>
+      <input id="inv-socio-wa" inputmode="numeric" maxlength="9" placeholder="WhatsApp del socio (opcional)">
+    </div>
+    <button id="inv-socio-btn" class="btn btn--bloque" style="margin-top:10px">Generar invitación de socio</button>
+    <div id="inv-socio-out" class="act-estado" hidden></div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -199,5 +213,28 @@
         .catch(function () { sel.disabled = false; });
     });
   });
+</script>
+<script>
+  // Capa 1 · emitir invitación de SOCIO.
+  (function () {
+    var b = document.getElementById('inv-socio-btn'); if (!b) return;
+    var out = document.getElementById('inv-socio-out');
+    b.addEventListener('click', async function () {
+      b.disabled = true;
+      var wa = (document.getElementById('inv-socio-wa').value || '').replace(/\D/g, '');
+      try {
+        var r = await fetch('/api/invitar/socio', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ whatsapp: wa ? ('51' + wa) : '' }) });
+        var j = await r.json();
+        out.hidden = false;
+        if (!j.ok) { out.className = 'act-estado warn'; out.textContent = j.error || 'No se pudo.'; b.disabled = false; return; }
+        out.className = 'act-estado ok';
+        out.innerHTML = 'Link: <a href="' + j.link + '">' + j.link + '</a>'
+          + (j.wa_url ? ' · <a href="' + j.wa_url + '">enviar por WhatsApp</a>' : '');
+        b.disabled = false;
+      } catch (_) { out.hidden = false; out.className = 'act-estado warn'; out.textContent = 'Error de red.'; b.disabled = false; }
+    });
+  })();
 </script>
 {% endblock %}
