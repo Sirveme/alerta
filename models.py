@@ -79,6 +79,10 @@ class RolUsuario(str, enum.Enum):
     CONTADOR_DUENO = "contador_dueno"          # administra su estudio (todo lo suyo)
     SUPERVISOR = "supervisor"                  # ve TODO su estudio; no lo estructural
     EMPRESARIO_LECTURA = "empresario_lectura"  # solo-lectura a SU RUC
+    # ── Capa 1 (accesos por invitación) ──
+    SOCIO = "socio"                            # CO-DUEÑO PLENO de la empresa: mismos
+    #                                            poderes que el dueño (invitar, crear asist.)
+    EMPRESARIO_ASISTENTE = "empresario_asistente"  # asistente de la EMPRESA: colabora, no invita
 
 
 class EstadoContribuyente(str, enum.Enum):
@@ -300,6 +304,12 @@ class EstudioContable(Base, TimestampMixin):
     # el link de activación; el empresario lo abre, pone su DNI + clave y ahí se crea
     # su Persona+Acceso. Se limpia al activar. NULL = ya tiene identidad / no aplica.
     activacion_token: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # Capa 1: política de acceso de los ASISTENTES del estudio a RUCs NO asignados.
+    # False (default) = advertir-sin-bloquear (el asistente puede actuar sobre
+    # cualquier RUC del estudio, se le advierte si no es suyo). True = endurecido:
+    # solo los RUCs asignados (Asignacion). Lo decide el CONTADOR_DUENO.
+    asistentes_solo_asignados: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False)
     # MARCA BLANCA (reservado, zAlerta-89): solo el espacio; NO se desarrolla aún.
     # La arquitectura no debe impedir marca blanca luego.
     marca_nombre: Mapped[str | None] = mapped_column(String(120))
@@ -1302,6 +1312,102 @@ class AuditoriaSoporte(Base):
         nullable=True)
     accion: Mapped[str] = mapped_column(String(20), default="VER", nullable=False)
     creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
+# ═════════════════════════════════════════════════════════════════════
+#  Capa 1 — Invitaciones + Auditoría (accesos por invitación)
+# ═════════════════════════════════════════════════════════════════════
+class EstadoInvitacion(str, enum.Enum):
+    """Ciclo de vida de una invitación (Capa 1)."""
+    PENDIENTE = "pendiente"
+    ACEPTADA = "aceptada"
+    CADUCADA = "caducada"
+    REVOCADA = "revocada"
+
+
+class Invitacion(Base):
+    """Invitación por LINK con token (Capa 1). Unifica el `activacion_token` de
+    Fase 1 en UN solo sistema. Principio: quien tiene autoridad sobre un RUC/estudio
+    invita; al ACEPTAR (Fase B) se crea el `Acceso` con `rol_destino` sobre el
+    destino DUAL (estudio_id XOR contribuyente_id, igual que Acceso).
+
+    Estructura ahora (Fase A, aditiva); el flujo de crear/aceptar es Fase B.
+    OJO (confidencialidad): las invitaciones con `contribuyente_id` (contador
+    invitado por empresario, asistente de empresa) NO se habilitan en prod hasta
+    Fase D (filtrado de vista por RUC). Las de `estudio_id` sí pueden ir antes."""
+    __tablename__ = "invitaciones"
+    __table_args__ = (
+        # Destino DUAL: exactamente uno de estudio_id / contribuyente_id (como Acceso).
+        CheckConstraint(
+            "(estudio_id IS NOT NULL) <> (contribuyente_id IS NOT NULL)",
+            name="ck_invitacion_destino"),
+        Index("ix_invitacion_estado", "estado"),
+        Index("ix_invitacion_estudio", "estudio_id"),
+        Index("ix_invitacion_contribuyente", "contribuyente_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # QUIÉN invita (autoridad; su rol se valida al crear la invitación, Fase B).
+    invitado_por_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"))
+    # Org desde la que se invita (contexto, para auditar/segmentar).
+    estudio_contexto_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="SET NULL"))
+    # Rol que tendrá el invitado al aceptar (nombre del enum RolUsuario, VARCHAR).
+    rol_destino: Mapped[RolUsuario] = mapped_column(
+        Enum(RolUsuario, native_enum=False, length=30), nullable=False)
+    # Destino DUAL del Acceso a crear (uno u otro).
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=True)
+    contribuyente_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=True)
+    # Entrega del link (opcional): whatsapp/correo del invitado.
+    destino_contacto: Mapped[str | None] = mapped_column(String(120))
+    # DNI esperado (opcional): si el que invita ya lo sabe.
+    dni_esperado: Mapped[str | None] = mapped_column(String(8))
+    estado: Mapped[EstadoInvitacion] = mapped_column(
+        Enum(EstadoInvitacion, native_enum=False, length=20),
+        default=EstadoInvitacion.PENDIENTE, nullable=False)
+    caduca_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+    aceptada_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    aceptada_por_persona_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="SET NULL"))
+
+
+class Auditoria(Base):
+    """Bitácora APPEND-ONLY de trazabilidad (Capa 1, innegociable): QUIÉN
+    (persona_id) hizo QUÉ (accion) sobre QUÉ RUC/estudio, CUÁNDO. Los ids se
+    guardan SIN FK a propósito: el registro debe sobrevivir aunque la fila
+    referida se borre (una auditoría no se mutila por un CASCADE). `accion` es
+    VARCHAR libre (no enum) para sumar tipos sin migrar. `datos` (JSONB) lleva el
+    detalle (p.ej. rol invitado, token, campo llenado). Estructura ahora (Fase A);
+    los INSERT se cablean en cada acción a medida que nacen (Fase B+)."""
+    __tablename__ = "auditoria"
+    __table_args__ = (
+        Index("ix_audit_persona", "persona_id"),
+        Index("ix_audit_estudio", "estudio_id"),
+        Index("ix_audit_contribuyente", "contribuyente_id"),
+        Index("ix_audit_creado", "creado_at"),
+        Index("ix_audit_accion", "accion"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    persona_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # QUIÉN
+    accion: Mapped[str] = mapped_column(String(40), nullable=False)          # QUÉ
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # sobre…
+    contribuyente_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    objeto_tipo: Mapped[str | None] = mapped_column(String(40))   # invitacion/notif/…
+    objeto_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    datos: Mapped[dict | None] = mapped_column(JSONB)             # detalle libre
+    creado_at: Mapped[datetime] = mapped_column(                 # CUÁNDO
         DateTime(timezone=True), default=ahora_lima, nullable=False)
 
 
