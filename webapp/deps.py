@@ -45,6 +45,23 @@ class UsuarioActual:
     # cablea en Fase 1); hoy siempre None porque no hay accesos contribuyente-scoped.
     contribuyente_scope: uuid.UUID | None = None
 
+    def puede_invitar(self, tipo: str) -> bool:
+        """AUTORIDAD para emitir invitaciones (Capa 1 Fase B) — SEPARADO de
+        `requiere_escritura`/`solo_lectura`: invitar es ADMINISTRAR ACCESOS, no
+        operar el buzón, así que el empresario/socio (solo-lectura del buzón) SÍ
+        puede. Se evalúa contra el CONTEXTO ACTIVO (rol + estudio del buzón activo).
+          - 'cliente'   : el contador onboarda un cliente (crea org + invita dueño).
+          - 'asistente' : el contador crea un asistente de SU estudio.
+          - 'socio'     : el dueño/socio de la EMPRESA invita a otro co-dueño.
+        Alcance Fase B = solo destinos estudio_id. Nadie más emite (SUPERVISOR,
+        ASISTENTE, EMPRESARIO_ASISTENTE)."""
+        if tipo in ("cliente", "asistente"):
+            return self.rol == RolUsuario.CONTADOR_DUENO
+        if tipo == "socio":
+            return (self.rol in (RolUsuario.EMPRESARIO_LECTURA, RolUsuario.SOCIO)
+                    and self.tipo_cuenta == TipoCuenta.EMPRESARIO.value)
+        return False
+
     @property
     def es_admin(self) -> bool:
         return self.rol == RolUsuario.ADMIN
