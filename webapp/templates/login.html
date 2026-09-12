@@ -34,3 +34,19 @@
   </div>
 </div>
 {% endblock %}
+{% block scripts %}
+<script>
+  // Tras logout (/login?out=1): purgar TODO rastro autenticado del dispositivo —
+  // Cache Storage (páginas cacheadas por el SW) y el caché de datos offline del
+  // buzón (IndexedDB/localStorage de resumen.js). Que nada quede tras salir.
+  (function () {
+    try {
+      if (!new URLSearchParams(location.search).has('out')) return;
+    } catch (e) { return; }
+    try { if (window.caches && caches.keys) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); }); } catch (e) {}
+    try { localStorage.removeItem('alertape_resumen'); } catch (e) {}
+    try { if (window.indexedDB && indexedDB.databases) { indexedDB.databases().then(function (dbs) { (dbs || []).forEach(function (d) { if (d && d.name) try { indexedDB.deleteDatabase(d.name); } catch (e) {} }); }); } else if (window.indexedDB) { try { indexedDB.deleteDatabase('alertape'); } catch (e) {} } } catch (e) {}
+    try { history.replaceState(null, '', '/login'); } catch (e) {}
+  })();
+</script>
+{% endblock %}
