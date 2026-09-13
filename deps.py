@@ -11,6 +11,7 @@ routers DEBEN usarlo en cada consulta.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass
 
@@ -18,8 +19,12 @@ from fastapi import Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select, or_, false
 
-from models import RolUsuario, TipoCuenta, Contribuyente
+from db import get_session
+from models import (RolUsuario, TipoCuenta, Contribuyente, Persona, Usuario,
+                    Asignacion, AsignacionGrupo, ContribuyenteGrupo)
 from .auth import COOKIE_NOMBRE, leer_sesion
+
+logger = logging.getLogger("alertape.sesion")
 
 
 class RedirigirALogin(Exception):
@@ -44,6 +49,9 @@ class UsuarioActual:
     # accesos de estudio. Latente en Fase 0 (el filtrado de vista por este id se
     # cablea en Fase 1); hoy siempre None porque no hay accesos contribuyente-scoped.
     contribuyente_scope: uuid.UUID | None = None
+    # Versión de sesión del TOKEN (revocación server-side). Se compara contra la
+    # versión en BD en el gate; None = token viejo sin `sv` → rechazado (corte limpio).
+    sesion_version: int | None = None
 
     def puede_invitar(self, tipo: str) -> bool:
         """AUTORIDAD para emitir invitaciones (Capa 1 Fase B) — SEPARADO de
@@ -148,21 +156,55 @@ def _desde_sesion(sesion: dict) -> UsuarioActual:
         multi_contexto=sesion.get("mc", False),
         cargo=sesion.get("cg"),
         contribuyente_scope=uuid.UUID(cid) if cid else None,
+        sesion_version=sesion.get("sv"),
     )
 
 
-def usuario_actual(request: Request) -> UsuarioActual:
-    """Dependencia: devuelve el usuario logueado o redirige a /login."""
+async def _sesion_no_revocada(user: "UsuarioActual") -> bool:
+    """Gate de REVOCACIÓN server-side. Devuelve si la sesión sigue vigente:
+      - token SIN `sv` (viejo, pre-fix) → False (corte limpio: re-login único).
+      - `sv` del token == sesion_version en BD → True.
+      - `sv` NO coincide (logout/cambio de clave lo incrementó) → False (revocada).
+      - identidad inexistente / versión NULL → False (rechaza por seguridad).
+      - BD NO responde (excepción/timeout) → True — NO expulsar a todos por un fallo
+        de BD; la firma+exp ya se validaron (leer_sesion) y la ventana de replay es
+        ínfima. Distingue 'revocada' (BD respondió y no casa) de 'BD no responde'.
+    ANTI-LOCKOUT: un fallo de BD nunca deja a todo el mundo afuera."""
+    if user.sesion_version is None:
+        return False
+    try:
+        async with get_session() as session:
+            if user.persona_id:
+                actual = await session.scalar(
+                    select(Persona.sesion_version).where(Persona.id == user.persona_id))
+            else:
+                actual = await session.scalar(
+                    select(Usuario.sesion_version).where(Usuario.id == user.id))
+    except Exception as e:
+        # BD lenta/caída: NO revocar (no lockout masivo). Se registra y se permite.
+        logger.warning("sesion: no se pudo verificar sesion_version (permito): %s", e)
+        return True
+    if actual is None:
+        return False   # la identidad ya no existe / versión nula → rechazar
+    return actual == user.sesion_version
+
+
+async def usuario_actual(request: Request) -> UsuarioActual:
+    """Dependencia: devuelve el usuario logueado o redirige a /login. Además del
+    token firmado (leer_sesion), aplica el GATE de revocación server-side."""
     sesion = leer_sesion(request.cookies.get(COOKIE_NOMBRE))
     if not sesion:
         raise RedirigirALogin()
     try:
-        return _desde_sesion(sesion)
+        user = _desde_sesion(sesion)
     except (KeyError, ValueError):
         raise RedirigirALogin()
+    if not await _sesion_no_revocada(user):
+        raise RedirigirALogin()
+    return user
 
 
-def usuario_actual_opcional(request: Request) -> "UsuarioActual | None":
+async def usuario_actual_opcional(request: Request) -> "UsuarioActual | None":
     """Como usuario_actual pero NO redirige: devuelve None si no hay sesión.
 
     Para rutas que sirven contenido público a anónimos y contenido propio a
@@ -171,9 +213,12 @@ def usuario_actual_opcional(request: Request) -> "UsuarioActual | None":
     if not sesion:
         return None
     try:
-        return _desde_sesion(sesion)
+        user = _desde_sesion(sesion)
     except (KeyError, ValueError):
         return None
+    if not await _sesion_no_revocada(user):
+        return None
+    return user
 
 
 async def contribuyente_accesible(session, user: "UsuarioActual",
@@ -189,6 +234,25 @@ async def contribuyente_accesible(session, user: "UsuarioActual",
         cond = Contribuyente.estudio_id == user.estudio_id
     return await session.scalar(
         select(Contribuyente).where(Contribuyente.id == contribuyente_id, cond))
+
+
+async def rucs_de_asistente(session, estudio_id, persona_asistente_id) -> set:
+    """Capa 1 Fase C — scope de un ASISTENTE: conjunto de contribuyente_ids que
+    tiene asignados en un estudio = individuales (`Asignacion`) ∪ RUCs de sus grupos
+    (`AsignacionGrupo`, resueltos EN VIVO por `ContribuyenteGrupo`). Helper ÚNICO que
+    en Fase C4 usarán cartera, cliente._puede_ver y /resumen (para que el asistente
+    vea lo MISMO en las tres). En C1 solo se DEFINE — nadie lo llama aún → cero
+    cambio de comportamiento."""
+    indiv = set(await session.scalars(
+        select(Asignacion.contribuyente_id).where(
+            Asignacion.estudio_id == estudio_id,
+            Asignacion.persona_asistente_id == persona_asistente_id)))
+    por_grupo = set(await session.scalars(
+        select(ContribuyenteGrupo.contribuyente_id)
+        .join(AsignacionGrupo, AsignacionGrupo.grupo_id == ContribuyenteGrupo.grupo_id)
+        .where(AsignacionGrupo.estudio_id == estudio_id,
+               AsignacionGrupo.persona_asistente_id == persona_asistente_id)))
+    return indiv | por_grupo
 
 
 def requiere_escritura(user: UsuarioActual = Depends(usuario_actual)) -> UsuarioActual:
