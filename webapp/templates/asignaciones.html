@@ -27,8 +27,15 @@
     border:1px solid color-mix(in srgb,var(--verde) 42%,transparent);font-size:.82rem;font-weight:600;}
   .asg-gchip .dot{width:8px;height:8px;border-radius:50%;background:var(--verde);}
   .asg-vivo{font-size:.6rem;font-weight:800;letter-spacing:.05em;color:#06251A;background:var(--cian);padding:1px 5px;border-radius:5px;}
-  .asg-x{color:var(--texto-suave);font-weight:700;cursor:pointer;margin-left:2px;}
-  .asg-ruc{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--borde);}
+  /* Botón QUITAR (✕): tap target claro, se torna rojo al confirmar. */
+  .asg-x{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;
+    padding:0 7px;border:1.5px solid var(--borde);border-radius:999px;background:transparent;
+    color:var(--texto-suave);font-weight:800;font-size:1rem;line-height:1;cursor:pointer;
+    flex:0 0 auto;transition:background .15s,color .15s,border-color .15s;}
+  .asg-x:hover,.asg-x:focus-visible{border-color:#ff6b6b;color:#ff6b6b;
+    background:color-mix(in srgb,#ff6b6b 14%,transparent);outline:none;}
+  .asg-x.confirm{background:#ff6b6b;color:#2a0b0b;border-color:#ff6b6b;font-size:.72rem;font-weight:800;padding:0 11px;}
+  .asg-ruc{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--borde);}
   .asg-ruc:last-child{border-bottom:none;}
   .asg-rz{font-size:.86rem;font-weight:500;} .asg-rn{font-size:.74rem;color:var(--texto-suave);}
   .asg-vacio{color:var(--texto-suave);font-size:.82rem;padding:4px 0;}
@@ -72,11 +79,15 @@
     <div>Arrastra un grupo al asistente, o toca <b>Asignar</b>. <b>En vivo:</b> los RUCs nuevos que entren al grupo los verá el asistente sin re-asignar.</div>
   </div>
 
-  <div class="asg-cap">Asignar un RUC suelto</div>
+  <div class="asg-cap">Asignar un RUC suelto a <span id="asg-nom-sel3">—</span></div>
   <div class="asg-picker">
     <input id="asg-buscar" type="search" placeholder="Buscar por RUC o razón social…" autocomplete="off">
   </div>
   <div class="asg-res" id="asg-res"></div>
+  <div class="asg-hint">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16h.01" stroke="#22D3D2" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="var(--borde)" stroke-width="1.5"/></svg>
+    <div>Puedes sumarle un RUC suelto aunque ya tenga grupos asignados. Aparece arriba en <b>RUCs SUELTOS</b>, con su <b>✕</b> para quitarlo.</div>
+  </div>
 {% endif %}
 </div>
 <div class="asg-toast" id="asg-toast"></div>
