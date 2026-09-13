@@ -53,6 +53,8 @@
   {% endif %}
 
   <!-- ══ Grilla de tarjetas (una por cliente) ══ -->
+  {# SOLO demo: mismas 3 fotos que /asignaciones, mapeadas por 1er nombre del responsable. #}
+  {% set FOTO_DEMO = {'ana': 'asistente-ana.jpg', 'beto': 'asistente-beto.jpg', 'carla': 'asistente-carla.jpg'} %}
   <div class="cra-grid" id="cra-grid" aria-live="polite">
     {% for c in clientes %}
     <a class="cra-card acento" href="/cliente/{{ c.id }}"
@@ -65,7 +67,13 @@
         </div>
         <div class="cra-resp" title="Responsable">
           {% if c.responsable %}
+          {% set _foto = FOTO_DEMO.get(c.responsable.split(' ')[0]|lower) %}
+          {% if _foto %}
+          <span class="cra-avatar cra-avatar--foto"><img src="/static/img/{{ _foto }}" alt=""
+            onerror="this.parentNode.classList.remove('cra-avatar--foto');this.parentNode.textContent='{{ c.responsable[:1]|upper }}';"></span>
+          {% else %}
           <span class="cra-avatar">{{ c.responsable[:1]|upper }}</span>
+          {% endif %}
           <span class="cra-resp-txt"><b>{{ c.responsable }}</b>{% if c.responsable_tel %}<span>{{ c.responsable_tel }}</span>{% endif %}</span>
           {% else %}
           <span class="cra-avatar cra-avatar--sin">–</span>
