@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block titulo %}Asignaciones · alerta.pe{% endblock %}
+{% block contenido %}
+<style>
+  .asg{--verde:#5EEA8C;--cian:#22D3D2;max-width:460px;margin:0 auto;padding-block:14px;}
+  .asg-h1{font-size:1.25rem;font-weight:600;letter-spacing:-.01em;margin:0;}
+  .asg-sub{color:var(--texto-suave);font-size:.85rem;margin:4px 0 16px;}
+  .asg-cap{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--texto-suave);margin:20px 0 9px;}
+  .asg-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;}
+  .asg-asis{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;
+    padding:10px 8px;border-radius:14px;border:1.5px solid var(--borde);background:var(--superficie);
+    min-width:76px;cursor:pointer;}
+  .asg-asis.sel{border-color:var(--verde);background:color-mix(in srgb,var(--verde) 12%,var(--superficie));
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--verde) 20%,transparent);}
+  .asg-asis.drop{border-color:var(--cian);box-shadow:0 0 0 3px color-mix(in srgb,var(--cian) 35%,transparent);}
+  .asg-av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-weight:700;color:#06251A;background:linear-gradient(135deg,var(--verde),var(--cian));}
+  .asg-nom{font-size:.8rem;font-weight:600;} .asg-cnt{font-size:.68rem;color:var(--texto-suave);}
+  .asg-card{background:var(--superficie);border:1.5px solid var(--borde);border-radius:16px;
+    padding:14px;border-left:4px solid var(--verde);}
+  .asg-subcap{font-size:.72rem;font-weight:700;color:var(--texto-suave);margin:12px 0 7px;letter-spacing:.03em;}
+  .asg-subcap:first-of-type{margin-top:0;}
+  .asg-gchips{display:flex;flex-wrap:wrap;gap:8px;}
+  .asg-gchip{display:flex;align-items:center;gap:7px;padding:7px 11px;border-radius:999px;
+    background:color-mix(in srgb,var(--verde) 14%,transparent);
+    border:1px solid color-mix(in srgb,var(--verde) 42%,transparent);font-size:.82rem;font-weight:600;}
+  .asg-gchip .dot{width:8px;height:8px;border-radius:50%;background:var(--verde);}
+  .asg-vivo{font-size:.6rem;font-weight:800;letter-spacing:.05em;color:#06251A;background:var(--cian);padding:1px 5px;border-radius:5px;}
+  .asg-x{color:var(--texto-suave);font-weight:700;cursor:pointer;margin-left:2px;}
+  .asg-ruc{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--borde);}
+  .asg-ruc:last-child{border-bottom:none;}
+  .asg-rz{font-size:.86rem;font-weight:500;} .asg-rn{font-size:.74rem;color:var(--texto-suave);}
+  .asg-vacio{color:var(--texto-suave);font-size:.82rem;padding:4px 0;}
+  .asg-gcard{display:flex;align-items:center;gap:11px;padding:12px;border-radius:14px;
+    background:var(--superficie-2);border:1.5px dashed var(--borde-fuerte);margin-bottom:9px;touch-action:none;}
+  .asg-gcard.arr{opacity:.6;border-style:solid;border-color:var(--cian);}
+  .asg-grip{color:var(--texto-suave);flex:0 0 auto;cursor:grab;}
+  .asg-gmid{flex:1;min-width:0;} .asg-gnom{font-weight:600;font-size:.9rem;} .asg-gmeta{font-size:.74rem;color:var(--texto-suave);}
+  .asg-btn{flex:0 0 auto;border:none;border-radius:10px;padding:8px 12px;font-weight:700;font-size:.8rem;
+    color:#06251A;background:linear-gradient(135deg,var(--verde),var(--cian));cursor:pointer;}
+  .asg-hint{display:flex;gap:8px;align-items:flex-start;margin-top:8px;color:var(--texto-suave);font-size:.78rem;line-height:1.4;}
+  .asg-picker{display:flex;gap:8px;margin-top:4px;}
+  .asg-picker input{flex:1;background:var(--superficie-2);color:var(--texto);border:1.5px solid var(--borde);
+    border-radius:12px;padding:11px 13px;font-size:.95rem;outline:none;}
+  .asg-picker input:focus{border-color:var(--verde);}
+  .asg-res{margin-top:6px;}
+  .asg-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--superficie);
+    border:1.5px solid var(--verde);color:var(--texto);padding:10px 16px;border-radius:12px;font-size:.85rem;
+    box-shadow:0 8px 24px rgba(0,0,0,.35);opacity:0;transition:opacity .2s;pointer-events:none;z-index:50;}
+  .asg-toast.show{opacity:1;}
+</style>
+
+<div class="asg" id="asg">
+{% if not autorizado %}
+  <h1 class="asg-h1">Asignaciones</h1>
+  <p class="asg-sub">Esta pantalla es solo del contador dueño del estudio.</p>
+{% else %}
+  <h1 class="asg-h1">Asignaciones</h1>
+  <p class="asg-sub">{{ asistentes|length }} asistente(s) · asigna clientes por grupo o por RUC.</p>
+
+  <div class="asg-cap">Tu equipo</div>
+  <div class="asg-row" id="asg-equipo"></div>
+
+  <div class="asg-cap"><span id="asg-nom-sel">—</span> ve</div>
+  <div class="asg-card" id="asg-panel"></div>
+
+  <div class="asg-cap">Asignar un grupo a <span id="asg-nom-sel2">—</span></div>
+  <div id="asg-grupos"></div>
+  <div class="asg-hint">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 8v5M12 16h.01" stroke="#22D3D2" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="var(--borde)" stroke-width="1.5"/></svg>
+    <div>Arrastra un grupo al asistente, o toca <b>Asignar</b>. <b>En vivo:</b> los RUCs nuevos que entren al grupo los verá el asistente sin re-asignar.</div>
+  </div>
+
+  <div class="asg-cap">Asignar un RUC suelto</div>
+  <div class="asg-picker">
+    <input id="asg-buscar" type="search" placeholder="Buscar por RUC o razón social…" autocomplete="off">
+  </div>
+  <div class="asg-res" id="asg-res"></div>
+{% endif %}
+</div>
+<div class="asg-toast" id="asg-toast"></div>
+
+{% if autorizado %}
+<script id="asg-data" type="application/json">{{ {"asistentes": asistentes, "grupos": grupos, "contribs": contribs, "asignaciones": asignaciones} | tojson }}</script>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if autorizado %}<script src="/static/js/asignaciones.js"></script>{% endif %}
+{% endblock %}
