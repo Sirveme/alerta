@@ -2308,6 +2308,8 @@ a.tarjeta-link { display:block; color:inherit; }
   display:grid; place-items:center; font-weight:700; font-size:.9rem;
   background:color-mix(in srgb, var(--acento) 22%, transparent); color:var(--acento); }
 .cra-avatar--sin { background:var(--superficie-2); color:var(--texto-suave); }
+.cra-avatar--foto { background:var(--superficie-2); overflow:hidden; }
+.cra-avatar--foto img { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
 .cra-resp-txt { display:flex; flex-direction:column; line-height:1.2; min-width:0; }
 .cra-resp-txt b { font-size:.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cra-resp-txt span { font-size:.74rem; color:var(--texto-suave); }
