@@ -13,7 +13,14 @@
   <h1 class="titulo-pagina">Activa tu acceso</h1>
   <p class="subtitulo">Te invitan a <b>{{ org_nombre }}</b> como <b>{{ rol_label }}</b>.</p>
 
-  {% if ya_sesion %}
+  {% if ya_pertenece %}
+  <div class="tarjeta" style="display:grid;gap:12px">
+    <p>Ya perteneces a <b>{{ org_nombre }}</b> — ya tienes acceso, no necesitas activar nada.</p>
+    <a href="/" class="btn btn--bloque">Ir a mi panel</a>
+    <p class="muted" style="text-align:center">¿La invitación es para otra persona?
+      <a href="/logout">Cierra sesión</a> y ábrela con esa cuenta.</p>
+  </div>
+  {% elif ya_sesion %}
   <div class="tarjeta" style="display:grid;gap:12px">
     <p>Ya tienes una sesión iniciada. Puedes <b>sumar este acceso</b> a tu cuenta actual.</p>
     <div id="ai-error" class="alta-estado" style="color:var(--u-urgente);min-height:1em"></div>
