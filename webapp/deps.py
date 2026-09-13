@@ -20,7 +20,8 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select, or_, false
 
 from db import get_session
-from models import RolUsuario, TipoCuenta, Contribuyente, Persona, Usuario
+from models import (RolUsuario, TipoCuenta, Contribuyente, Persona, Usuario,
+                    Asignacion, AsignacionGrupo, ContribuyenteGrupo)
 from .auth import COOKIE_NOMBRE, leer_sesion
 
 logger = logging.getLogger("alertape.sesion")
@@ -233,6 +234,25 @@ async def contribuyente_accesible(session, user: "UsuarioActual",
         cond = Contribuyente.estudio_id == user.estudio_id
     return await session.scalar(
         select(Contribuyente).where(Contribuyente.id == contribuyente_id, cond))
+
+
+async def rucs_de_asistente(session, estudio_id, persona_asistente_id) -> set:
+    """Capa 1 Fase C — scope de un ASISTENTE: conjunto de contribuyente_ids que
+    tiene asignados en un estudio = individuales (`Asignacion`) ∪ RUCs de sus grupos
+    (`AsignacionGrupo`, resueltos EN VIVO por `ContribuyenteGrupo`). Helper ÚNICO que
+    en Fase C4 usarán cartera, cliente._puede_ver y /resumen (para que el asistente
+    vea lo MISMO en las tres). En C1 solo se DEFINE — nadie lo llama aún → cero
+    cambio de comportamiento."""
+    indiv = set(await session.scalars(
+        select(Asignacion.contribuyente_id).where(
+            Asignacion.estudio_id == estudio_id,
+            Asignacion.persona_asistente_id == persona_asistente_id)))
+    por_grupo = set(await session.scalars(
+        select(ContribuyenteGrupo.contribuyente_id)
+        .join(AsignacionGrupo, AsignacionGrupo.grupo_id == ContribuyenteGrupo.grupo_id)
+        .where(AsignacionGrupo.estudio_id == estudio_id,
+               AsignacionGrupo.persona_asistente_id == persona_asistente_id)))
+    return indiv | por_grupo
 
 
 def requiere_escritura(user: UsuarioActual = Depends(usuario_actual)) -> UsuarioActual:
