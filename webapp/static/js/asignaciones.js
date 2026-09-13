@@ -22,6 +22,12 @@
   }
   function nombreDe(aid) { var a = DATA.asistentes.find(function (x) { return x.id === aid; }); return a ? a.nombre : '—'; }
   function inicial(nom) { return (nom || '?').trim().charAt(0).toUpperCase(); }
+  // SOLO demo: mapea por nombre las 3 fotos de asistentes. Sin foto → avatar de inicial.
+  var FOTO_DEMO = { ana: 'asistente-ana.jpg', beto: 'asistente-beto.jpg', carla: 'asistente-carla.jpg' };
+  function fotoDe(nom) {
+    var f = FOTO_DEMO[(nom || '').trim().split(' ')[0].toLowerCase()];
+    return f ? '/static/img/' + f : null;
+  }
   function cuenta(aid) {
     var a = asig[aid] || { grupos: [], rucs: [] };
     var n = a.rucs.length;
@@ -35,7 +41,12 @@
       var d = document.createElement('div');
       d.className = 'asg-asis' + (a.id === sel ? ' sel' : '');
       d.dataset.aid = a.id;
-      d.innerHTML = '<div class="asg-av">' + esc(inicial(a.nombre)) + '</div>'
+      var foto = fotoDe(a.nombre), ini = esc(inicial(a.nombre));
+      var av = foto
+        ? '<div class="asg-av asg-av--foto"><img src="' + foto + '" alt="" data-ini="' + ini + '" '
+            + 'onerror="this.parentNode.classList.remove(\'asg-av--foto\');this.parentNode.textContent=this.dataset.ini;"></div>'
+        : '<div class="asg-av">' + ini + '</div>';
+      d.innerHTML = av
         + '<div class="asg-nom">' + esc(a.nombre.split(' ')[0]) + '</div>'
         + '<div class="asg-cnt">' + cuenta(a.id) + ' RUCs</div>';
       d.addEventListener('click', function () { sel = a.id; renderTodo(); });
