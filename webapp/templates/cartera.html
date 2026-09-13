@@ -91,6 +91,7 @@
 
 {% block scripts %}
 <script src="/static/js/cartera.js"></script>
+<script src="/static/js/invitar_compartir.js"></script>
 <script>
   // Capa 1 · emitir invitación de ASISTENTE del estudio.
   (function () {
@@ -104,11 +105,8 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ whatsapp: wa ? ('51' + wa) : '' }) });
         var j = await r.json();
-        out.hidden = false;
-        if (!j.ok) { out.className = 'act-estado warn'; out.textContent = j.error || 'No se pudo.'; b.disabled = false; return; }
-        out.className = 'act-estado ok';
-        out.innerHTML = 'Link: <a href="' + j.link + '">' + j.link + '</a>'
-          + (j.wa_url ? ' · <a href="' + j.wa_url + '">enviar por WhatsApp</a>' : '');
+        if (!j.ok) { out.hidden = false; out.className = 'act-estado warn'; out.textContent = j.error || 'No se pudo.'; b.disabled = false; return; }
+        pintarInvitacion(out, j, 'el asistente');   // link PARA COMPARTIR, no para abrir
         b.disabled = false;
       } catch (_) { out.hidden = false; out.className = 'act-estado warn'; out.textContent = 'Error de red.'; b.disabled = false; }
     });
