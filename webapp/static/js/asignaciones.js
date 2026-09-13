@@ -43,10 +43,35 @@
     });
   }
 
+  // Quitar en 2 toques (evita liberaciones accidentales): 1er toque arma "¿Quitar?",
+  // 2º confirma; se desarma solo a los 3.5s o si armas otro. `etiqueta` va al aria-label.
+  function armarQuitar(btn, etiqueta, ejecutar) {
+    var timer = null;
+    function reset() {
+      btn.classList.remove('confirm'); btn.textContent = '×';
+      btn.setAttribute('aria-label', etiqueta); btn._armado = false; clearTimeout(timer);
+    }
+    reset();
+    btn.setAttribute('type', 'button'); btn.setAttribute('title', etiqueta);
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (btn._armado) { reset(); ejecutar(); return; }
+      // Desarma cualquier otro ✕ pendiente en el panel.
+      $('asg-panel').querySelectorAll('.asg-x.confirm').forEach(function (o) {
+        o.classList.remove('confirm'); o.textContent = '×'; o._armado = false;
+      });
+      btn._armado = true; btn.classList.add('confirm'); btn.textContent = '¿Quitar?';
+      btn.setAttribute('aria-label', 'Confirmar: quitar ' + etiqueta);
+      timer = setTimeout(reset, 3500);
+    });
+  }
+
   function renderPanel() {
     var a = asig[sel] || { grupos: [], rucs: [] };
+    var nom1 = (nombreDe(sel) || '').split(' ')[0];
     $('asg-nom-sel').textContent = nombreDe(sel);
-    $('asg-nom-sel2').textContent = (nombreDe(sel) || '').split(' ')[0];
+    $('asg-nom-sel2').textContent = nom1;
+    if ($('asg-nom-sel3')) $('asg-nom-sel3').textContent = nom1;
     var p = $('asg-panel'); var h = '';
     h += '<div class="asg-subcap">GRUPOS ASIGNADOS</div>';
     if (a.grupos.length) {
@@ -55,7 +80,7 @@
         var g = gById[gid]; if (!g) return;
         h += '<span class="asg-gchip"><span class="dot"></span>' + esc(g.nombre) + ' · ' + g.n
           + ' <span class="asg-vivo">EN VIVO</span>'
-          + '<span class="asg-x" data-quitar-grupo="' + gid + '">×</span></span>';
+          + '<button class="asg-x" data-quitar-grupo="' + gid + '">×</button></span>';
       });
       h += '</div>';
     } else { h += '<div class="asg-vacio">Sin grupos asignados.</div>'; }
@@ -65,15 +90,19 @@
         var c = cById[cid]; if (!c) return;
         h += '<div class="asg-ruc"><div><div class="asg-rz">' + esc(c.razon) + '</div>'
           + '<div class="asg-rn">RUC ' + esc(c.ruc) + '</div></div>'
-          + '<span class="asg-x" data-quitar-ruc="' + cid + '">×</span></div>';
+          + '<button class="asg-x" data-quitar-ruc="' + cid + '">×</button></div>';
       });
     } else { h += '<div class="asg-vacio">Sin RUCs sueltos.</div>'; }
     p.innerHTML = h;
     p.querySelectorAll('[data-quitar-grupo]').forEach(function (x) {
-      x.addEventListener('click', function () { accionGrupo(x.dataset.quitarGrupo, 'quitar'); });
+      var g = gById[x.dataset.quitarGrupo];
+      armarQuitar(x, (g ? g.nombre : 'grupo') + ' de ' + nom1,
+        function () { accionGrupo(x.dataset.quitarGrupo, 'quitar'); });
     });
     p.querySelectorAll('[data-quitar-ruc]').forEach(function (x) {
-      x.addEventListener('click', function () { accionRuc(x.dataset.quitarRuc, 'quitar'); });
+      var c = cById[x.dataset.quitarRuc];
+      armarQuitar(x, (c ? c.razon : 'RUC') + ' de ' + nom1,
+        function () { accionRuc(x.dataset.quitarRuc, 'quitar'); });
     });
   }
 
