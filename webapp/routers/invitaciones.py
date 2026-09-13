@@ -212,12 +212,25 @@ async def _cargar_invitacion(session, token: str):
     return inv, None
 
 
+async def _ya_pertenece(session, persona_id, estudio_id, es_soporte=False) -> bool:
+    """¿La persona YA tiene acceso a ese estudio? True si es SOPORTE_GLOBAL (ve
+    todo) o si ya tiene un Acceso a ese estudio (dueño, socio, asistente, etc.).
+    Se usa para NO ofrecer 'sumar acceso' a quien ya lo tiene."""
+    if es_soporte:
+        return True
+    if not persona_id:
+        return False
+    return bool(await session.scalar(select(Acceso.id).where(
+        Acceso.persona_id == persona_id, Acceso.estudio_id == estudio_id)))
+
+
 @router.get("/invitacion", response_class=HTMLResponse)
 async def invitacion_form(request: Request, t: str = ""):
     t = (t or "").strip()
-    ya_sesion = bool(leer_sesion(request.cookies.get(COOKIE_NOMBRE)))
+    ses = leer_sesion(request.cookies.get(COOKIE_NOMBRE))
     ctx = {"token": t, "valido": False, "motivo": None, "org_nombre": "",
-           "rol_label": "", "es_cliente": False, "ya_sesion": ya_sesion,
+           "rol_label": "", "es_cliente": False, "ya_sesion": bool(ses),
+           "ya_pertenece": False,
            "whatsapp_soporte": WHATSAPP_SOPORTE, "dni_esperado": ""}
     async with get_session() as session:
         inv, motivo = await _cargar_invitacion(session, t)
@@ -227,6 +240,12 @@ async def invitacion_form(request: Request, t: str = ""):
                        rol_label=_ROL_LABEL.get(inv.rol_destino, "acceso"),
                        es_cliente=(inv.rol_destino == RolUsuario.EMPRESARIO_LECTURA),
                        dni_esperado=(inv.dni_esperado or ""))
+            # Punto 2: si el que abre YA pertenece a este estudio, no ofrecer sumar.
+            if ses:
+                pid = ses.get("pid")
+                ctx["ya_pertenece"] = await _ya_pertenece(
+                    session, uuid.UUID(pid) if pid else None, inv.estudio_id,
+                    es_soporte=(ses.get("rs") == "SOPORTE_GLOBAL"))
         else:
             ctx["motivo"] = motivo
     return templates.TemplateResponse(request, "invitacion.html", ctx)
@@ -256,6 +275,16 @@ async def invitacion_aceptar(request: Request):
             persona = await session.get(Persona, uuid.UUID(ya_sesion["pid"]))
         if persona is None and dni.isdigit() and len(dni) == 8:
             persona = await session.scalar(select(Persona).where(Persona.dni == dni))
+
+        # Punto 2: si la persona resuelta YA pertenece al estudio (o es SOPORTE_GLOBAL),
+        # NO sumar acceso ni consumir la invitación — informar. (Una persona nueva
+        # aún no existe → persona None → no entra aquí.)
+        if persona is not None:
+            if await _ya_pertenece(session, persona.id, inv.estudio_id,
+                                   es_soporte=(persona.rol_sistema is not None)):
+                return JSONResponse({
+                    "ok": True, "ya_pertenece": True, "redirect": "/",
+                    "mensaje": "Ya tienes acceso a este estudio."})
 
         if persona is None:
             # Crear identidad nueva: exige DNI + clave elegida (≠ DNI).
