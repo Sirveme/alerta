@@ -973,6 +973,18 @@ a.tarjeta-link { display:block; color:inherit; }
 .act-estado.ok { color:var(--u-aldia); } .act-estado.warn { color:var(--u-importante); }
 .act-estado.err { color:var(--u-urgente); }
 
+/* Link de invitación generado: se presenta PARA COMPARTIR (no para abrirlo uno). */
+.inv-share { margin-top:12px; padding:14px; border-radius:14px;
+  background:var(--superficie); border:1.5px solid var(--borde);
+  border-left:4px solid var(--u-aldia); }
+.inv-share-tit { font-weight:700; color:var(--u-aldia); margin-bottom:6px; }
+.inv-share-txt { color:var(--texto-suave); font-size:.88rem; margin:0 0 10px; }
+.inv-share-link { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.8rem;
+  word-break:break-all; background:var(--superficie-2); border:1px solid var(--borde);
+  border-radius:10px; padding:10px 12px; color:var(--texto); user-select:all; }
+.inv-share-btns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.inv-share-msg { color:var(--u-aldia); font-size:.82rem; min-height:1em; margin-top:8px; }
+
 /* ════════ CAMPOS DE LAS PUERTAS (unificado, tema oscuro) ════════
    /activar (.act), /contadores (.reg-form) y /activar-identidad (.ai-wrap):
    relleno teñido que se distingue del fondo, borde visible, esquinas 12px,
