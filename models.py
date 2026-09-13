@@ -1295,6 +1295,35 @@ class Asignacion(Base):
         DateTime(timezone=True), default=ahora_lima, nullable=False)
 
 
+class AsignacionGrupo(Base):
+    """Asignación de un GRUPO completo a un ASISTENTE (Capa 1 Fase C). EN VIVO: el
+    scope resuelve grupo→RUCs al vuelo por `ContribuyenteGrupo`, así un RUC nuevo que
+    entre al grupo lo ve el asistente SIN re-asignar. Complementa `Asignacion` (RUC
+    individual): el scope del asistente = individuales ∪ RUCs de sus grupos.
+    Multi-tenant (estudio_id). Solo destinos estudio_id (nada de contribuyente_id)."""
+    __tablename__ = "asignaciones_grupo"
+    __table_args__ = (
+        UniqueConstraint("grupo_id", "persona_asistente_id", name="uq_asignaciongrupo"),
+        Index("ix_asigrupo_estudio", "estudio_id"),
+        Index("ix_asigrupo_asistente", "persona_asistente_id"),
+        Index("ix_asigrupo_grupo", "grupo_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    estudio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        nullable=False)
+    grupo_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("grupos.id", ondelete="CASCADE"),
+        nullable=False)
+    persona_asistente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"),
+        nullable=False)
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=ahora_lima, nullable=False)
+
+
 class AuditoriaSoporte(Base):
     """Registro de acceso de un SOPORTE_GLOBAL a un buzón ajeno (zAlerta-58).
     Estructura ahora; el INSERT se cablea en Fase 3 cuando el código lea accesos.
