@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es" data-rol="soporte">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>{{ mapa.titulo }} · interno</title>
+<style>
+  :root{
+    --fondo:#0E1117; --superficie:#161B24; --superficie-2:#1A1F2B;
+    --borde:#2E3548; --borde-fuerte:#3A4358;
+    --texto:#F0F3F8; --texto-suave:#6B7689; --acento:#3DD68C;
+    --ancho:1080px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--fondo);color:var(--texto);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;-webkit-font-smoothing:antialiased;}
+  a{color:var(--acento);}
+  .mp-bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;
+    display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    padding:11px 18px;background:color-mix(in srgb,var(--fondo) 88%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--borde);}
+  .mp-brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:.95rem;letter-spacing:-.01em;}
+  .mp-dot{width:10px;height:10px;border-radius:50%;background:var(--acento);
+    box-shadow:0 0 0 4px color-mix(in srgb,var(--acento) 22%,transparent);}
+  .mp-chip{font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:#0E1117;background:var(--acento);padding:3px 9px;border-radius:999px;}
+  .wrap{max-width:var(--ancho);margin:0 auto;padding-inline:18px;padding-block:26px 60px;}
+  .mp-head{margin-bottom:26px;}
+  .mp-title{font-size:clamp(1.6rem,4vw,2.3rem);font-weight:800;letter-spacing:-.02em;
+    margin:0 0 8px;text-wrap:balance;
+    background:linear-gradient(120deg,var(--texto),#9fb0c9);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .mp-head .mp-lede{font-size:1rem;color:var(--texto-suave);max-width:70ch;margin:0;}
+  .mp-head .mp-lede strong{color:var(--texto);}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start;}
+  .panel{position:relative;background:var(--superficie);border:1px solid var(--borde);
+    border-radius:16px;padding:18px 18px 16px;overflow:hidden;
+    --ac:var(--acento);}
+  .panel::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ac);}
+  .panel h2{font-size:1.02rem;font-weight:700;margin:0 0 3px;letter-spacing:-.01em;
+    display:flex;align-items:center;gap:8px;}
+  .panel h2::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--ac);flex:0 0 auto;}
+  .mp-lede{color:var(--texto-suave);font-size:.86rem;margin:.1rem 0 .7rem;}
+  .panel .mp-lede{margin-top:0;}
+  .mp-h3{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    color:color-mix(in srgb,var(--ac) 72%,var(--texto-suave));margin:.9rem 0 .35rem;}
+  .mp-ul{margin:.2rem 0 .2rem;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:6px;}
+  .mp-ul li{position:relative;padding-left:18px;font-size:.88rem;color:var(--texto);}
+  .mp-ul li::before{content:"";position:absolute;left:3px;top:.55em;width:6px;height:6px;
+    border-radius:50%;background:var(--ac);}
+  .mp-ul--sub{margin:.3rem 0 .3rem 10px;padding-left:6px;border-left:1px solid var(--borde);}
+  .mp-ul--sub li{font-size:.84rem;color:var(--texto-suave);}
+  .mp-ul--sub li::before{background:var(--borde-fuerte);}
+  .panel strong{color:var(--texto);font-weight:700;}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82em;
+    background:var(--superficie-2);border:1px solid var(--borde);border-radius:6px;padding:1px 5px;
+    color:color-mix(in srgb,var(--acento) 80%,var(--texto));}
+  .mp-foot{margin-top:30px;padding-top:16px;border-top:1px solid var(--borde);
+    color:var(--texto-suave);font-size:.78rem;line-height:1.6;}
+</style>
+</head>
+<body>
+  <div class="mp-bar">
+    <div class="mp-brand"><span class="mp-dot"></span> Mapa Global · alerta.pe</div>
+    <span class="mp-chip">Soporte · interno</span>
+  </div>
+  <div class="wrap">
+    <header class="mp-head">
+      <h1 class="mp-title">{{ mapa.titulo }}</h1>
+      {{ mapa.intro_html|safe }}
+    </header>
+
+    <div class="grid">
+      {% for s in mapa.secciones %}
+      <section class="panel" style="--ac:{{ s.acento }}">
+        <h2>{{ s.titulo }}</h2>
+        {{ s.cuerpo_html|safe }}
+      </section>
+      {% endfor %}
+    </div>
+
+    <footer class="mp-foot">
+      Página interna, solo <strong>SOPORTE_GLOBAL</strong> · <code>noindex</code>.<br>
+      Editable en <code>webapp/contenido/mapa_global.md</code> — cada <code>##</code> es un panel.
+      {% if generado %}<br>Actualizado: {{ generado }}.{% endif %}
+    </footer>
+  </div>
+</body>
+</html>
