@@ -2304,12 +2304,13 @@ a.tarjeta-link { display:block; color:inherit; }
 .cra-meta { font-size:.78rem; color:var(--texto-suave); margin-top:2px; }
 .cra-wh { white-space:nowrap; }
 .cra-resp { display:flex; align-items:center; gap:8px; flex-shrink:0; max-width:46%; }
-.cra-avatar { width:32px; height:32px; border-radius:50%; flex-shrink:0;
+.cra-avatar { width:32px; height:32px; border-radius:50%; flex-shrink:0; overflow:hidden;
   display:grid; place-items:center; font-weight:700; font-size:.9rem;
   background:color-mix(in srgb, var(--acento) 22%, transparent); color:var(--acento); }
 .cra-avatar--sin { background:var(--superficie-2); color:var(--texto-suave); }
-.cra-avatar--foto { background:var(--superficie-2); overflow:hidden; }
-.cra-avatar--foto img { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
+.cra-avatar--foto { background:var(--superficie-2); }
+/* Cualquier <img> dentro del avatar: círculo fijo, recorta y centra sin deformar. */
+.cra-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
 .cra-resp-txt { display:flex; flex-direction:column; line-height:1.2; min-width:0; }
 .cra-resp-txt b { font-size:.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .cra-resp-txt span { font-size:.74rem; color:var(--texto-suave); }
@@ -2377,12 +2378,23 @@ ul.rsm-json-lista { margin:0; padding-left:18px; }
    (hechos, sin neto) + capa de gestión Capa 1. Verde-contador, oscuro, móvil.
    ══════════════════════════════════════════════════════════════════ */
 .cli { max-width:1100px; margin:0 auto; padding:4px 2px 48px; }
-.cli-head { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+.cli-head { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin-bottom:14px; }
 .cli-volver { display:inline-flex; align-items:center; gap:4px; color:var(--texto-suave);
-  text-decoration:none; font-size:.82rem; width:max-content; }
+  text-decoration:none; font-size:.82rem; width:max-content; flex-basis:100%; }
 .cli-volver:hover { color:var(--acento); }
+.cli-ident { flex:1 1 auto; min-width:0; }
 .cli-ident .titulo-pagina { margin:0; }
 .cli-sub { font-size:.82rem; color:var(--texto-suave); }
+.cli-export { margin-left:auto; }
+
+/* Botón "Exportar a Excel" (cartera + cliente): acción discreta, no un CTA. */
+.cli-export, .cra-export { display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+  text-decoration:none; font-size:.82rem; font-weight:600; cursor:pointer;
+  color:var(--acento); background:color-mix(in srgb, var(--acento) 12%, transparent);
+  border:1px solid color-mix(in srgb, var(--acento) 40%, transparent);
+  border-radius:10px; padding:7px 12px; }
+.cli-export:hover, .cra-export:hover { background:color-mix(in srgb, var(--acento) 20%, transparent); }
+.cli-export .material-symbols-outlined, .cra-export .material-symbols-outlined { font-size:18px; }
 
 .cli-general { background:var(--superficie); border:1px solid var(--borde);
   border-left:3px solid var(--acento); border-radius:var(--radio,12px);
