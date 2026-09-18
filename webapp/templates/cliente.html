@@ -10,6 +10,10 @@
       <h1 class="titulo-pagina">{{ contrib.razon_social }}</h1>
       <span class="cli-sub">RUC {{ contrib.ruc }} · {{ total_docs }} documento(s)</span>
     </div>
+    <a class="cli-export" href="/cliente/{{ contrib.id }}/exportar.xlsx"
+       title="Descargar el buzón de este cliente en Excel">
+      <span class="material-symbols-outlined">download</span> Exportar a Excel
+    </a>
   </header>
 
   <!-- ══ Instrucción GENERAL del cliente (capa gestión, notif NULL) ══ -->
