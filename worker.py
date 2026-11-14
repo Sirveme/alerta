@@ -458,10 +458,15 @@ async def _procesar_fondo(session, full: bool = False) -> int:
     red de seguridad de zAlerta-46 (recupera cualquier hueco + sella
     ultimo_barrido_full_at). El push NO se envía aquí (se agrupa por horario).
     """
+    # Excluir estudios DEMO (para videos): siguen activos y visibles en la app,
+    # pero el worker NO los scrapea (join + es_demo=False). estudio_id es NOT NULL
+    # (FK), así que el inner join no descarta ningún contribuyente real.
     activos = list(await session.scalars(
         select(Contribuyente)
+        .join(EstudioContable, EstudioContable.id == Contribuyente.estudio_id)
         .options(selectinload(Contribuyente.credencial))
-        .where(Contribuyente.estado == EstadoContribuyente.ACTIVO)))
+        .where(Contribuyente.estado == EstadoContribuyente.ACTIVO,
+               EstudioContable.es_demo.is_(False))))
 
     ok = fallo = timeout = 0
     for contrib in activos:
