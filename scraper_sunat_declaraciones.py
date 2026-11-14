@@ -27,7 +27,7 @@ from __future__ import annotations
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -346,6 +346,204 @@ def diag_declaraciones(cfg: SunatConfig) -> dict:
                             "at": ahora}
                 info["pantalla"] = tg["desc"]
                 res["pantallas"].append(info)
+                _pausa()
+            res["red"] = red
+            res["exito"] = True
+        finally:
+            try:
+                ctx.close(); nav.close()
+            except Exception:
+                pass
+    return res
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# FASE 2 (modo decl-diag2): navega por CÓDIGO de menú (robusto), envía un rango
+# corto en la Consulta DDJJ y pagos y captura la ESTRUCTURA de la constancia 0621.
+# Sigue sin escribir en BD y sin descargar PDFs (evita las rutas window.open de
+# comprobanteNSIR). Códigos confirmados en el volcado de fase 1.
+# ═══════════════════════════════════════════════════════════════════════
+MESES_FASE2 = int(os.getenv("DECL_DIAG2_MESES", "5"))   # <6 (límite SUNAT: 182 d)
+
+TARGETS_FASE2 = [
+    {"slug": "01_consulta_general", "code": "12.8.1.1.2",
+     "desc": "Consulta general — Detalle de declaraciones y pagos "
+             "(/cl-ti-itconsdecdetinf/consultaS01Alias?accion=consgeneral)"},
+    {"slug": "02_djj_pagos", "code": "12.1.1.1.4",
+     "desc": "Consulta de declaraciones juradas y pagos "
+             "(/cl-ti-itdeclpagcon-mepeco/cdpS01Alias) + rango + constancia 0621"},
+    {"slug": "05_detr_recaudacion", "code": "12.4.1.1.3",
+     "desc": "Detracciones — Ingreso como recaudación "
+             "(/cl-ti-itconsimput/imputS01Alias)"},
+    {"slug": "06_detr_npd", "code": "12.4.1.1.6",
+     "desc": "Detracciones — Consulta de NPD "
+             "(/cl-ti-itnumpagdetr/consultaIndividual.htm)"},
+]
+
+
+def _ir_por_codigo(page, code: str, desc: str) -> bool:
+    """Abre la operación SOL por su CÓDIGO de menú, como hace la propia web
+    (ejecuta('MenuInternet.htm?action=iconExecute&code=…')). Fallback: fija el
+    src del iframe de aplicación."""
+    url = f"MenuInternet.htm?action=iconExecute&code={code}"
+    try:
+        page.evaluate("(a) => ejecuta(a.u, false, a.t, '', a.c)",
+                      {"u": url, "t": desc[:60], "c": code})
+        _pausa()
+        return True
+    except Exception:
+        try:
+            page.evaluate("(u) => { var f = document.getElementById("
+                          "'iframeApplication'); if (f) { f.src = u; } }", url)
+            _pausa()
+            return True
+        except Exception:
+            return False
+
+
+def _frame_con(page, selector: str):
+    """Scope (frame o página) que contiene `selector`, o None."""
+    for sc in _scopes(page):
+        try:
+            if sc.query_selector(selector):
+                return sc
+        except Exception:
+            pass
+    return None
+
+
+def _enviar_rango_02(page, cfg: SunatConfig, meses: int):
+    """En la Consulta DDJJ y pagos rellena un rango de `meses` (DD/MM/YYYY, bajo el
+    límite de 6 meses) y pulsa Buscar. Devuelve el scope con resultados o None."""
+    fr = _frame_con(page, "form[name='formFechas']")
+    if not fr:
+        log("    02: no encontré el formulario de fechas (¿cargó la operación?).",
+            "WARN")
+        return None
+    hoy = date.today()
+    desde = hoy - timedelta(days=int(30.4 * meses))
+    try:
+        fr.fill("input[name='fechaDesde']", desde.strftime("%d/%m/%Y"))
+        fr.fill("input[name='fechaHasta']", hoy.strftime("%d/%m/%Y"))
+        fr.evaluate("consulta(document.formFechas)")   # misma vía que Buscar
+        log(f"    02: enviado rango {desde:%d/%m/%Y}–{hoy:%d/%m/%Y}.", "INFO")
+    except Exception as e:
+        log(f"    02: no pude enviar el rango: {_sanea(str(e), cfg)}", "WARN")
+        return fr
+    _pausa()
+    return _frame_con(page, "form[name='formComprobante']") or fr
+
+
+def _capturar_constancia(page, scope, carpeta: Path, cfg: SunatConfig) -> dict:
+    """Invoca el enlace 'Comprobante' de la 1ª fila (constancia 0621) y vuelca la
+    constancia. NO descarga PDF (ignora comprobanteNSIR/window.open)."""
+    link = None
+    try:
+        link = scope.query_selector("a[onclick^='comprobante('], "
+                                    "a[onclick*=' comprobante('], "
+                                    "[onclick*='comprobante(']")
+    except Exception:
+        link = None
+    if not link:
+        return {"slug": "03_constancia_0621", "estado": "sin_datos",
+                "detalle": "sin filas con enlace 'Comprobante' en el rango"}
+    oc = link.get_attribute("onclick") or ""
+    if "comprobantensir" in oc.lower() or "comprobante(" not in oc.lower():
+        return {"slug": "03_constancia_0621", "estado": "sin_datos",
+                "detalle": "la 1ª fila usa comprobanteNSIR (PDF); se omite a "
+                           "propósito (no descargamos). Reintentar con otra fila."}
+    try:
+        scope.evaluate(oc)             # ejecuta comprobante('0621', numPres, …)
+    except Exception as e:
+        return {"slug": "03_constancia_0621", "estado": "no_se_pudo_leer",
+                "detalle": _sanea(f"invoke comprobante: {e}", cfg)}
+    _pausa()
+    info = _volcar(page, carpeta, "03_constancia_0621", cfg)
+    info["estado"] = "con_datos" if info["tiene_datos"] else "sin_datos"
+    info["onclick_muestra"] = _sanea(oc[:90], cfg)
+    return info
+
+
+def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict:
+    """Fase 2: navega por código, envía rango en la 02 y captura la constancia
+    0621. NO escribe en BD, NO descarga PDFs."""
+    meses = MESES_FASE2 if meses is None else meses
+    res = {"exito": False, "pantallas": [], "carpeta": None, "red": [], "fase": 2}
+    ts = datetime.now(TZ_LIMA).strftime("%Y%m%d_%H%M%S")
+    carpeta = DEST / f"decl_diag2_{cfg.ruc}_{ts}"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    res["carpeta"] = str(carpeta)
+    red: list = []
+    cur = {"t": "00_login"}
+
+    def _on_response(resp):
+        try:
+            if "sunat" not in resp.url.lower():
+                return
+            red.append({"pantalla": cur["t"], "metodo": resp.request.method,
+                        "url": _patron_url(resp.url, cfg), "status": resp.status,
+                        "ctype": ((resp.headers or {}).get("content-type", ""))[:40]})
+        except Exception:
+            pass
+
+    with sync_playwright() as p:
+        nav = p.chromium.launch(
+            headless=cfg.headless,
+            args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
+        ctx = nav.new_context(
+            locale="es-PE", timezone_id="America/Lima",
+            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"))
+        ctx.on("response", _on_response)
+        page = ctx.new_page()
+        try:
+            if not login_sol(page, cfg):
+                res["motivo"] = "login"
+                log("  decl-diag2: login SOL rechazado.", "ERROR")
+                return res
+            log("  decl-diag2: login OK. Navego por código de menú...", "OK")
+            for tg in TARGETS_FASE2:
+                cur["t"] = tg["slug"]
+                ahora = ts_lima()
+                log(f"  decl-diag2: {tg['slug']} (code {tg['code']})...", "INFO")
+                try:
+                    if not _ir_por_codigo(page, tg["code"], tg["desc"]):
+                        info = {"slug": tg["slug"], "estado": "no_se_pudo_leer",
+                                "detalle": "no se pudo invocar el código", "at": ahora}
+                    else:
+                        info = _volcar(page, carpeta, tg["slug"], cfg)
+                        info["estado"] = ("con_datos" if info["tiene_datos"]
+                                          else "sin_datos")
+                        info["at"] = ahora
+                except Exception as e:
+                    info = {"slug": tg["slug"], "estado": "no_se_pudo_leer",
+                            "detalle": _sanea(f"{type(e).__name__}: {e}", cfg),
+                            "at": ahora}
+                info["code"] = tg["code"]
+                info["pantalla"] = tg["desc"]
+                res["pantallas"].append(info)
+
+                # Pantalla 02: enviar rango + capturar constancia 0621.
+                if tg["slug"] == "02_djj_pagos" and info["estado"] != "no_se_pudo_leer":
+                    try:
+                        cur["t"] = "02_resultados"
+                        sc = _enviar_rango_02(page, cfg, meses)
+                        r = _volcar(page, carpeta, "02_djj_pagos_resultados", cfg)
+                        r["estado"] = ("con_datos" if r["tiene_datos"]
+                                       else "sin_datos")
+                        r["pantalla"] = f"02 resultados (rango {meses} meses)"
+                        res["pantallas"].append(r)
+                        cur["t"] = "03_constancia"
+                        cons = _capturar_constancia(page, sc or page, carpeta, cfg)
+                        cons["pantalla"] = "03 Constancia del Formulario 0621"
+                        res["pantallas"].append(cons)
+                    except Exception as e:
+                        res["pantallas"].append(
+                            {"slug": "03_constancia_0621",
+                             "estado": "no_se_pudo_leer",
+                             "detalle": _sanea(f"{type(e).__name__}: {e}", cfg),
+                             "pantalla": "03 Constancia del Formulario 0621"})
                 _pausa()
             res["red"] = red
             res["exito"] = True

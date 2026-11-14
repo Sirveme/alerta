@@ -33,7 +33,8 @@ from sqlalchemy.orm import selectinload
 # modo `decl-diag`, y SOLO si existe, usamos DATABASE_PUBLIC_URL ANTES de importar
 # db (el engine se arma al importar db.py). No afecta a ningún otro modo ni al
 # worker en prod (que corre worker.py, no este __main__, y nunca pasa 'decl-diag').
-if any(a.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag")
+if any(a.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag",
+                     "decl-diag2", "--decl-diag2")
        for a in sys.argv[1:]):
     _pub = os.getenv("DATABASE_PUBLIC_URL")
     if _pub:
@@ -790,6 +791,14 @@ def _decl_diag_sync(ruc: str, usuario_sol: str, clave_sol: str) -> dict:
     return scraper_decl.diag_declaraciones(cfg)
 
 
+def _decl_diag2_sync(ruc: str, usuario_sol: str, clave_sol: str) -> dict:
+    """Diag FASE 2: navega por código, envía rango en la 02 y captura la
+    constancia 0621 (sync, Playwright). NO BD, NO descarga PDFs."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper_decl.diag_declaraciones_fase2(cfg)
+
+
 async def _contrib_para_diag(session, ruc_filtro: str | None):
     """Como _contribuyentes_a_scrapear pero SIN filtrar por estado: así el diag
     encuentra tu RUC aunque lo hayas puesto 'inactivo' para sacarlo del worker
@@ -836,6 +845,38 @@ async def procesar_decl_diag(session, contrib: Contribuyente) -> int:
         f"menú, {len(res.get('red', []))} petición(es) de red. Volcado en "
         f"{res.get('carpeta')} (HTML enmascarado + 00_menu_catalogo.txt). "
         f"NO se escribió nada en la BD.", "OK")
+    return len(res.get("pantallas", []))
+
+
+async def procesar_decl_diag2(session, contrib: Contribuyente) -> int:
+    """DIAGNÓSTICO FASE 2 de Declaraciones y Pagos: navega por código, envía un
+    rango corto en la Consulta DDJJ y pagos y captura la constancia 0621. NO
+    escribe en la BD, NO descarga PDFs. Correr LOCAL con railway run."""
+    cred = contrib.credencial
+    if not cred:
+        log(f"  {contrib.ruc}: sin credencial registrada, no puedo loguear.", "WARN")
+        return 0
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    log(f"  {contrib.ruc}: DECL-DIAG2 — navego por código + rango + constancia "
+        f"(NO persiste, NO descarga)...")
+    res = await asyncio.to_thread(
+        _decl_diag2_sync, contrib.ruc, cred.usuario_sol, clave)
+    if not res.get("exito"):
+        log(f"  {contrib.ruc}: DECL-DIAG2 no completó (motivo={res.get('motivo')}). "
+            f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")
+        return 0
+    for pant in res.get("pantallas", []):
+        tablas = pant.get("tablas", [])
+        cols = sum(len(t.get("encabezados", [])) for t in tablas)
+        log(f"    · {pant.get('slug')}: {pant.get('estado', '—')} "
+            f"({len(tablas)} tabla(s), {cols} encabezado(s)) "
+            f"{pant.get('detalle', '')}".rstrip())
+    log(f"  {contrib.ruc}: DECL-DIAG2 OK — {len(res.get('red', []))} petición(es) "
+        f"de red. Volcado en {res.get('carpeta')}. NO se escribió en la BD.", "OK")
     return len(res.get("pantallas", []))
 
 
@@ -955,15 +996,17 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
                pdf: bool = False, pdf_diag: bool = False,
                ceros: bool = False, ceros_diag: bool = False,
                sunafil: bool = False, sunafil_diag: bool = False,
-               decl_diag: bool = False) -> None:
+               decl_diag: bool = False, decl_diag2: bool = False) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
-    if decl_diag:
-        log("modo DECL-DIAG: login + vuelca la ESTRUCTURA de Declaraciones y "
-            "Pagos (NO escribe en BD, NO descarga). Correr LOCAL, no en el worker.",
+    if decl_diag or decl_diag2:
+        log(f"modo DECL-DIAG{'2' if decl_diag2 else ''}: "
+            + ("navega por código + rango + constancia 0621"
+               if decl_diag2 else "login + vuelca la ESTRUCTURA")
+            + " (NO escribe en BD, NO descarga). Correr LOCAL, no en el worker.",
             "WARN")
         if not ruc_filtro:
             log("DECL-DIAG requiere un RUC explícito. Uso: "
-                "run_scraper.py <RUC> decl-diag", "ERROR")
+                "run_scraper.py <RUC> decl-diag[2]", "ERROR")
             return
     if sunafil_diag:
         log("modo SUNAFIL-DIAG: login + vuelca el DOM de la casilla (NO ingesta).", "WARN")
@@ -989,14 +1032,16 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
     elif forzar:
         log("modo FORZAR: se scrapea aunque esté fresco.", "WARN")
     async with get_session() as session:
-        if decl_diag:
+        if decl_diag or decl_diag2:
             contribs = await _contrib_para_diag(session, ruc_filtro)
         else:
             contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if decl_diag:
+                if decl_diag2:
+                    await procesar_decl_diag2(session, contrib)
+                elif decl_diag:
                     await procesar_decl_diag(session, contrib)
                 elif sunafil or sunafil_diag:
                     await procesar_sunafil(session, contrib, diagnostico=sunafil_diag)
@@ -1037,6 +1082,7 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> sunafil-diag → login + vuelca el DOM de la casilla SUNAFIL
     #   python run_scraper.py <RUC> sunafil  → lee la casilla SUNAFIL e ingesta (fuente=sunafil)
     #   python run_scraper.py <RUC> decl-diag → login + vuelca ESTRUCTURA de Declaraciones y Pagos (NO BD, LOCAL)
+    #   python run_scraper.py <RUC> decl-diag2 → fase 2: navega por código + rango + constancia 0621 (NO BD, LOCAL)
     ruc = None
     forzar = False
     solo_censo = False
@@ -1050,6 +1096,7 @@ if __name__ == "__main__":
     sunafil = False
     sunafil_diag = False
     decl_diag = False
+    decl_diag2 = False
     for arg in sys.argv[1:]:
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
@@ -1073,6 +1120,8 @@ if __name__ == "__main__":
             sunafil_diag = True
         elif arg.lower() in ("sunafil", "--sunafil"):
             sunafil = True
+        elif arg.lower() in ("decl-diag2", "--decl-diag2"):
+            decl_diag2 = True
         elif arg.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag"):
             decl_diag = True
         else:
@@ -1081,4 +1130,4 @@ if __name__ == "__main__":
                      genhtml=genhtml, genhtml_diag=genhtml_diag,
                      pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag,
                      sunafil=sunafil, sunafil_diag=sunafil_diag,
-                     decl_diag=decl_diag))
+                     decl_diag=decl_diag, decl_diag2=decl_diag2))
