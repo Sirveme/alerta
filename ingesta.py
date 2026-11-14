@@ -193,6 +193,9 @@ async def ingestar_resultado(
             # zAlerta-86: resolución de deuda no disponible en SUNAT (honesto).
             if msg.get("valorado_no_disponible") and not existe.valorado_no_disponible:
                 existe.valorado_no_disponible = True
+            # SUNAFIL-1: backfill de presencia de documento oficial (no se descarga).
+            if msg.get("tiene_documento") and not existe.tiene_documento:
+                existe.tiene_documento = True
             # Reclasificar EN SITIO los mensajes viejos SIN clasificar (OTRO/None).
             # Usa carpeta+asunto: la capa de asunto rescata los carpeta-NULL viejos
             # sin re-descargar PDFs (asunto/texto ya están en BD). No degrada:
@@ -269,6 +272,8 @@ async def ingestar_resultado(
                 clasificado_at=ahora_lima(),
                 # zAlerta-85: se abrió el detalle y SUNAT no da adjunto → marcado.
                 revisado_sin_adjunto=bool(msg.get("revisado_sin_adjunto")),
+                # SUNAFIL-1: presencia de documento oficial (no se descarga; ver arriba).
+                tiene_documento=bool(msg.get("tiene_documento")),
                 # zAlerta-86: resolución de deuda no disponible en SUNAT.
                 valorado_no_disponible=bool(msg.get("valorado_no_disponible")),
             )

@@ -290,6 +290,21 @@ _FORMAS = [
 ]
 
 
+def _tiene_documento(tr, heads_norm: list) -> bool:
+    """True si la fila tiene un documento oficial: botón/ícono de archivo (fa-file*)
+    en la columna 'Ver Documento'. SOLO LECTURA de estructura — NUNCA se hace clic ni
+    se descarga (abrir el acto en SUNAFIL registra el ACUSE e inicia el plazo; eso lo
+    hace el contador, no alerta.pe). Devuelve solo la PRESENCIA del documento."""
+    idx = next((i for i, h in enumerate(heads_norm) if "ver documento" in h), None)
+    if idx is None:
+        return False
+    tds = tr.query_selector_all("td")
+    if idx >= len(tds):
+        return False
+    # cualquier ícono fa-file / fa-file-pdf-o dentro de la celda = hay documento
+    return bool(tds[idx].query_selector("i[class*='fa-file'], [class*='fa-file']"))
+
+
 def _detectar_forma(heads_norm: list):
     """Devuelve el spec de forma que coincide con la cabecera, o None (desconocida)."""
     for spec in _FORMAS:
@@ -403,6 +418,8 @@ def _parsear_pagina(tabla, spec: dict, categoria: str, heads_norm: list,
             "fecha_limite": _fecha("fecha_limite") if "fecha_limite" in claves_mapa else "",
             "plazo_dias": plazo,
             "no_leida": (leido is False),
+            # Presencia de documento oficial (sin descargar; abrirlo en SUNAFIL acusa).
+            "tiene_documento": _tiene_documento(tr, heads_norm),
             "_forma": spec["clave"], "_validado": validado,
             "_estado_icono": leido,
         }
@@ -606,8 +623,10 @@ def leer_casilla_sunafil(cfg: SunatConfig, conocidos: set | None = None,
                         if cod in vistos:
                             continue                     # ya visto en otra categoría
                         vistos.add(cod)
-                        if conocidos is not None and cod in conocidos:
-                            continue
+                        # NO se pre-filtra `conocidos`: se devuelve TODO y la ingesta
+                        # deduplica por (cod+fuente) y hace BACKFILL de campos nuevos
+                        # (p.ej. tiene_documento) en las filas ya guardadas. `conocidos`
+                        # queda solo para detectar la 1ª ingesta (arranque silencioso).
                         for k in ("_estado_icono", "_forma", "_validado"):
                             f.pop(k, None)               # metadatos internos, no se ingestan
                         resultado["mensajes"].append(f)

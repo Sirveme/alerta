@@ -134,6 +134,7 @@
     // Origen SUNAFIL + plazo accionable (SUNAFIL-1).
     if (f.fuente === 'sunafil') meta.push('<span class="rsm-mod-chip rsm-chip--sunafil">SUNAFIL' + (f.categoria_fuente ? ' · ' + esc(f.categoria_fuente) : '') + '</span>');
     if (f.plazo_dias) meta.push('<span class="rsm-mod-tag rsm-tag--plazo">Tienes ' + esc(String(f.plazo_dias)) + ' día(s) para responder</span>');
+    if (f.fuente === 'sunafil' && f.tiene_documento) meta.push('<span class="rsm-mod-tag rsm-tag--doc">📄 Documento oficial — se abre en SUNAFIL</span>');
     if (f.monto) meta.push('<span class="rsm-mod-chip rsm-mod-chip--deuda">' + esc(f.monto) + '</span>');
     if (f.periodo && f.periodo !== '—') meta.push('<span class="rsm-mod-tag">Periodo: ' + esc(f.periodo) + '</span>');
     if (f.fecha && f.fecha !== '—') meta.push('<span class="rsm-mod-tag">Documento: ' + esc(f.fecha) + '</span>');
@@ -165,6 +166,18 @@
     if (f.es_pago && f.pago) pdfHtml = pagoModal(f.pago) + pdfHtml;
     if (f.es_esquela && f.esquela) pdfHtml = esquelaModal(f.esquela) + pdfHtml;
     if (f.coactivo) pdfHtml = coactivoChip(f) + coactivoPDF(f.coactivo) + pdfHtml;
+    // SUNAFIL con documento oficial: alerta.pe NUNCA lo descarga (abrirlo en SUNAFIL
+    // registra el acuse e inicia el plazo). Avisamos la consecuencia ANTES y
+    // enlazamos a la casilla; el contador lo abre allí (ahí queda su acuse).
+    if (f.fuente === 'sunafil' && f.tiene_documento) {
+      pdfHtml += '<div class="rsm-mod-pdfs"><div class="rsm-mod-lbl">Documento oficial SUNAFIL</div>'
+        + '<div class="rsm-mod-sunafil-doc">'
+        + '<p>Tiene un documento oficial en SUNAFIL. Ábrelo en tu casilla — '
+        + '<b>al abrirlo queda registrado tu acuse y empieza a correr el plazo</b>.</p>'
+        + '<a class="rsm-mod-btn" href="https://casillaelectronica.sunafil.gob.pe/si.inbox/Inicio/Empleador" '
+        + 'target="_blank" rel="noopener">Abrir mi casilla SUNAFIL</a>'
+        + '</div></div>';
+    }
     if (!pdfHtml) pdfHtml = '<div class="rsm-mod-sinpdf">Sin documento adjunto.</div>';
 
     const ov = document.createElement('div');
