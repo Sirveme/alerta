@@ -38,6 +38,7 @@ import gcs
 # El scraper validado (Playwright puro). Ajustar al nombre real del archivo.
 import scraper_sunat_playwgth as scraper
 import scraper_sunafil   # lector de la casilla SUNAFIL (SUNAFIL-1)
+import scraper_sunat_declaraciones as scraper_decl  # diag Declaraciones y Pagos
 
 TZ_LIMA = ZoneInfo("America/Lima")
 
@@ -764,6 +765,62 @@ def _sunafil_sync(ruc: str, usuario_sol: str, clave_sol: str,
     return scraper_sunafil.leer_casilla_sunafil(cfg, conocidos=conocidos, diag=diag)
 
 
+def _decl_diag_sync(ruc: str, usuario_sol: str, clave_sol: str) -> dict:
+    """Diag de Declaraciones y Pagos (sync, Playwright). SOLO vuelca estructura."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper_decl.diag_declaraciones(cfg)
+
+
+async def _contrib_para_diag(session, ruc_filtro: str | None):
+    """Como _contribuyentes_a_scrapear pero SIN filtrar por estado: así el diag
+    encuentra tu RUC aunque lo hayas puesto 'inactivo' para sacarlo del worker
+    mientras corres el diag (ver forma segura de correrlo)."""
+    q = (select(Contribuyente)
+         .options(selectinload(Contribuyente.credencial)))
+    if ruc_filtro:
+        q = q.where(Contribuyente.ruc == ruc_filtro)
+    return list(await session.scalars(q))
+
+
+async def procesar_decl_diag(session, contrib: Contribuyente) -> int:
+    """DIAGNÓSTICO de Declaraciones y Pagos: login + vuelca estructura. NO escribe
+    en la BD (solo LEE la credencial para loguear). Pensado para correr LOCAL con
+    `railway run`, nunca dentro del worker."""
+    cred = contrib.credencial
+    if not cred:
+        log(f"  {contrib.ruc}: sin credencial registrada, no puedo loguear.", "WARN")
+        return 0
+    if not cred.valida:
+        log(f"  {contrib.ruc}: la credencial figura como NO válida; intento el "
+            f"diag igual (login dirá si es la clave).", "WARN")
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    log(f"  {contrib.ruc}: DECL-DIAG — login + vuelco de estructura (NO persiste)...")
+    res = await asyncio.to_thread(
+        _decl_diag_sync, contrib.ruc, cred.usuario_sol, clave)
+    if not res.get("exito"):
+        log(f"  {contrib.ruc}: DECL-DIAG no completó (motivo={res.get('motivo')}). "
+            f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")
+        return 0
+    # Resumen por pantalla (los 3 estados), sin datos sensibles.
+    for pant in res.get("pantallas", []):
+        estado = pant.get("estado", "—")
+        tablas = pant.get("tablas", [])
+        cols = sum(len(t.get("encabezados", [])) for t in tablas)
+        log(f"    · {pant.get('slug')}: {estado} "
+            f"({len(tablas)} tabla(s), {cols} encabezado(s), "
+            f"{len(pant.get('formularios', []))} formulario(s))")
+    log(f"  {contrib.ruc}: DECL-DIAG OK — {len(res.get('menu', []))} opción(es) de "
+        f"menú, {len(res.get('red', []))} petición(es) de red. Volcado en "
+        f"{res.get('carpeta')} (HTML enmascarado + 00_menu_catalogo.txt). "
+        f"NO se escribió nada en la BD.", "OK")
+    return len(res.get("pantallas", []))
+
+
 async def procesar_sunafil(session, contrib: Contribuyente,
                            diagnostico: bool = False) -> int:
     """Lee el buzón SUNAFIL del contribuyente y lo ingesta por el MISMO pipeline
@@ -879,8 +936,17 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
                genhtml: bool = False, genhtml_diag: bool = False,
                pdf: bool = False, pdf_diag: bool = False,
                ceros: bool = False, ceros_diag: bool = False,
-               sunafil: bool = False, sunafil_diag: bool = False) -> None:
+               sunafil: bool = False, sunafil_diag: bool = False,
+               decl_diag: bool = False) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
+    if decl_diag:
+        log("modo DECL-DIAG: login + vuelca la ESTRUCTURA de Declaraciones y "
+            "Pagos (NO escribe en BD, NO descarga). Correr LOCAL, no en el worker.",
+            "WARN")
+        if not ruc_filtro:
+            log("DECL-DIAG requiere un RUC explícito. Uso: "
+                "run_scraper.py <RUC> decl-diag", "ERROR")
+            return
     if sunafil_diag:
         log("modo SUNAFIL-DIAG: login + vuelca el DOM de la casilla (NO ingesta).", "WARN")
     elif sunafil:
@@ -905,11 +971,16 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
     elif forzar:
         log("modo FORZAR: se scrapea aunque esté fresco.", "WARN")
     async with get_session() as session:
-        contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
+        if decl_diag:
+            contribs = await _contrib_para_diag(session, ruc_filtro)
+        else:
+            contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if sunafil or sunafil_diag:
+                if decl_diag:
+                    await procesar_decl_diag(session, contrib)
+                elif sunafil or sunafil_diag:
                     await procesar_sunafil(session, contrib, diagnostico=sunafil_diag)
                 elif ceros or ceros_diag:
                     await procesar_ceros(session, contrib, diagnostico=ceros_diag)
@@ -947,6 +1018,7 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> ceros    → captura adjuntos codArchivo=0 por nomArchivo
     #   python run_scraper.py <RUC> sunafil-diag → login + vuelca el DOM de la casilla SUNAFIL
     #   python run_scraper.py <RUC> sunafil  → lee la casilla SUNAFIL e ingesta (fuente=sunafil)
+    #   python run_scraper.py <RUC> decl-diag → login + vuelca ESTRUCTURA de Declaraciones y Pagos (NO BD, LOCAL)
     ruc = None
     forzar = False
     solo_censo = False
@@ -959,6 +1031,7 @@ if __name__ == "__main__":
     ceros_diag = False
     sunafil = False
     sunafil_diag = False
+    decl_diag = False
     for arg in sys.argv[1:]:
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
@@ -982,9 +1055,12 @@ if __name__ == "__main__":
             sunafil_diag = True
         elif arg.lower() in ("sunafil", "--sunafil"):
             sunafil = True
+        elif arg.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag"):
+            decl_diag = True
         else:
             ruc = arg
     asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill,
                      genhtml=genhtml, genhtml_diag=genhtml_diag,
                      pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag,
-                     sunafil=sunafil, sunafil_diag=sunafil_diag))
+                     sunafil=sunafil, sunafil_diag=sunafil_diag,
+                     decl_diag=decl_diag))
