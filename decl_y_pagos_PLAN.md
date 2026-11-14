@@ -21,12 +21,36 @@ formas seguras (elige una):
   el diag, y lo vuelves a `activo`. El diag está hecho para **encontrar tu RUC
   aunque esté inactivo** (usa un fetch sin filtro de estado), justo para esto.
 
-Comando (local, con el entorno de prod inyectado por Railway, pero **solo lee**
-la credencial; no escribe nada):
+### Conexión a la BD desde tu PC (URL pública)
+
+La `DATABASE_URL` del worker apunta al host **interno** de Railway
+(`*.railway.internal`), que no resuelve desde tu PC (`getaddrinfo failed`). El
+modo `decl-diag` ya está hecho para usar **`DATABASE_PUBLIC_URL`** si existe (hace
+el swap antes de abrir la conexión; solo este modo, solo si la variable existe).
+Falta que esa variable llegue al entorno del worker **por referencia** (sin que
+copies ninguna contraseña):
+
+1. **Postgres** → Settings → Networking → activa **Public Networking / TCP Proxy**
+   si no está (eso expone `DATABASE_PUBLIC_URL` en el servicio Postgres).
+2. **alertape-worker** → Variables → New Variable → nombre `DATABASE_PUBLIC_URL`,
+   valor **`${{Postgres.DATABASE_PUBLIC_URL}}`** (usa el selector de referencia;
+   reemplaza `Postgres` por el nombre real de tu servicio de BD). Es una
+   **referencia**, no tecleas la contraseña.
+   - Por CLI equivale a:
+     `railway variables -s alertape-worker --set 'DATABASE_PUBLIC_URL=${{Postgres.DATABASE_PUBLIC_URL}}'`
+
+Con eso, `railway run -s alertape-worker` te inyecta **todo** el entorno del
+worker: `DATABASE_PUBLIC_URL` (BD pública) **y** `FERNET_KEY_SOL` (la llave con
+que se descifran las claves SOL). No copias nada a mano.
+
+Comando (local; **solo lee** la credencial, no escribe nada):
 
 ```
-railway run python run_scraper.py 20615446565 decl-diag
+railway run -s alertape-worker python run_scraper.py 20615446565 decl-diag
 ```
+
+Deberías ver primero la línea `[decl-diag] Conectando por DATABASE_PUBLIC_URL…`.
+Si en cambio ves el `AVISO: no hay DATABASE_PUBLIC_URL`, falta el paso 2.
 
 Ritmo y variables:
 - `DECL_DIAG_PAUSA_SEG` (def. 4): pausa entre pantallas (súbelo si quieres ir más
