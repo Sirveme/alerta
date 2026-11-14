@@ -37,7 +37,7 @@
     {% endif %}
   </div>
   <div class="cc-acciones">
-    <a class="btn-cc btn-cc--ver" href="/contribuyentes/{{ c.id }}/notificaciones">
+    <a class="btn-cc btn-cc--ver" href="/cliente/{{ c.id }}">
       <i class="ti ti-eye" aria-hidden="true"></i> Ver</a>
     {% if not user.solo_lectura %}
     <button class="btn-cc btn-cc--actu btn-actualizar" data-id="{{ c.id }}"

@@ -41,37 +41,23 @@ def _puede_ver_notif(user: UsuarioActual, notif) -> bool:
     return False
 
 
-@router.get("/contribuyentes/{contribuyente_id}/notificaciones",
-            response_class=HTMLResponse)
+@router.get("/contribuyentes/{contribuyente_id}/notificaciones")
 async def lista_notificaciones(
     request: Request, contribuyente_id: uuid.UUID,
     tipo: str | None = None,
     user: UsuarioActual = Depends(usuario_actual)):
-    async with get_session() as session:
-        # Acceso multi-tenant + empresario (solo su RUC vía cuenta_empresario_id).
-        contrib = await contribuyente_accesible(session, user, contribuyente_id)
-        if not contrib:
-            return RedirectResponse("/", status_code=303)
-
-        # Filtramos por el estudio REAL del RUC (para el empresario es el del
-        # contador; para el estudio es el suyo). El acceso ya fue validado.
-        q = (select(Notificacion).where(
-                Notificacion.contribuyente_id == contribuyente_id,
-                Notificacion.estudio_id == contrib.estudio_id))
-
-        tipo_sel = None
-        if tipo and tipo in ETIQUETA_TIPO_DOCUMENTO:
-            tipo_sel = tipo
-            q = q.where(Notificacion.tipo_documento_enum == TipoDocumento(tipo))
-
-        notifs = (await session.scalars(
-            q.order_by(desc(Notificacion.fecha_publica_sunat),
-                       desc(Notificacion.creado_at)).limit(200))).all()
-
-    return templates.TemplateResponse(request, "notificaciones.html", {
-        "user": user, "contrib": contrib, "notifs": notifs,
-        "tipos": ETIQUETA_TIPO_DOCUMENTO, "tipo_sel": tipo_sel,
-    })
+    """CONVERGENCIA de rutas: esta vista plana legacy (sin deuda/tarjetas) fue
+    jubilada. Se conserva la URL como REDIRECT (302, no 404) para enlaces
+    guardados/externos, el 'Volver' del detalle de notif y la 'Ficha' del IA.
+    Destino según el usuario, respetando su vista rica:
+      · empresario → /resumen (su buzón con semáforo/deuda),
+      · contador/asistente → /cliente/{id} (rejilla por período + gestión).
+    302 (temporal) a propósito: el destino depende del tipo de usuario, y un 301
+    se cachearía por-URL congelando el destino para el otro tipo. El ?tipo= se
+    descarta (la vista /cliente agrupa por período, no por tipo). El acceso lo
+    valida la ruta destino (empresario: cuenta_empresario_id; asistente: asignación)."""
+    destino = "/resumen" if user.es_empresario else f"/cliente/{contribuyente_id}"
+    return RedirectResponse(destino, status_code=302)
 
 
 @router.get("/notificaciones/{notif_id}", response_class=HTMLResponse)
