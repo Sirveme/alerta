@@ -434,34 +434,69 @@ def _enviar_rango_02(page, cfg: SunatConfig, meses: int):
     return _frame_con(page, "form[name='formComprobante']") or fr
 
 
-def _capturar_constancia(page, scope, carpeta: Path, cfg: SunatConfig) -> dict:
-    """Invoca el enlace 'Comprobante' de la 1ª fila (constancia 0621) y vuelca la
-    constancia. NO descarga PDF (ignora comprobanteNSIR/window.open)."""
-    link = None
+def _sel(fr, name: str, *vals) -> bool:
+    """Intenta seleccionar la 1ª opción válida de un <select name=..>."""
+    for v in vals:
+        try:
+            fr.select_option(f"select[name='{name}']", value=v)
+            return True
+        except Exception:
+            pass
+    return False
+
+
+def _enviar_filtro_01(page, cfg: SunatConfig, meses: int):
+    """Consulta general: filtra por PERÍODO (mes/año desde-hasta) y busca. Trae la
+    grilla período×tributo×importe pagado. Devuelve el scope o None."""
+    fr = _frame_con(page, "form[name='consultageneral']")
+    if not fr:
+        log("    01: no encontré el formulario consultageneral.", "WARN")
+        return None
+    hoy = date.today()
+    desde = hoy - timedelta(days=int(30.4 * meses))
     try:
-        link = scope.query_selector("a[onclick^='comprobante('], "
-                                    "a[onclick*=' comprobante('], "
-                                    "[onclick*='comprobante(']")
-    except Exception:
-        link = None
-    if not link:
-        return {"slug": "03_constancia_0621", "estado": "sin_datos",
-                "detalle": "sin filas con enlace 'Comprobante' en el rango"}
-    oc = link.get_attribute("onclick") or ""
-    if "comprobantensir" in oc.lower() or "comprobante(" not in oc.lower():
-        return {"slug": "03_constancia_0621", "estado": "sin_datos",
-                "detalle": "la 1ª fila usa comprobanteNSIR (PDF); se omite a "
-                           "propósito (no descargamos). Reintentar con otra fila."}
-    try:
-        scope.evaluate(oc)             # ejecuta comprobante('0621', numPres, …)
+        _sel(fr, "adesde", str(desde.year))
+        _sel(fr, "mdesde", f"{desde.month:02d}", str(desde.month))
+        _sel(fr, "ahasta", str(hoy.year))
+        _sel(fr, "mhasta", f"{hoy.month:02d}", str(hoy.month))
+        fr.evaluate("if (typeof validarFormCGeneral==='function'){"
+                    "validarFormCGeneral();} else {"
+                    "document.consultageneral.submit();}")
+        log(f"    01: enviado período {desde:%m/%Y}–{hoy:%m/%Y}.", "INFO")
     except Exception as e:
-        return {"slug": "03_constancia_0621", "estado": "no_se_pudo_leer",
-                "detalle": _sanea(f"invoke comprobante: {e}", cfg)}
+        log(f"    01: no pude enviar el filtro: {_sanea(str(e), cfg)}", "WARN")
+        return fr
     _pausa()
-    info = _volcar(page, carpeta, "03_constancia_0621", cfg)
-    info["estado"] = "con_datos" if info["tiene_datos"] else "sin_datos"
-    info["onclick_muestra"] = _sanea(oc[:90], cfg)
-    return info
+    return _frame_con(page, "form[name='consultageneral']") or fr
+
+
+def _resumen_constancias(scope, cfg: SunatConfig) -> dict:
+    """La constancia (0621/1662) se abre con `constanciaNP(num_ord,'cod_for')` →
+    `validar_constanciaNP` (XML) → window.open de un PDF `obtener_constanciaNP`.
+    En DIAG NO se descarga: solo se reporta qué hay (cuántos enlaces y por
+    formulario) y el patrón de URL del PDF, para decidir si se parsea el PDF."""
+    hrefs = []
+    try:
+        for a in scope.query_selector_all(
+                "a[href*='constanciaNP('], a[onclick*='constanciaNP(']"):
+            hrefs.append((a.get_attribute("href") or "")
+                         + (a.get_attribute("onclick") or ""))
+    except Exception:
+        pass
+    cods = re.findall(r"constanciaNP\(\s*\d+\s*,\s*'([0-9]{3,4})'", " ".join(hrefs))
+    por_form = {}
+    for c in cods:
+        por_form[c] = por_form.get(c, 0) + 1
+    return {"slug": "03_constancia", "pantalla": "03 Constancia (0621/1662)",
+            "estado": ("con_datos" if hrefs else "sin_datos"),
+            "n_enlaces": len(hrefs), "por_formulario": por_form,
+            "mecanismo": "constanciaNP(num_ord, cod_for) → POST accion="
+                         "validar_constanciaNP → window.open accion="
+                         "obtener_constanciaNP&cod_ecm=… (PDF)",
+            "pdf_url_patron": _patron_url(
+                "/cl-ti-itdeclpagcon-mepeco/cdpS01Alias?accion=obtener_"
+                "constanciaNP&cod_ecm=", cfg),
+            "detalle": "constancia = PDF; en diag NO se descarga"}
 
 
 def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict:
@@ -524,7 +559,23 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict
                 info["pantalla"] = tg["desc"]
                 res["pantallas"].append(info)
 
-                # Pantalla 02: enviar rango + capturar constancia 0621.
+                # Pantalla 01 (Consulta general): enviar filtro de período y volcar
+                # la grilla período×tributo×importe pagado.
+                if tg["slug"] == "01_consulta_general" and info["estado"] != "no_se_pudo_leer":
+                    try:
+                        cur["t"] = "01_resultados"
+                        _enviar_filtro_01(page, cfg, meses)
+                        r = _volcar(page, carpeta, "01_consulta_general_resultados", cfg)
+                        r["estado"] = ("con_datos" if r["tiene_datos"] else "sin_datos")
+                        r["pantalla"] = f"01 resultados (período, {meses} meses)"
+                        res["pantallas"].append(r)
+                    except Exception as e:
+                        res["pantallas"].append(
+                            {"slug": "01_consulta_general_resultados",
+                             "estado": "no_se_pudo_leer", "pantalla": "01 resultados",
+                             "detalle": _sanea(f"{type(e).__name__}: {e}", cfg)})
+
+                # Pantalla 02: enviar rango, volcar resultados y resumir constancias.
                 if tg["slug"] == "02_djj_pagos" and info["estado"] != "no_se_pudo_leer":
                     try:
                         cur["t"] = "02_resultados"
@@ -535,15 +586,14 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict
                         r["pantalla"] = f"02 resultados (rango {meses} meses)"
                         res["pantallas"].append(r)
                         cur["t"] = "03_constancia"
-                        cons = _capturar_constancia(page, sc or page, carpeta, cfg)
-                        cons["pantalla"] = "03 Constancia del Formulario 0621"
-                        res["pantallas"].append(cons)
+                        res["pantallas"].append(
+                            _resumen_constancias(sc or page, cfg))
                     except Exception as e:
                         res["pantallas"].append(
-                            {"slug": "03_constancia_0621",
+                            {"slug": "03_constancia",
                              "estado": "no_se_pudo_leer",
                              "detalle": _sanea(f"{type(e).__name__}: {e}", cfg),
-                             "pantalla": "03 Constancia del Formulario 0621"})
+                             "pantalla": "03 Constancia (0621/1662)"})
                 _pausa()
             res["red"] = red
             res["exito"] = True
