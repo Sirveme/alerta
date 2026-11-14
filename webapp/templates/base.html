@@ -49,7 +49,7 @@
   <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0"
         media="all" onerror="this.media='none'">
-  <link rel="stylesheet" href="/static/css/app.css">
+  <link rel="stylesheet" href="/static/css/app.css?v={{ v }}">
 </head>
 <body>
   {% if user %}
@@ -200,12 +200,12 @@
     </div>
   </div>
 
-  <script src="/static/js/app.js"></script>
-  <script src="/static/js/tema.js"></script>
-  {% if user %}<script src="/static/js/ia.js"></script>{% endif %}
-  {% if user %}<script src="/static/js/push.js"></script>{% endif %}
-  {% if user %}<script src="/static/js/dock.js"></script>{% endif %}
-  <script src="/static/js/pwa.js"></script>
+  <script src="/static/js/app.js?v={{ v }}"></script>
+  <script src="/static/js/tema.js?v={{ v }}"></script>
+  {% if user %}<script src="/static/js/ia.js?v={{ v }}"></script>{% endif %}
+  {% if user %}<script src="/static/js/push.js?v={{ v }}"></script>{% endif %}
+  {% if user %}<script src="/static/js/dock.js?v={{ v }}"></script>{% endif %}
+  <script src="/static/js/pwa.js?v={{ v }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
