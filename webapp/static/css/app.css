@@ -1478,6 +1478,34 @@ a.tarjeta-link { display:block; color:inherit; }
   border:1px solid var(--borde); background:var(--superficie); color:var(--texto-suave);
   font-size:.82rem; font-weight:700; white-space:nowrap; }
 .rsm-chip--on { background:var(--marca); color:#fff; border-color:var(--marca); }
+/* Escritorio (SUNAFIL-UI-2): barra de desplazamiento DELGADA y visible para la fila
+   de chips; la rueda del mouse también la mueve (resumen.js). En móvil se mantiene
+   sin barra (arrastre táctil), como estaba. */
+@media (min-width:768px){
+  .rsm-chips{ scrollbar-width:thin; scrollbar-color:var(--borde) transparent;
+    padding-bottom:14px; }
+  .rsm-chips::-webkit-scrollbar{ display:block; height:7px; }
+  .rsm-chips::-webkit-scrollbar-thumb{ background:var(--borde); border-radius:999px; }
+  .rsm-chips::-webkit-scrollbar-thumb:hover{ background:var(--texto-suave); }
+  .rsm-chips::-webkit-scrollbar-track{ background:transparent; }
+}
+/* Chip de filtro por FUENTE SUNAFIL (SUNAFIL-UI-2): morado, distinto de las
+   categorías de deuda; al activarse se sólido. */
+.rsm-chip--sunafil-f{ color:#B79CF6;
+  border-color:color-mix(in srgb,#8B5CF6 45%,transparent); }
+.rsm-chip--sunafil-f.rsm-chip--on{ background:#8B5CF6; color:#fff;
+  border-color:#8B5CF6; }
+/* Etiqueta de FUENTE en la tarjeta (SUNAFIL-UI-2): fila propia bajo el encabezado. */
+.rsm-c-fuentes{ display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 2px; }
+.rsm-c-fuente{ display:inline-flex; align-items:center; gap:4px; font-size:.72rem;
+  font-weight:700; padding:2px 8px; border-radius:999px; line-height:1.4;
+  border:1px solid transparent; }
+.rsm-c-fuente--sunafil{ color:#B79CF6;
+  background:color-mix(in srgb,#8B5CF6 18%,transparent);
+  border-color:color-mix(in srgb,#8B5CF6 30%,transparent); }
+.rsm-c-fuente--doc{ color:#F0863B;
+  background:color-mix(in srgb,#F0863B 12%,transparent);
+  border-color:color-mix(in srgb,#F0863B 32%,transparent); }
 /* Tarjetas de la lista */
 .rsm-lista { display:flex; flex-direction:column; gap:10px; }
 /* zAlerta-77 · La tarjeta ES un bloque de dos ejes: el color de naturaleza, el
