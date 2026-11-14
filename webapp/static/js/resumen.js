@@ -401,6 +401,15 @@
   }
   function montoSoles(n) { return 'S/ ' + Math.round(n).toLocaleString('es-PE'); }
 
+  // Filtro especial por FUENTE (SUNAFIL-UI-2): no es un "grupo" de deuda, es el
+  // organismo de origen. Se trata aparte de grupoDe() en la lista y en los chips.
+  const FILTRO_SUNAFIL = 'f:sunafil';
+  function pasaFiltro(f) {
+    if (_filtro === 'todo') return true;
+    if (_filtro === FILTRO_SUNAFIL) return f.fuente === 'sunafil';
+    return grupoDe(f) === _filtro;
+  }
+
   let _filtro = 'todo';
   let _filas = [];
 
@@ -449,6 +458,16 @@
     const nat = naturalezaDe(f), est = estadoDe(f);
     const ico = '<span class="rsm-c-ico"><span class="material-symbols-outlined">'
       + iconoDe(f) + '</span></span>';
+    // Etiqueta de FUENTE visible en la tarjeta (SUNAFIL-UI-2): todo mensaje de
+    // SUNAFIL se distingue del de SUNAT, TENGA O NO documento oficial. Si además
+    // hay documento, un marcador discreto (el detalle y el enlace van en el modal).
+    const fuenteBadge = f.fuente === 'sunafil'
+      ? '<span class="rsm-c-fuente rsm-c-fuente--sunafil">SUNAFIL'
+        + (f.categoria_fuente ? ' · ' + esc(f.categoria_fuente) : '') + '</span>'
+        + (f.tiene_documento
+            ? '<span class="rsm-c-fuente rsm-c-fuente--doc" title="Documento oficial en SUNAFIL">📄 Documento</span>'
+            : '')
+      : '';
     return '<div class="rsm-card bloque ' + nat + ' ' + est + (nueva ? ' rsm-card--nueva' : '')
       + '" data-i="' + i + '" title="' + esc(SEM_TXT[sem]) + '">'
       + '<div class="rsm-c-top">' + ico
@@ -457,6 +476,7 @@
       + (tienePdf(f) ? '<span class="rsm-pdf-badge" title="Tiene documento PDF">'
           + '<span class="material-symbols-outlined">picture_as_pdf</span></span>' : '')
       + '</span></div>'
+      + (fuenteBadge ? '<div class="rsm-c-fuentes">' + fuenteBadge + '</div>' : '')
       + '<div class="rsm-c-asunto">' + esc(f.detalle) + '</div>'
       + '<div class="rsm-c-meta">'
       + '<span class="rsm-c-fecha"><i class="ti ti-calendar"></i> ' + esc(f.fecha || '—') + '</span>'
@@ -471,8 +491,7 @@
   }
 
   function pintarLista() {
-    const vis = _filtro === 'todo' ? _filas
-      : _filas.filter((f) => grupoDe(f) === _filtro);
+    const vis = _filas.filter(pasaFiltro);
     const cont = document.getElementById('rsm-lista');
     if (!cont) return;
     cont.innerHTML = vis.length
@@ -492,6 +511,20 @@
   // Contenedores del diseño C (presentes en resumen.html; zAlerta-38b).
   function elMetricas() { return document.getElementById('rsm-metricas'); }
   function elChips() { return document.getElementById('rsm-chips'); }
+
+  // Rueda del mouse → desplazamiento HORIZONTAL de la fila de chips en escritorio
+  // (SUNAFIL-UI-2). En móvil el arrastre táctil ya funciona y aquí no estorba.
+  // Se liga UNA sola vez por elemento (el innerHTML cambia, el nodo no).
+  function habilitarRuedaChips(cc) {
+    if (!cc || cc.dataset.wheel) return;
+    cc.dataset.wheel = '1';
+    cc.addEventListener('wheel', (e) => {
+      if (cc.scrollWidth <= cc.clientWidth) return;          // no hay desborde
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;  // ya es scroll horizontal
+      cc.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
+  }
 
   function render(data, offline) {
     _filas = (data && data.filas) || [];
@@ -527,11 +560,18 @@
     // Chips (solo los presentes; "Todo" siempre)
     const cuenta = {};
     _filas.forEach((f) => { const g = grupoDe(f); cuenta[g] = (cuenta[g] || 0) + 1; });
-    const chips = CHIPS_ORDEN
+    let chips = CHIPS_ORDEN
       .filter((k) => k === 'todo' || cuenta[k])
       .map((k) => '<button class="rsm-chip" data-f="' + k + '">'
         + (k === 'todo' ? 'Todo' : esc(TIPO_LBL[k]) + ' (' + cuenta[k] + ')') + '</button>')
       .join('');
+    // Chip por FUENTE SUNAFIL (SUNAFIL-UI-2): al final, visualmente distinto, solo
+    // si hay mensajes de SUNAFIL en el buzón.
+    const nSunafil = _filas.filter((f) => f.fuente === 'sunafil').length;
+    if (nSunafil) {
+      chips += '<button class="rsm-chip rsm-chip--sunafil-f" data-f="' + FILTRO_SUNAFIL + '">'
+        + 'SUNAFIL (' + nSunafil + ')</button>';
+    }
 
     // Rellenar los contenedores nombrados del HTML (contrato explícito).
     const cm = elMetricas(), cc = elChips();
@@ -540,6 +580,7 @@
       cc.innerHTML = chips;
       cc.querySelectorAll('.rsm-chip').forEach((c) =>
         c.addEventListener('click', () => { _filtro = c.dataset.f; pintarLista(); }));
+      habilitarRuedaChips(cc);
     }
     pintarLista();
   }
