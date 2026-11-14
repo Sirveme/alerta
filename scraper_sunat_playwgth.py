@@ -77,8 +77,21 @@ def ts_lima() -> str:
     return ahora_lima().strftime("%d/%m/%Y %H:%M:%S")
 
 
+try:
+    from seguridad_logs import enmascarar as _mask
+except Exception:  # nunca romper el motor por el enmascarado
+    def _mask(x):
+        return str(x) if x is not None else ""
+
+# Capturas de diagnóstico (diag_*.png/html): APAGADAS por defecto. Solo se
+# generan si SUNAT_DIAG=1. En prod esto evita (a) fugar HTML con datos y (b) el
+# CUELGUE de page.screenshot/page.content sobre una página trabada (incidente
+# del 27/10: un diag colgado congeló todo el worker).
+_DIAG_ON = os.getenv("SUNAT_DIAG", "0") == "1"
+
+
 def log(msg: str, nivel: str = "INFO") -> None:
-    print(f"[{ts_lima()}] [{nivel}] {msg}", flush=True)
+    print(f"[{ts_lima()}] [{nivel}] {_mask(msg)}", flush=True)
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -144,6 +157,15 @@ def _evidencia(page: Page, etiqueta: str) -> None:
     que se asiente y, si aun así no se puede capturar, lo registramos sin
     generar ruido de error (no es un fallo del scraping).
     """
+    if not _DIAG_ON:
+        # Prod: sin capturas. page.screenshot(full_page)/page.content() sobre una
+        # página trabada pueden BLOQUEAR sin timeout → cuelgan el hilo del scraper
+        # y, sin él, todo el worker. Solo registramos la URL (ya enmascarada).
+        try:
+            log(f"   [diag off] {etiqueta} · URL: {page.url}", "INFO")
+        except Exception:
+            pass
+        return
     DESCARGAS.mkdir(parents=True, exist_ok=True)
     try:
         page.wait_for_load_state("domcontentloaded", timeout=5_000)
@@ -928,9 +950,14 @@ def scrapear_ruc(cfg: SunatConfig, conocidos: set | None = None,
 
         try:
             if not login_sol(page, cfg):
+                # Login rechazado = casi siempre Clave SOL (motivo 'login').
+                resultado["motivo"] = "login"
                 return resultado
             visor_frame = entrar_buzon(page)
             if not visor_frame:
+                # Entró pero el visor no cargó = técnico/SUNAT, NO la clave.
+                # (Incidente 27/10.) 'red' → no se le dice al cliente "revisa tu clave".
+                resultado["motivo"] = "red"
                 return resultado
 
             # ── FASE DESCUBRIMIENTO (breve) ──

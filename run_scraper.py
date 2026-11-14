@@ -47,9 +47,16 @@ TZ_LIMA = ZoneInfo("America/Lima")
 FRESCURA_HORAS_DEFAULT = 3
 
 
+try:
+    from seguridad_logs import enmascarar as _mask
+except Exception:
+    def _mask(x):
+        return str(x) if x is not None else ""
+
+
 def log(msg: str, nivel: str = "INFO") -> None:
     print(f"[{datetime.now(TZ_LIMA).strftime('%d/%m/%Y %H:%M:%S')}] "
-          f"[{nivel}] {msg}", flush=True)
+          f"[{nivel}] {_mask(msg)}", flush=True)
 
 
 async def _contribuyentes_a_scrapear(session, ruc_filtro: str | None):
@@ -401,9 +408,15 @@ async def procesar_contribuyente(session, contrib: Contribuyente,
         anio_desde, solo_censo, backfill)
 
     if not resultado.get("exito"):
-        log(f"  {contrib.ruc}: scraping falló.", "ERROR")
+        # motivo: 'login' (clave real) | 'red' (técnico/SUNAT) | 'otro'. NO
+        # colapsar todo a "clave" (bug de confianza): _revisar_credencial solo
+        # marca ERROR_CREDENCIAL si el motivo es 'login'.
+        motivo = resultado.get("motivo") or "otro"
+        log(f"  {contrib.ruc}: scraping falló (motivo={motivo}).", "ERROR")
         contrib.ultimo_scrapeo_at = datetime.now(TZ_LIMA)
         contrib.ultimo_scrapeo_ok = False
+        contrib.ultimo_error_motivo = motivo
+        contrib.ultimo_error_at = datetime.now(TZ_LIMA)
         await session.commit()
         return
 

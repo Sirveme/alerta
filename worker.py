@@ -45,7 +45,7 @@ from models import (
     SolicitudValidacionCredencial, EstadoValidacion, ahora_lima,
     EstudioContable, CredencialSol, EstadoSuscripcion, TipoCuenta,
     Recordatorio, ModoRecordatorio, Usuario, ETIQUETA_TIPO_DOCUMENTO,
-    TipoDocumento, PushSuscripcion, PushEnviado,
+    TipoDocumento, PushSuscripcion, PushEnviado, WorkerEstado,
 )
 
 # Horarios (hora Lima) en que se permiten los push de recordatorio (no spamear).
@@ -72,6 +72,10 @@ TZ_LIMA = ZoneInfo("America/Lima")
 
 INTERVALO_SEGUNDOS = int(os.getenv("WORKER_INTERVALO_SEG", "90"))
 FRESCURA_HORAS = int(os.getenv("WORKER_FRESCURA_HORAS", str(FRESCURA_HORAS_DEFAULT)))
+# AISLAMIENTO POR RUC: tiempo máximo TOTAL por contribuyente. Si se cuelga o se
+# pasa, se registra "no se pudo leer", se sigue con el siguiente — un RUC NUNCA
+# detiene el ciclo (incidente 27/10). Default 3 min.
+RUC_TIMEOUT_SEG = int(os.getenv("WORKER_RUC_TIMEOUT_SEG", "180"))
 
 # Ventana NOCTURNA de lectura (zAlerta-12 P1.a): la conexión a SUNAT es mejor de
 # noche. El ciclo de FONDO (scrapeo masivo) solo corre dentro de esta franja
@@ -134,7 +138,13 @@ async def _revisar_credencial(session, contrib) -> None:
         select(CredencialSol).where(CredencialSol.contribuyente_id == contrib.id))
     if not cred:
         return
-    if contrib.ultimo_scrapeo_ok is False:
+    # Bug de confianza: SOLO es "revisa tu clave" si el motivo fue 'login'
+    # (credencial rechazada). Un fallo técnico/red/timeout NO debe decirle al
+    # cliente que cambie su clave — se registra, pero el estado sigue ACTIVO y
+    # el fallo técnico se ve en el panel de salud.
+    es_fallo_login = (contrib.ultimo_scrapeo_ok is False
+                      and contrib.ultimo_error_motivo == "login")
+    if es_fallo_login:
         if contrib.estado != EstadoContribuyente.ERROR_CREDENCIAL:
             contrib.estado = EstadoContribuyente.ERROR_CREDENCIAL
         if not contrib.credencial_error_avisada:
@@ -149,10 +159,11 @@ async def _revisar_credencial(session, contrib) -> None:
                     log(f"  {contrib.ruc}: aviso credencial falló (sigo): {e}", "WARN")
             contrib.credencial_error_avisada = True
     elif contrib.ultimo_scrapeo_ok:
-        # Reconectó: limpiar el estado de error y el flag de aviso.
+        # Reconectó: limpiar el estado de error, el motivo y el flag de aviso.
         if contrib.estado == EstadoContribuyente.ERROR_CREDENCIAL:
             contrib.estado = EstadoContribuyente.ACTIVO
         contrib.credencial_error_avisada = False
+        contrib.ultimo_error_motivo = None
 
 
 async def _usuarios_de(session, contrib) -> list:
@@ -199,6 +210,79 @@ async def _procesar_y_notificar(session, contrib, forzar: bool,
         log(f"  {contrib.ruc}: {nuevas} nueva(s) — push diferido a horario fijo.", "OK")
 
 
+async def _procesar_ruc_aislado(session, contrib, forzar: bool,
+                                full: bool = False) -> str:
+    """AÍSLA un RUC con tiempo máximo TOTAL (RUC_TIMEOUT_SEG). Si se cuelga o se
+    pasa, lo registra como "no se pudo leer" (motivo 'timeout'), hace rollback y
+    SIGUE. Un RUC nunca detiene a los demás ni al ciclo (incidente 27/10).
+
+    Devuelve 'ok' | 'timeout' | 'error'. El scraper corre en un hilo
+    (to_thread); wait_for libera el ciclo aunque el hilo tarde en soltar su
+    navegador — con las capturas diag apagadas el cuelgue indefinido desaparece.
+    """
+    try:
+        await asyncio.wait_for(
+            _procesar_y_notificar(session, contrib, forzar=forzar, full=full),
+            timeout=RUC_TIMEOUT_SEG)
+        return "ok"
+    except asyncio.TimeoutError:
+        log(f"  {contrib.ruc}: NO SE PUDO LEER — superó {RUC_TIMEOUT_SEG}s "
+            f"({ahora_lima().strftime('%d/%m/%Y %H:%M:%S')}). Sigo con el siguiente.",
+            "ERROR")
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        try:
+            contrib.ultimo_scrapeo_at = ahora_lima()
+            contrib.ultimo_scrapeo_ok = False
+            contrib.ultimo_error_motivo = "timeout"
+            contrib.ultimo_error_at = ahora_lima()
+            await _revisar_credencial(session, contrib)   # timeout ≠ "revisa tu clave"
+            await session.commit()
+        except Exception as e:
+            log(f"  {contrib.ruc}: no pude registrar el timeout: {e}", "WARN")
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+        return "timeout"
+    except Exception as e:
+        log(f"  {contrib.ruc}: error inesperado (aislado): {e}", "ERROR")
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        return "error"
+
+
+async def _actualizar_latido(session, inicio_at, rucs_total: int,
+                             rucs_ok: int, rucs_fallo: int,
+                             rucs_timeout: int) -> None:
+    """Sella el fin de un ciclo COMPLETO en worker_estado (latido). El vigilante
+    externo y el panel leen esto. Nunca rompe el ciclo si falla."""
+    try:
+        est = await session.get(WorkerEstado, "singleton")
+        if est is None:
+            est = WorkerEstado(id="singleton")
+            session.add(est)
+        ahora = ahora_lima()
+        est.ultimo_ciclo_inicio_at = inicio_at
+        est.ultimo_ciclo_ok_at = ahora
+        est.rucs_total = rucs_total
+        est.rucs_ok = rucs_ok
+        est.rucs_fallo = rucs_fallo
+        est.rucs_timeout = rucs_timeout
+        est.actualizado_at = ahora
+        await session.commit()
+    except Exception as e:
+        log(f"latido: no pude actualizar worker_estado (sigo): {e}", "WARN")
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+
+
 async def _procesar_solicitudes_manuales(session) -> int:
     """Scrapea YA los contribuyentes con flag de actualización (prioridad)."""
     solicitados = list(await session.scalars(
@@ -212,16 +296,16 @@ async def _procesar_solicitudes_manuales(session) -> int:
 
     log(f"PRIORIDAD: {len(solicitados)} actualización(es) solicitada(s).")
     for contrib in solicitados:
+        # Manual "Actualizar ahora" → INCREMENTAL (rápido), AISLADO por timeout.
+        await _procesar_ruc_aislado(session, contrib, forzar=True, full=False)
         try:
-            # Manual "Actualizar ahora" → INCREMENTAL (rápido). zAlerta-46.
-            await _procesar_y_notificar(session, contrib, forzar=True, full=False)
-        except Exception as e:
-            log(f"  {contrib.ruc}: error inesperado (manual): {e}", "ERROR")
-        finally:
             # Limpiar el flag tras el INTENTO (éxito o no) para no reprocesar en
             # bucle. Si falló, el ciclo de fondo lo reintentará por frescura.
             contrib.actualizar_solicitado = False
             await session.commit()
+        except Exception as e:
+            log(f"  {contrib.ruc}: no pude limpiar flag manual: {e}", "WARN")
+            await session.rollback()
     return len(solicitados)
 
 
@@ -379,17 +463,24 @@ async def _procesar_fondo(session, full: bool = False) -> int:
         .options(selectinload(Contribuyente.credencial))
         .where(Contribuyente.estado == EstadoContribuyente.ACTIVO)))
 
+    ok = fallo = timeout = 0
     for contrib in activos:
-        try:
-            antes_scr = contrib.ultimo_scrapeo_at
-            await _procesar_y_notificar(session, contrib, forzar=False, full=full)
-            # SUNAFIL (arranque controlado por SUNAFIL_RUCS): solo si está habilitado
-            # para el RUC y SUNAT REALMENTE scrapeó esta pasada (misma frescura → no
-            # martillea la casilla). Aislado: su fallo no rompe el ciclo.
-            if _sunafil_habilitado(contrib.ruc) and contrib.ultimo_scrapeo_at != antes_scr:
-                await _procesar_sunafil_seguro(session, contrib)
-        except Exception as e:
-            log(f"  {contrib.ruc}: error inesperado (fondo): {e}", "ERROR")
+        antes_scr = contrib.ultimo_scrapeo_at
+        estado = await _procesar_ruc_aislado(session, contrib, forzar=False, full=full)
+        if estado == "ok":
+            ok += 1
+        elif estado == "timeout":
+            timeout += 1
+        else:
+            fallo += 1
+        # SUNAFIL (arranque controlado por SUNAFIL_RUCS): solo si está habilitado,
+        # SUNAT leyó OK esta pasada y realmente scrapeó (misma frescura → no
+        # martillea la casilla). Aislado: su fallo no rompe el ciclo.
+        if (estado == "ok" and _sunafil_habilitado(contrib.ruc)
+                and contrib.ultimo_scrapeo_at != antes_scr):
+            await _procesar_sunafil_seguro(session, contrib)
+    _procesar_fondo.ultimo_conteo = {   # lo lee ciclo() para el latido
+        "total": len(activos), "ok": ok, "fallo": fallo, "timeout": timeout}
     return len(activos)
 
 
@@ -591,6 +682,7 @@ async def _enviar_push_agrupado(session) -> int:
 
 async def ciclo() -> None:
     """Un ciclo: primero solicitudes manuales (prioridad), luego frescura."""
+    inicio = ahora_lima()
     async with get_session() as session:
         # Validaciones, solicitudes manuales y recordatorios: SIEMPRE (los
         # recordatorios solo disparan en sus horarios 8/12/17).
@@ -602,9 +694,16 @@ async def ciclo() -> None:
         # FRESCURA_HORAS h), sin martillear. El push va aparte, por horario.
         full = _en_ventana_nocturna()
         n = await _procesar_fondo(session, full=full)
-        log(f"Ciclo completo ({n} activo(s); modo {'FULL nocturno' if full else 'incremental diurno'}).", "OK")
+        c = getattr(_procesar_fondo, "ultimo_conteo",
+                    {"total": n, "ok": n, "fallo": 0, "timeout": 0})
+        log(f"Ciclo completo ({n} activo(s); ok={c['ok']} fallo={c['fallo']} "
+            f"timeout={c['timeout']}; modo "
+            f"{'FULL nocturno' if full else 'incremental diurno'}).", "OK")
         # Push AGRUPADO en horarios fijos (zAlerta-48 FASE C).
         await _enviar_push_agrupado(session)
+        # LATIDO: sella el fin de un ciclo completo (lo vigila el watchdog externo).
+        await _actualizar_latido(session, inicio, c["total"], c["ok"],
+                                 c["fallo"], c["timeout"])
 
 
 async def main() -> None:
