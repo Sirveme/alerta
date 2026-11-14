@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="es" data-rol="soporte">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Salud del worker · interno</title>
+<style>
+  :root{
+    --fondo:#0E1117; --superficie:#161B24; --superficie-2:#1A1F2B;
+    --borde:#2E3548; --borde-fuerte:#3A4358; --texto:#F0F3F8; --texto-suave:#6B7689;
+    --verde:#3DD68C; --rojo:#F0526E; --ambar:#E8A53D; --ancho:1040px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--fondo);color:var(--texto);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.5;}
+  .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;
+    align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+    padding:11px 18px;background:color-mix(in srgb,var(--fondo) 88%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--borde);}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:.95rem;}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--verde);
+    box-shadow:0 0 0 4px color-mix(in srgb,var(--verde) 22%,transparent);}
+  .chip{font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:#0E1117;background:var(--verde);padding:3px 9px;border-radius:999px;}
+  .wrap{max-width:var(--ancho);margin:0 auto;padding-inline:18px;padding-block:22px 60px;}
+  h1{font-size:1.4rem;font-weight:800;margin:0 0 3px;letter-spacing:-.01em;}
+  .sub{color:var(--texto-suave);font-size:.85rem;margin:0 0 20px;}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:26px;}
+  .tile{background:var(--superficie);border:1px solid var(--borde);border-radius:16px;
+    padding:16px 16px 14px;border-left:4px solid var(--ac,var(--borde-fuerte));}
+  .tile.ok{--ac:var(--verde);} .tile.mal{--ac:var(--rojo);} .tile.neutro{--ac:var(--texto-suave);}
+  .tile h2{font-size:.76rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--texto-suave);margin:0 0 8px;}
+  .estado{font-size:1.18rem;font-weight:800;display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .estado .pin{width:10px;height:10px;border-radius:50%;background:var(--ac);flex:0 0 auto;}
+  .tile.ok .estado{color:var(--verde);} .tile.mal .estado{color:var(--rojo);}
+  .tile p{margin:3px 0 0;font-size:.84rem;color:var(--texto-suave);}
+  .tile b{color:var(--texto);}
+  .cap{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--texto-suave);margin:22px 0 10px;}
+  .tscroll{overflow-x:auto;border:1px solid var(--borde);border-radius:12px;}
+  table{border-collapse:collapse;width:100%;font-size:.84rem;}
+  th{background:var(--superficie-2);text-align:left;padding:9px 11px;font-weight:700;white-space:nowrap;}
+  td{padding:8px 11px;border-top:1px solid var(--borde);white-space:nowrap;}
+  .badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.72rem;font-weight:700;}
+  .b-ok{background:color-mix(in srgb,var(--verde) 16%,transparent);color:var(--verde);}
+  .b-mal{background:color-mix(in srgb,var(--rojo) 16%,transparent);color:var(--rojo);}
+  .b-neutro{background:var(--superficie-2);color:var(--texto-suave);}
+  .foot{margin-top:26px;color:var(--texto-suave);font-size:.78rem;line-height:1.6;
+    border-top:1px solid var(--borde);padding-top:14px;}
+  code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82em;
+    background:var(--superficie-2);border:1px solid var(--borde);border-radius:6px;padding:1px 5px;}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <div class="brand"><span class="dot" style="background:{{ '#F0526E' if worker.detenido else '#3DD68C' }}"></span> Salud del worker · alerta.pe</div>
+    <span class="chip">Soporte · interno</span>
+  </div>
+  <div class="wrap">
+    <h1>Salud del sistema</h1>
+    <p class="sub">Generado {{ generado }} (hora Lima). Umbral de "detenido": {{ umbral_horas }}h sin ciclo completo.</p>
+
+    <div class="tiles">
+      <!-- 1) WORKER DETENIDO -->
+      <div class="tile {{ 'mal' if worker.detenido else 'ok' }}">
+        <h2>1 · Worker</h2>
+        <div class="estado"><span class="pin"></span>{{ 'DETENIDO' if worker.detenido else 'Activo' }}</div>
+        <p>Último ciclo completo: <b>{{ worker.ciclo_ok_at }}</b>{% if worker.edad_h %} ({{ worker.edad_h }}h){% endif %}.</p>
+        <p>Último ciclo: {{ worker.rucs_ok }} ok · {{ worker.rucs_fallo }} fallo · {{ worker.rucs_timeout }} timeout.</p>
+        {% if worker.detenido %}<p><b>Acción:</b> revisar <code>alertape-worker</code> en Railway.</p>{% endif %}
+      </div>
+      <!-- 2) SIN NOVEDADES -->
+      <div class="tile neutro">
+        <h2>2 · Novedades</h2>
+        <div class="estado" style="color:var(--texto)"><span class="pin"></span>{{ 'Sin novedades' if novedades.no_leidos == 0 else 'Con fallos de lectura' }}</div>
+        <p>Última notificación ingerida: <b>{{ novedades.ultima_notif }}</b>.</p>
+        <p>{{ novedades.no_leidos }} RUC(s) con "no se pudo leer".</p>
+      </div>
+      <!-- 3) PUSH NO ENTREGADO -->
+      <div class="tile {{ 'mal' if push.problema else 'ok' }}">
+        <h2>3 · Push</h2>
+        <div class="estado"><span class="pin"></span>{{ 'Revisar entrega' if push.problema else 'OK' }}</div>
+        <p>VAPID configurado: <b>{{ 'sí' if push.vapid_ok else 'NO' }}</b>.</p>
+        <p>Suscripciones: <b>{{ push.subs_activas }}</b> activas · {{ push.subs_muertas }} muertas.</p>
+        <p>Pendientes de envío: {{ push.pendientes }}.</p>
+      </div>
+    </div>
+
+    <div class="cap">Por RUC</div>
+    <div class="tscroll">
+      <table>
+        <thead><tr><th>RUC</th><th>Razón social</th><th>Último intento</th><th>Lectura</th><th>Motivo fallo</th><th>Fecha fallo</th></tr></thead>
+        <tbody>
+          {% for r in rucs %}
+          <tr>
+            <td>{{ r.ruc }}</td>
+            <td>{{ r.razon }}</td>
+            <td>{{ r.ultimo }}</td>
+            <td>{% if r.ok %}<span class="badge b-ok">leyó</span>{% elif r.no_leido %}<span class="badge b-mal">no se pudo leer</span>{% else %}<span class="badge b-neutro">—</span>{% endif %}</td>
+            <td>{{ r.motivo }}</td>
+            <td>{{ r.error_at }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="foot">
+      Tres situaciones separadas a propósito: <b>worker detenido</b> (latido viejo) ≠
+      <b>sin novedades</b> (revisó y no hay) ≠ <b>push no entregado</b> (VAPID/suscripciones).
+      El latido lo escribe el worker al cerrar cada ciclo; el <code>vigilante.py</code> externo
+      avisa por Telegram y correo si se detiene.
+    </div>
+  </div>
+</body>
+</html>

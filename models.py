@@ -428,6 +428,11 @@ class Contribuyente(Base, TimestampMixin):
     # Control de scraping
     ultimo_scrapeo_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ultimo_scrapeo_ok: Mapped[bool | None] = mapped_column(Boolean)
+    # MOTIVO del último fallo (no colapsar todo a "clave"): 'login' (clave real),
+    # 'timeout' (se colgó/superó su tiempo máximo), 'red' (SUNAT/red), 'otro'.
+    # Separa el fallo de credencial de los fallos técnicos (bug de confianza).
+    ultimo_error_motivo: Mapped[str | None] = mapped_column(String(20))
+    ultimo_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Último barrido COMPLETO exitoso (zAlerta-46). El incremental solo se activa
     # si esto existe (hubo un full previo = base contra la que comparar). El primer
     # scan y el barrido nocturno lo setean.
@@ -1648,3 +1653,25 @@ class Evidencia(Base):
         DateTime(timezone=True), default=ahora_lima, nullable=False)
 
     instruccion: Mapped["Instruccion | None"] = relationship(back_populates="evidencias")
+
+
+class WorkerEstado(Base):
+    """Latido (heartbeat) del worker de scraping. UNA sola fila (id='singleton').
+    El worker la actualiza al TERMINAR cada ciclo completo; el vigilante externo
+    y el panel la leen. Si `ultimo_ciclo_ok_at` está viejo → el worker está
+    detenido/colgado (un proceso vivo-pero-congelado no se auto-detecta: por eso
+    el vigilante es EXTERNO)."""
+    __tablename__ = "worker_estado"
+
+    id: Mapped[str] = mapped_column(String(20), primary_key=True, default="singleton")
+    ultimo_ciclo_inicio_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ultimo_ciclo_ok_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Conteos del último ciclo completo.
+    rucs_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rucs_ok: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rucs_fallo: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rucs_timeout: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    detalle_json: Mapped[dict | None] = mapped_column(JSONB)
+    # Anti-spam del vigilante: cuándo avisó por última vez que está caído.
+    ultima_alerta_caido_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    actualizado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
