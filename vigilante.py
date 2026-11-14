@@ -9,28 +9,31 @@ completar ciclos 3 semanas, sin que nadie se enterara).
 
 Ejecución:
   - Cron (recomendado): `python vigilante.py`  → un chequeo y sale. Programar
-    cada ~15-30 min (Railway Cron, o cron externo / uptime).
-  - Loop:  `python vigilante.py --loop`  → chequea cada VIGILANTE_INTERVALO_SEG.
+    cada 15 min (Railway Cron).
+  - Loop:   `python vigilante.py --loop`  → chequea cada VIGILANTE_INTERVALO_SEG.
+  - Prueba: `python vigilante.py --test`  → manda una alerta de PRUEBA ya mismo
+    (Telegram + correo), sin mirar el latido. Para verificar el cableado.
 
 ENV:
   VIGILANTE_UMBRAL_HORAS   (default 2)   — sin ciclo completo => alerta
   VIGILANTE_COOLDOWN_HORAS (default 6)   — no repetir alerta antes de esto
   VIGILANTE_INTERVALO_SEG  (default 900) — solo en --loop
-  TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID   — alerta Telegram (si faltan, se omite)
-  SMTP_HOST, SMTP_PORT (587), SMTP_USER, SMTP_PASS, ALERTA_EMAIL_TO, ALERTA_EMAIL_FROM
-                                          — alerta correo (si faltan, se omite)
+  TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID   — Telegram (el MISMO bot de Facturalo).
+  RESEND_API_KEY                         — correo por Resend (HTTP API).
+  ALERTA_EMAIL_TO                        — destinatario del correo.
+  ALERTA_EMAIL_FROM (default onboarding@resend.dev) — remitente Resend.
+Si falta cualquiera de un canal, ese canal se omite (no rompe).
 """
 from __future__ import annotations
 
 import asyncio
 import os
-import smtplib
 import sys
 from datetime import timedelta
-from email.message import EmailMessage
 
-from db import get_session, engine
 from models import WorkerEstado, ahora_lima
+# `db` se importa de forma PEREZOSA (dentro de las funciones) para que
+# `--test` funcione aunque no haya DATABASE_URL (solo prueba Telegram/Resend).
 
 try:
     from dotenv import load_dotenv
@@ -76,33 +79,33 @@ def _enviar_telegram(texto: str) -> bool:
 
 
 def _enviar_correo(asunto: str, cuerpo: str) -> bool:
-    host = os.getenv("SMTP_HOST", "")
+    """Correo vía Resend (HTTP API). Remitente onboarding@resend.dev por defecto."""
+    api = os.getenv("RESEND_API_KEY", "")
     to = os.getenv("ALERTA_EMAIL_TO", "")
-    if not host or not to:
-        log("Correo no configurado (SMTP_HOST/ALERTA_EMAIL_TO) — omito.", "WARN")
+    if not api or not to:
+        log("Correo no configurado (RESEND_API_KEY/ALERTA_EMAIL_TO) — omito.", "WARN")
         return False
+    remitente = os.getenv("ALERTA_EMAIL_FROM", "onboarding@resend.dev")
     try:
-        msg = EmailMessage()
-        msg["Subject"] = asunto
-        msg["From"] = os.getenv("ALERTA_EMAIL_FROM") or os.getenv("SMTP_USER", to)
-        msg["To"] = to
-        msg.set_content(cuerpo)
-        port = int(os.getenv("SMTP_PORT", "587"))
-        with smtplib.SMTP(host, port, timeout=25) as s:
-            s.starttls()
-            user, pw = os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASS", "")
-            if user:
-                s.login(user, pw)
-            s.send_message(msg)
-        log("Correo enviado.", "OK")
-        return True
+        import httpx
+        r = httpx.post("https://api.resend.com/emails",
+                       headers={"Authorization": f"Bearer {api}",
+                                "Content-Type": "application/json"},
+                       json={"from": remitente, "to": [to],
+                             "subject": asunto, "text": cuerpo},
+                       timeout=25)
+        ok = r.status_code in (200, 201)
+        log(f"Correo (Resend) enviado: {ok} (HTTP {r.status_code})",
+            "OK" if ok else "ERROR")
+        return ok
     except Exception as e:
-        log(f"Correo falló: {e}", "ERROR")
+        log(f"Correo (Resend) falló: {e}", "ERROR")
         return False
 
 
 async def _chequear_una_vez() -> bool:
     """Devuelve True si está SANO, False si alertó (o intentó) por caído."""
+    from db import get_session
     async with get_session() as session:
         est = await session.get(WorkerEstado, "singleton")
         ahora = ahora_lima()
@@ -142,7 +145,24 @@ async def _chequear_una_vez() -> bool:
         return False
 
 
+def _alerta_prueba() -> None:
+    """Manda una alerta de PRUEBA ya mismo (no mira el latido). Verifica cableado."""
+    ahora = ahora_lima()
+    texto = (f"✅ alerta.pe · PRUEBA del vigilante\n"
+             f"Si lees esto, Telegram y/o Resend están bien cableados. "
+             f"Hora Lima: {ahora.strftime('%d/%m/%Y %H:%M')}.")
+    log("PRUEBA — enviando alerta por los dos canales.")
+    t = _enviar_telegram(texto)
+    c = _enviar_correo("✅ alerta.pe — prueba del vigilante", texto)
+    log(f"Resultado prueba: Telegram={t} · Correo={c}",
+        "OK" if (t or c) else "ERROR")
+
+
 async def _main():
+    if "--test" in sys.argv:
+        _alerta_prueba()   # no toca la BD
+        return
+    from db import engine
     loop = "--loop" in sys.argv
     if not loop:
         await _chequear_una_vez()
