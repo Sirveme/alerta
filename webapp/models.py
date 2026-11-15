@@ -276,6 +276,11 @@ class EstudioContable(Base, TimestampMixin):
     codigo_fundador: Mapped[str | None] = mapped_column(String(20), unique=True)
     fundador_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Estudio de DEMO (para videos): sigue ACTIVO y visible en la app, pero el
+    # worker lo IGNORA en su ciclo de fondo (no scrapea sus contribuyentes, no
+    # gasta ciclos ni genera ruido de log). Sus notificaciones son data sembrada.
+    es_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     # WhatsApp de contacto (con código país). Clave para el onboarding viral
     # del empresario (zAlerta-06 A.4 / C).
     whatsapp: Mapped[str | None] = mapped_column(String(20))
