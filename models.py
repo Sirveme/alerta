@@ -1675,3 +1675,139 @@ class WorkerEstado(Base):
     # Anti-spam del vigilante: cuándo avisó por última vez que está caído.
     ultima_alerta_caido_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     actualizado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+# ═════════════════════════════════════════════════════════════════════
+# Declaraciones y Pagos (proyecto decl-diag) — HTML-first.
+# Fuentes SOL (solo lectura):
+#   · 01 Consulta general  (consultaS01Alias?accion=consgeneral): rejilla por
+#     PERÍODO con banco, código-tributo e IMPORTE PAGADO en HTML.
+#   · 02 Consulta de DDJJ y pagos (cdpS01Alias): lista de presentaciones por
+#     FECHA DE PRESENTACIÓN + enlace a la constancia (PDF, fase posterior).
+# NO se escribe en prod hasta aprobar la migración (migrar_declaraciones.py).
+# ═════════════════════════════════════════════════════════════════════
+class DeclaracionJurada(Base, TimestampMixin):
+    """Una PRESENTACIÓN de declaración jurada (formulario tipo DJ: 0621, 0601,
+    PDT621, etc.). Una presentación = una fila. Las rectificatorias de un mismo
+    período+formulario conviven (se conservan todas); la de mayor fecha/num_orden
+    queda `es_vigente=True`. Se llena desde 01 (filas 0621) y 02."""
+    __tablename__ = "declaraciones_juradas"
+    __table_args__ = (
+        # num_orden identifica la presentación de forma única en SOL.
+        UniqueConstraint("contribuyente_id", "num_orden",
+                         name="uq_declaracion_numorden"),
+        Index("ix_declaracion_contrib_periodo", "contribuyente_id", "periodo"),
+        Index("ix_declaracion_vigente", "contribuyente_id", "periodo", "es_vigente"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    # Tenant directo (deriva del contribuyente). El filtro fuerte es contribuyente_id.
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        index=True)
+
+    periodo: Mapped[str] = mapped_column(String(6), nullable=False)   # AAAAMM
+    cod_formulario: Mapped[str] = mapped_column(String(10), nullable=False)  # 0621…
+    desc_formulario: Mapped[str | None] = mapped_column(String(120))
+    num_orden: Mapped[str] = mapped_column(String(20), nullable=False)
+    fecha_presentacion: Mapped[datetime | None] = mapped_column(Date)
+
+    # Rectificatorias: todas se conservan; la última por período+formulario vigente.
+    es_rectificatoria: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    es_vigente: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Importe pagado JUNTO con la declaración (de 01). Los pagos por boleta 1662
+    # van en PagoTributario. NULL = no informado / "-".
+    importe_pagado: Mapped[float | None] = mapped_column(Numeric(14, 2))
+
+    origen: Mapped[str | None] = mapped_column(String(2))    # '01' | '02'
+    fuente_hash: Mapped[str | None] = mapped_column(String(64))  # dedup/cambio
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+
+    tributos: Mapped[list["DeclaracionTributo"]] = relationship(
+        back_populates="declaracion", cascade="all, delete-orphan")
+
+
+class PagoTributario(Base, TimestampMixin):
+    """Un PAGO tributario (boleta 1662 "BOLETA DE PAGO - VIRTUAL", u otro pago
+    por período). Trae banco, código de tributo e importe, todo en HTML (01).
+    Se vincula al período; el enlace opcional a la DJ del mismo período es
+    informativo (no financiero)."""
+    __tablename__ = "pagos_tributarios"
+    __table_args__ = (
+        UniqueConstraint("contribuyente_id", "num_orden",
+                         name="uq_pago_numorden"),
+        Index("ix_pago_contrib_periodo", "contribuyente_id", "periodo"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        index=True)
+
+    periodo: Mapped[str] = mapped_column(String(6), nullable=False)   # AAAAMM
+    cod_formulario: Mapped[str | None] = mapped_column(String(10))    # 1662…
+    desc_formulario: Mapped[str | None] = mapped_column(String(120))
+    num_orden: Mapped[str] = mapped_column(String(20), nullable=False)
+    fecha_pago: Mapped[datetime | None] = mapped_column(Date)  # = fecha de presentación en 01
+
+    banco_receptor: Mapped[str | None] = mapped_column(String(60))
+    cod_tributo: Mapped[str | None] = mapped_column(
+        String(10), ForeignKey("tributos.codigo"))
+    importe: Mapped[float | None] = mapped_column(Numeric(14, 2))
+
+    # Vínculo informativo a la DJ del mismo período (puede quedar NULL).
+    declaracion_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("declaraciones_juradas.id", ondelete="SET NULL"),
+        index=True)
+
+    origen: Mapped[str | None] = mapped_column(String(2))
+    fuente_hash: Mapped[str | None] = mapped_column(String(64))
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+
+    tributo: Mapped["Tributo | None"] = relationship()
+
+
+class DeclaracionTributo(Base):
+    """Desglose POR TRIBUTO de una declaración/pago (período × tributo fino:
+    IGV, Renta, EsSalud, ONP…). FASE POSTERIOR: su fuente rica es la constancia
+    0621 (PDF, `obtener_constanciaNP`) o el 'Detalle de Tributos Pagados' del 1662
+    (HTML, `verDetalleTributos`→vpS01Alias). Se deja definida; se puebla cuando se
+    habilite esa fase. `periodo_tributo` se NORMALIZA a AAAAMM (el de los detalles
+    valorados suele venir como texto libre; ver [[DetalleValorado.periodo]])."""
+    __tablename__ = "declaraciones_tributos"
+    __table_args__ = (
+        Index("ix_decltrib_decl", "declaracion_id"),
+        Index("ix_decltrib_periodo_trib", "periodo_tributo", "cod_tributo"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    declaracion_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("declaraciones_juradas.id", ondelete="CASCADE"),
+        index=True)
+    pago_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("pagos_tributarios.id", ondelete="CASCADE"),
+        index=True)
+
+    periodo_tributo: Mapped[str | None] = mapped_column(String(6))   # AAAAMM normalizado
+    cod_tributo: Mapped[str | None] = mapped_column(
+        String(10), ForeignKey("tributos.codigo"))
+    desc_tributo: Mapped[str | None] = mapped_column(String(160))
+
+    # Del PDF de la constancia 0621: "Total Deuda" vs "Monto Pago".
+    importe_declarado: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    importe_pagado: Mapped[float | None] = mapped_column(Numeric(14, 2))
+
+    origen: Mapped[str | None] = mapped_column(String(20))   # 'constancia_pdf'|'detalle_1662'
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+
+    declaracion: Mapped["DeclaracionJurada | None"] = relationship(back_populates="tributos")
+    tributo: Mapped["Tributo | None"] = relationship()
