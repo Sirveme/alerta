@@ -879,6 +879,17 @@ async def procesar_decl_diag2(session, contrib: Contribuyente,
         log(f"    · {pant.get('slug')}: {pant.get('estado', '—')} "
             f"({len(tablas)} tabla(s), {cols} encabezado(s)) "
             f"{pant.get('detalle', '')}".rstrip())
+    red_n = len(res.get("red", []))
+    carpeta = res.get("carpeta")
+    # SIN ACCESO: el usuario SOL (secundario) no tiene el perfil para esas opciones.
+    # Es acción del CONTADOR (asignar el perfil en SOL), no una falla del sistema.
+    sin_acc = res.get("pantallas_sin_acceso", [])
+    if sin_acc:
+        log(f"  {contrib.ruc}: DECL-DIAG2 SIN ACCESO — el contador debe asignar el "
+            f"perfil SOL para: {', '.join(sin_acc)}. Si lo acaba de asignar, puede "
+            f"tardar unos minutos en propagarse. Vuelve a correr luego. "
+            f"Volcado en {carpeta}.", "WARN")
+    # CON ERRORES: falla nuestra o de SUNAT (no es un permiso del contador).
     errores = res.get("pantallas_error", [])
     if errores:
         detalle = "; ".join(
@@ -886,11 +897,11 @@ async def procesar_decl_diag2(session, contrib: Contribuyente,
             + (f" ({e.get('aviso')})" if e.get("aviso") else "")
             for e in errores)
         log(f"  {contrib.ruc}: DECL-DIAG2 CON ERRORES — {len(errores)} pantalla(s): "
-            f"{detalle}. {len(res.get('red', []))} petición(es) de red. "
-            f"Volcado en {res.get('carpeta')}. NO se escribió en la BD.", "ERROR")
-    else:
-        log(f"  {contrib.ruc}: DECL-DIAG2 OK — {len(res.get('red', []))} petición(es) "
-            f"de red. Volcado en {res.get('carpeta')}. NO se escribió en la BD.", "OK")
+            f"{detalle}. {red_n} petición(es) de red. "
+            f"Volcado en {carpeta}. NO se escribió en la BD.", "ERROR")
+    if not errores and not sin_acc:
+        log(f"  {contrib.ruc}: DECL-DIAG2 OK — {red_n} petición(es) "
+            f"de red. Volcado en {carpeta}. NO se escribió en la BD.", "OK")
     return len(res.get("pantallas", []))
 
 

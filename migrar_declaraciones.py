@@ -68,7 +68,10 @@ DDL = [
         num_orden           VARCHAR(20) NOT NULL,
         fecha_pago          DATE,
         banco_receptor      VARCHAR(60),
-        cod_tributo         VARCHAR(10) REFERENCES tributos(codigo),
+        -- Tributo fiscal real (del Detalle de Tributos Pagados). SIN FK a tributos:
+        -- SUNAT puede devolver códigos fuera de nuestro catálogo (p.ej. 3121 MYPE) y
+        -- la FK haría fallar la carga. La descripción va en declaraciones_tributos.
+        cod_tributo         VARCHAR(10),
         cod_tributo_boleta  VARCHAR(10),
         importe             NUMERIC(14,2),
         declaracion_id      UUID REFERENCES declaraciones_juradas(id) ON DELETE SET NULL,
@@ -92,8 +95,10 @@ DDL = [
         declaracion_id      UUID REFERENCES declaraciones_juradas(id) ON DELETE CASCADE,
         pago_id             UUID REFERENCES pagos_tributarios(id) ON DELETE CASCADE,
         periodo_tributo     VARCHAR(6),
-        cod_tributo         VARCHAR(10) REFERENCES tributos(codigo),
+        cod_tributo         VARCHAR(10),          -- SIN FK (ver nota en pagos_tributarios)
         desc_tributo        VARCHAR(160),
+        casilla             VARCHAR(10),
+        concepto            VARCHAR(40),          -- 'Monto Pagado'|'Monto Imputado'|'Monto de la Deuda'
         importe_declarado   NUMERIC(14,2),
         importe_pagado      NUMERIC(14,2),
         origen              VARCHAR(20),

@@ -1759,10 +1759,14 @@ class PagoTributario(Base, TimestampMixin):
     fecha_pago: Mapped[datetime | None] = mapped_column(Date)  # = fecha de presentación en 01
 
     banco_receptor: Mapped[str | None] = mapped_column(String(60))
-    # Tributo FISCAL (IGV/Renta/RUS…), FK al catálogo. En una boleta 1662 la 01 NO
-    # lo trae: queda NULL hasta resolverlo con el "Detalle de Tributos Pagados".
-    cod_tributo: Mapped[str | None] = mapped_column(
-        String(10), ForeignKey("tributos.codigo"))
+    # Tributo FISCAL (IGV/Renta/RUS…). En una boleta 1662/1663 la 01 NO lo trae:
+    # queda NULL hasta resolverlo con el "Detalle de Tributos Pagados" (vpS01Alias),
+    # que puede devolver códigos que NO están en nuestro catálogo `tributos` (p.ej.
+    # 3121 Renta MYPE). Por eso SIN FK: se guarda el código tal cual lo da SUNAT (la
+    # descripción autoritativa va en DeclaracionTributo.desc_tributo). Si se quisiera
+    # la FK, el cargador tendría que upsertar antes el catálogo, y un código nuevo
+    # rompería la carga. Preferimos no romper la carga por un código no sembrado.
+    cod_tributo: Mapped[str | None] = mapped_column(String(10))
     # Código CRUDO de la columna "Codigo-Tributo" de la boleta (p.ej. 0018). NO es
     # el tributo fiscal ni está en el catálogo `tributos` → SIN FK. Solo trazabilidad.
     cod_tributo_boleta: Mapped[str | None] = mapped_column(String(10))
@@ -1776,8 +1780,7 @@ class PagoTributario(Base, TimestampMixin):
     origen: Mapped[str | None] = mapped_column(String(2))
     fuente_hash: Mapped[str | None] = mapped_column(String(64))
     parser_version: Mapped[str | None] = mapped_column(String(20))
-
-    tributo: Mapped["Tributo | None"] = relationship()
+    # (sin relationship a Tributo: cod_tributo ya no es FK; ver nota arriba)
 
 
 class DeclaracionTributo(Base):
@@ -1803,9 +1806,14 @@ class DeclaracionTributo(Base):
         index=True)
 
     periodo_tributo: Mapped[str | None] = mapped_column(String(6))   # AAAAMM normalizado
-    cod_tributo: Mapped[str | None] = mapped_column(
-        String(10), ForeignKey("tributos.codigo"))
+    # Tributo real del "Detalle de Tributos Pagados" (p.ej. 3121). SIN FK: SUNAT puede
+    # devolver códigos fuera del catálogo `tributos`; la descripción va al lado.
+    cod_tributo: Mapped[str | None] = mapped_column(String(10))
     desc_tributo: Mapped[str | None] = mapped_column(String(160))
+    # Del Detalle HTML: casilla (p.ej. 404) y sección/concepto ('Monto Pagado',
+    # 'Monto Imputado', 'Monto de la Deuda') para no mezclar pagado con imputado.
+    casilla: Mapped[str | None] = mapped_column(String(10))
+    concepto: Mapped[str | None] = mapped_column(String(40))
 
     # Del PDF de la constancia 0621: "Total Deuda" vs "Monto Pago".
     importe_declarado: Mapped[float | None] = mapped_column(Numeric(14, 2))
@@ -1815,7 +1823,7 @@ class DeclaracionTributo(Base):
     parser_version: Mapped[str | None] = mapped_column(String(20))
 
     declaracion: Mapped["DeclaracionJurada | None"] = relationship(back_populates="tributos")
-    tributo: Mapped["Tributo | None"] = relationship()
+    # (sin relationship a Tributo: cod_tributo ya no es FK)
 
 
 # ═════════════════════════════════════════════════════════════════════

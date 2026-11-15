@@ -201,6 +201,17 @@ def _hay_marcador(texto: str, marcadores) -> bool:
     return any(m in texto for m in marcadores)
 
 
+def _sin_acceso_visible(page) -> bool:
+    """True si la página/frames ya muestran el aviso de falta de permiso/perfil SOL
+    (usuario secundario sin la opción, p.ej. 'acceso no autorizado'). Permite ABORTAR
+    las esperas de iframe sin gastar el timeout completo (antes se perdían ~3 min por
+    RUC sin acceso esperando un frame de operación que nunca iba a cargar)."""
+    try:
+        return _hay_marcador(_texto_scopes(page), _MARCA_SIN_ACCESO)
+    except Exception:
+        return False
+
+
 def _tabla_es_resultado(t: dict) -> bool:
     heads = " ".join(t.get("encabezados") or []).lower()
     return sum(1 for k in _SIG_ENCABEZADOS if k in heads) >= 2
@@ -481,10 +492,13 @@ def _frame_con(page, selector: str):
 
 
 def _esperar_frame_url(page, frag: str, timeout_s: float = 20.0,
-                       intervalo: float = 0.5):
+                       intervalo: float = 0.5, abortar_si=None):
     """Espera a que el frame de la OPERACIÓN (iframe ifrVCE) haya navegado: busca
     un frame cuya URL contenga `frag` (p.ej. 'cdpS01Alias'). Evita volcar el
-    formulario antes de que cargue (quedaría con 0 tablas)."""
+    formulario antes de que cargue (quedaría con 0 tablas).
+
+    `abortar_si(page)->bool`: si devuelve True (p.ej. ya se ve 'acceso no
+    autorizado'), corta la espera y devuelve None sin agotar el timeout."""
     frag = (frag or "").lower()
     if not frag:
         return None
@@ -494,6 +508,12 @@ def _esperar_frame_url(page, frag: str, timeout_s: float = 20.0,
             try:
                 if frag in (fr.url or "").lower():
                     return fr
+            except Exception:
+                pass
+        if abortar_si is not None:
+            try:
+                if abortar_si(page):
+                    return None
             except Exception:
                 pass
         if time.monotonic() >= fin:
@@ -798,7 +818,10 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                     else:
                         # Esperar a que el iframe de la operación cargue (async)
                         # antes de volcar la estructura, si no sale con 0 tablas.
-                        _esperar_frame_url(page, tg.get("url_frag", ""), 20)
+                        # Si ya se ve 'acceso no autorizado' (usuario secundario sin
+                        # perfil), abortar la espera: no gastar el timeout en vano.
+                        _esperar_frame_url(page, tg.get("url_frag", ""), 20,
+                                           abortar_si=_sin_acceso_visible)
                         info = _volcar(page, carpeta, tg["slug"], cfg)
                         info["estado"] = _estado_desde(info)
                         info["at"] = ahora
@@ -812,6 +835,13 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
 
                 # Pantalla 01 (Consulta general): enviar filtro de período y volcar
                 # la grilla período×tributo×importe pagado.
+                # Si el usuario NO tiene acceso a esta opción (secundario sin perfil),
+                # no tiene sentido enviar el filtro/rango: se salta directo a la
+                # siguiente pantalla. Así no se pierden ~30-60 s por sub-paso.
+                if info["estado"] == "sin_acceso":
+                    _pausa()
+                    continue
+
                 if tg["slug"] == "01_consulta_general" and info["estado"] != "no_se_pudo_leer":
                     try:
                         cur["t"] = "01_resultados"
@@ -820,7 +850,10 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                             reabrir=lambda: _ir_por_codigo(
                                 page, tg["code"], tg["desc"]))
                         r = _volcar(page, carpeta, "01_consulta_general_resultados", cfg)
-                        if aviso01 or not _hay_resultados_01(page):
+                        if r.get("sin_acceso"):
+                            # El filtro reveló falta de perfil: NO es error_filtro.
+                            r["estado"] = "sin_acceso"
+                        elif aviso01 or not _hay_resultados_01(page):
                             # El formulario NO avanzó a resultados: es un error de
                             # filtro/navegación, NO "sin datos" (confundirlos haría
                             # ver un fallo como "no hay declaraciones" → grave).
@@ -855,7 +888,9 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                             reabrir=lambda: _ir_por_codigo(
                                 page, tg["code"], tg["desc"]))
                         r = _volcar(page, carpeta, "02_djj_pagos_resultados", cfg)
-                        if aviso02:
+                        if r.get("sin_acceso"):
+                            r["estado"] = "sin_acceso"
+                        elif aviso02:
                             # El form no cargó: error de navegación, NO "sin datos".
                             r["estado"] = "error_filtro"
                             r["aviso"] = aviso02
@@ -878,12 +913,20 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
             # falle. Las pantallas con error se listan aparte para que el resumen
             # NO cante "OK" si hubo error_filtro/no_se_pudo_leer.
             res["exito"] = True
+            # SIN ACCESO (el contador debe asignar el perfil SOL) ≠ CON ERRORES
+            # (falla nuestra o de SUNAT). Se separan para no asustar al contador con
+            # un "error" cuando en realidad es un permiso que él mismo debe habilitar.
             res["pantallas_error"] = [
                 {"slug": p.get("slug"), "estado": p.get("estado"),
                  "aviso": p.get("aviso") or p.get("detalle")}
                 for p in res["pantallas"]
                 if p.get("estado") in ("error_filtro", "no_se_pudo_leer")]
             res["con_errores"] = bool(res["pantallas_error"])
+            res["pantallas_sin_acceso"] = sorted({
+                p.get("pantalla") or p.get("slug")
+                for p in res["pantallas"]
+                if p.get("estado") == "sin_acceso"})
+            res["sin_acceso"] = bool(res["pantallas_sin_acceso"])
         finally:
             try:
                 ctx.close(); nav.close()

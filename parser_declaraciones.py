@@ -303,6 +303,133 @@ def parse_djj_pagos(html: str) -> dict:
     return {"total": total, "presentaciones": pres}
 
 
+# ───────────────────── 04 Detalle de Tributos Pagados ─────────────────────────
+# Pantalla `vpS01Alias` (verDetalleTributos). Es la ÚNICA fuente del tributo fiscal
+# real de una BOLETA de pago (1662/1663): la grilla 01 trae en "Codigo-Tributo" un
+# código de la BOLETA (p.ej. 0018) o un '-', NO el tributo (IGV 1011 / Renta 3031 /
+# Mype 3121 / RUS 4131…). Aquí sí viene "3121-RENTA - REGIMEN MYPE TRIBUTARIO".
+#
+# Estructura (volcado 15/11/2026, RUC 20615643735, boleta 1663, orden 231473849):
+#   Cabecera: RUC, Formulario ("1663 - BOLETA DE PAGO - NPS"), Fecha de
+#             presentación, Periodo (202610), Número de Orden en Formulario.
+#   Tabla(s) #tblVeriPagoRptaUno/Dos/Tres, cada una bajo un <strong> de sección
+#   ("Monto Pagado", y de haberlos "Monto Imputado"/"Monto de la Deuda"):
+#       Casilla | Codigo - Descripción del Tributo | Importe
+#       404     | 3121-RENTA - REGIMEN MYPE TRIBUTARIO | 69.00
+_RE_COD_DESC = re.compile(r"^\s*(\d{3,6})\s*-\s*(.+?)\s*$", re.S)
+
+
+def _num_mixto(txt: str | None) -> Decimal | None:
+    """Importe tolerante al formato: el Detalle usa punto decimal ('69.00'), la
+    grilla 01 usa coma ('69,00'). Regla: el separador más a la DERECHA es el
+    decimal; el resto son miles. Maneja '1,234.56', '1.234,56', '69.00', '17,00'."""
+    if txt is None:
+        return None
+    t = txt.replace("\xa0", " ").strip()
+    if t in ("", "-", "--"):
+        return None
+    neg = t.startswith("-") and any(c.isdigit() for c in t)
+    t = re.sub(r"[^0-9,.]", "", t)
+    if not re.search(r"\d", t):
+        return None
+    ultimo = max(t.rfind(","), t.rfind("."))
+    if ultimo == -1:
+        ent, dec = t, ""
+    else:
+        ent = re.sub(r"[,.]", "", t[:ultimo])
+        dec = re.sub(r"[^0-9]", "", t[ultimo + 1:])
+    norm = ent + ("." + dec if dec else "")
+    try:
+        v = Decimal(norm or "0")
+    except InvalidOperation:
+        return None
+    return -v if neg else v
+
+
+def parse_detalle_tributos(html: str) -> dict:
+    """Parsea el 'Detalle de Tributos Pagados' (pantalla 04). Devuelve:
+        {
+          'cabecera': {ruc, cod_formulario, desc_formulario, fecha_presentacion,
+                       periodo, num_orden},
+          'tributos': [ {seccion, casilla, cod_tributo, desc_tributo, importe} ],
+        }
+    `cod_tributo` es el código FISCAL real (apto para la FK a `tributos`, salvo que
+    no exista en el catálogo: en ese caso el cargador lo deja en NULL y conserva la
+    descripción). NO escribe en BD.
+    """
+    s = _soup(html)
+    texto = s.get_text(" ", strip=True)
+    cab = {"ruc": None, "cod_formulario": None, "desc_formulario": None,
+           "fecha_presentacion": None, "periodo": None, "num_orden": None}
+    m = re.search(r"RUC\s*:?\s*(\d{11})", texto)
+    if m:
+        cab["ruc"] = m.group(1)
+    m = re.search(r"Formulario\s*:?\s*(\d{3,4})\s*-\s*(.+?)\s+Fecha de presentaci",
+                  texto)
+    if m:
+        cab["cod_formulario"] = m.group(1)
+        cab["desc_formulario"] = m.group(2).strip()
+    m = re.search(r"Fecha de presentaci\w*n\s*:?\s*(\d{2}/\d{2}/\d{4})", texto)
+    if m:
+        cab["fecha_presentacion"] = _fecha(m.group(1))
+    m = re.search(r"Periodo\s*:?\s*(\d{6})", texto)
+    if m:
+        cab["periodo"] = m.group(1)
+    m = re.search(r"Orden en Formulario\s*:?\s*(\d+)", texto)
+    if m:
+        cab["num_orden"] = m.group(1)
+
+    tributos: list[dict] = []
+    for tabla in s.find_all("table"):
+        tid = (tabla.get("id") or "")
+        if not tid.startswith("tblVeriPagoRpta"):
+            continue
+        prev = tabla.find_previous("strong")
+        seccion = _limpia(prev.get_text()) if prev else None
+        cuerpo = tabla.find("tbody") or tabla
+        for tr in cuerpo.find_all("tr"):
+            celdas = tr.find_all("td")
+            if len(celdas) < 3:
+                continue
+            casilla = _limpia(celdas[0].get_text())
+            cod_desc = (celdas[1].get_text() or "").replace("\xa0", " ").strip()
+            importe = _num_mixto(celdas[2].get_text())
+            cod_trib, desc_trib = None, _limpia(cod_desc)
+            mc = _RE_COD_DESC.match(cod_desc)
+            if mc:
+                cod_trib = mc.group(1)
+                desc_trib = mc.group(2).strip()
+            if not (cod_trib or desc_trib or importe is not None):
+                continue
+            tributos.append({
+                "seccion": seccion, "casilla": casilla,
+                "cod_tributo": cod_trib, "desc_tributo": desc_trib,
+                "importe": importe,
+            })
+    return {"cabecera": cab, "tributos": tributos}
+
+
+def aplicar_detalle_a_pagos(pagos: list[dict], detalles: list[dict]) -> None:
+    """Cruza los Detalles (parse_detalle_tributos) con los pagos de la grilla 01 por
+    `num_orden`. A cada pago le adjunta `tributos` (la lista del Detalle) y, cuando el
+    Detalle trae UN solo tributo, copia su `cod_tributo` real al pago (para la FK).
+    Muta `pagos`. No toca BD."""
+    por_orden: dict[str, dict] = {}
+    for d in detalles:
+        no = (d.get("cabecera") or {}).get("num_orden")
+        if no:
+            por_orden[str(no)] = d
+    for pg in pagos:
+        d = por_orden.get(str(pg.get("num_orden")))
+        if not d:
+            continue
+        trib = d.get("tributos") or []
+        pg["tributos"] = trib
+        codigos = {t.get("cod_tributo") for t in trib if t.get("cod_tributo")}
+        if len(codigos) == 1:
+            pg["cod_tributo"] = next(iter(codigos))
+
+
 # ───────────────────────── rejilla período × tributo ─────────────────────────
 def rejilla_periodos(cg: dict) -> list[dict]:
     """Construye filas de rejilla POR PERÍODO a partir de parse_consulta_general.
@@ -361,6 +488,10 @@ def _cli(carpeta: str) -> None:
                                 or _leer("01_consulta_general*frame4.html"))
     dp = parse_djj_pagos(_leer("02_djj_pagos_resultados_frame4.html")
                          or _leer("02_djj_pagos*frame4.html"))
+    det_html = _leer("04_detalle_tributos_frame4.html") or _leer("04_detalle*frame4.html")
+    detalle = parse_detalle_tributos(det_html) if det_html else None
+    if detalle:
+        aplicar_detalle_a_pagos(cg["pagos"], [detalle])
 
     print("== CABECERA 01 ==", cg["cabecera"])
     print(f"== 01: {len(cg['declaraciones'])} declaraciones, "
@@ -371,10 +502,19 @@ def _cli(carpeta: str) -> None:
               f"vig={d.get('es_vigente')} pagado={d.get('importe_pagado')}")
     for pg in cg["pagos"]:
         det = "sí" if pg.get("detalle_tributos") else "no"
+        trib_real = pg.get("cod_tributo") or "—"
         print(f"  PAGO {pg['periodo']} F{pg['cod_formulario']} "
               f"cod_boleta {pg.get('cod_tributo_boleta')} "
               f"banco {pg.get('banco_receptor')} importe {pg.get('importe')} "
-              f"(detalle_tributos={det})")
+              f"tributo_real {trib_real} (detalle_tributos={det})")
+    if detalle:
+        print(f"== 04 DETALLE (orden {detalle['cabecera'].get('num_orden')}, "
+              f"F{detalle['cabecera'].get('cod_formulario')}, "
+              f"período {detalle['cabecera'].get('periodo')}) ==")
+        for t in detalle["tributos"]:
+            print(f"  [{t.get('seccion')}] casilla {t.get('casilla')} "
+                  f"tributo {t.get('cod_tributo')} ({t.get('desc_tributo')}) "
+                  f"importe {t.get('importe')}")
     print(f"== 02: total={dp['total']}, "
           f"{len(dp['presentaciones'])} presentaciones (pág. actual) ==")
     print("== REJILLA por período (solo datos de fuente) ==")
