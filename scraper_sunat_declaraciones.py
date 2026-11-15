@@ -431,15 +431,19 @@ MESES_FASE2 = int(os.getenv("DECL_DIAG2_MESES", "5"))   # <6 (límite SUNAT: 182
 
 TARGETS_FASE2 = [
     {"slug": "01_consulta_general", "code": "12.8.1.1.2",
+     "url_frag": "consultaS01Alias",
      "desc": "Consulta general — Detalle de declaraciones y pagos "
              "(/cl-ti-itconsdecdetinf/consultaS01Alias?accion=consgeneral)"},
     {"slug": "02_djj_pagos", "code": "12.1.1.1.4",
+     "url_frag": "cdpS01Alias",
      "desc": "Consulta de declaraciones juradas y pagos "
              "(/cl-ti-itdeclpagcon-mepeco/cdpS01Alias) + rango + constancia 0621"},
     {"slug": "05_detr_recaudacion", "code": "12.4.1.1.3",
+     "url_frag": "imputS01Alias",
      "desc": "Detracciones — Ingreso como recaudación "
              "(/cl-ti-itconsimput/imputS01Alias)"},
     {"slug": "06_detr_npd", "code": "12.4.1.1.6",
+     "url_frag": "itnumpagdetr",
      "desc": "Detracciones — Consulta de NPD "
              "(/cl-ti-itnumpagdetr/consultaIndividual.htm)"},
 ]
@@ -474,6 +478,30 @@ def _frame_con(page, selector: str):
         except Exception:
             pass
     return None
+
+
+def _esperar_frame_url(page, frag: str, timeout_s: float = 20.0,
+                       intervalo: float = 0.5):
+    """Espera a que el frame de la OPERACIÓN (iframe ifrVCE) haya navegado: busca
+    un frame cuya URL contenga `frag` (p.ej. 'cdpS01Alias'). Evita volcar el
+    formulario antes de que cargue (quedaría con 0 tablas)."""
+    frag = (frag or "").lower()
+    if not frag:
+        return None
+    fin = time.monotonic() + timeout_s
+    while True:
+        for fr in page.frames:
+            try:
+                if frag in (fr.url or "").lower():
+                    return fr
+            except Exception:
+                pass
+        if time.monotonic() >= fin:
+            return None
+        try:
+            time.sleep(intervalo)
+        except Exception:
+            return None
 
 
 def _esperar_frame_con(page, selector: str, timeout_s: float = 30.0,
@@ -725,6 +753,9 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                         info = {"slug": tg["slug"], "estado": "no_se_pudo_leer",
                                 "detalle": "no se pudo invocar el código", "at": ahora}
                     else:
+                        # Esperar a que el iframe de la operación cargue (async)
+                        # antes de volcar la estructura, si no sale con 0 tablas.
+                        _esperar_frame_url(page, tg.get("url_frag", ""), 20)
                         info = _volcar(page, carpeta, tg["slug"], cfg)
                         info["estado"] = _estado_desde(info)
                         info["at"] = ahora
