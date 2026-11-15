@@ -164,9 +164,17 @@ def parse_consulta_general(html: str) -> dict:
                     "ruc": ruc, "periodo": periodo,
                     "cod_formulario": cod_form, "desc_formulario": desc_form,
                     "num_orden": num_orden, "fecha_pago": fecha_pres,
-                    "banco_receptor": banco, "cod_tributo": cod_trib,
+                    "banco_receptor": banco,
+                    # OJO: en una boleta 1662 la columna "Codigo-Tributo" (col 7)
+                    # NO es el tributo fiscal (IGV/Renta/RUS…): es un código de la
+                    # boleta (p.ej. 0018), que NO está en el catálogo `tributos`.
+                    # Se guarda CRUDO aquí; el tributo real está en el "Detalle de
+                    # Tributos Pagados" (verDetalleTributos → vpS01Alias, HTML).
+                    # NO se rellena `cod_tributo` (FK a tributos) con este valor.
+                    "cod_tributo_boleta": cod_trib,
+                    "cod_tributo": None,
                     "importe": importe, "origen": "01",
-                    "detalle_tributos": det,
+                    "detalle_tributos": det,   # puntero al desglose autoritativo
                 })
             else:
                 declaraciones.append({
@@ -317,19 +325,24 @@ def rejilla_periodos(cg: dict) -> list[dict]:
         p = por_periodo.setdefault(pg["periodo"], _fila_vacia(pg["periodo"]))
         if pg.get("importe") is not None:
             p["pagado"] = (p["pagado"] or Decimal("0")) + pg["importe"]
-        if pg.get("cod_tributo"):
-            p["cod_tributos"].add(pg["cod_tributo"])
+        # Código de la BOLETA (col "Codigo-Tributo"), NO el tributo fiscal: se
+        # expone crudo y se marca que el desglose por tributo está en el Detalle.
+        if pg.get("cod_tributo_boleta"):
+            p["cod_boletas"].add(pg["cod_tributo_boleta"])
+        if pg.get("detalle_tributos"):
+            p["detalle_tributos_pendiente"] = True
         p["tiene_pago"] = True
     filas = list(por_periodo.values())
     for f in filas:
-        f["cod_tributos"] = sorted(f["cod_tributos"])
+        f["cod_boletas"] = sorted(f["cod_boletas"])
     return sorted(filas, key=lambda f: f["periodo"], reverse=True)
 
 
 def _fila_vacia(periodo: str) -> dict:
     return {"periodo": periodo, "declaro": False, "cod_formulario": None,
             "desc_formulario": None, "fecha_presentacion": None,
-            "tiene_pago": False, "pagado": None, "cod_tributos": set()}
+            "tiene_pago": False, "pagado": None, "cod_boletas": set(),
+            "detalle_tributos_pendiente": False}
 
 
 # ───────────────────────── CLI de validación (sin BD) ─────────────────────────
@@ -357,16 +370,19 @@ def _cli(carpeta: str) -> None:
               f"orden {d['num_orden']} pres {d['fecha_presentacion']} "
               f"vig={d.get('es_vigente')} pagado={d.get('importe_pagado')}")
     for pg in cg["pagos"]:
+        det = "sí" if pg.get("detalle_tributos") else "no"
         print(f"  PAGO {pg['periodo']} F{pg['cod_formulario']} "
-              f"trib {pg.get('cod_tributo')} banco {pg.get('banco_receptor')} "
-              f"importe {pg.get('importe')}")
+              f"cod_boleta {pg.get('cod_tributo_boleta')} "
+              f"banco {pg.get('banco_receptor')} importe {pg.get('importe')} "
+              f"(detalle_tributos={det})")
     print(f"== 02: total={dp['total']}, "
           f"{len(dp['presentaciones'])} presentaciones (pág. actual) ==")
-    print("== REJILLA período × tributo (solo datos de fuente) ==")
+    print("== REJILLA por período (solo datos de fuente) ==")
     for f in rejilla_periodos(cg):
+        nota = " · desglose por tributo en Detalle" if f.get("detalle_tributos_pendiente") else ""
         print(f"  {f['periodo']}  declaró={'sí' if f['declaro'] else 'no'} "
               f"({f['fecha_presentacion']})  pagado={f['pagado']}  "
-              f"tributos={f['cod_tributos']}")
+              f"cod_boleta={f['cod_boletas']}{nota}")
 
 
 if __name__ == "__main__":

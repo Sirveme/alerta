@@ -69,6 +69,7 @@ DDL = [
         fecha_pago          DATE,
         banco_receptor      VARCHAR(60),
         cod_tributo         VARCHAR(10) REFERENCES tributos(codigo),
+        cod_tributo_boleta  VARCHAR(10),
         importe             NUMERIC(14,2),
         declaracion_id      UUID REFERENCES declaraciones_juradas(id) ON DELETE SET NULL,
         origen              VARCHAR(2),

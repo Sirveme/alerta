@@ -1759,8 +1759,13 @@ class PagoTributario(Base, TimestampMixin):
     fecha_pago: Mapped[datetime | None] = mapped_column(Date)  # = fecha de presentación en 01
 
     banco_receptor: Mapped[str | None] = mapped_column(String(60))
+    # Tributo FISCAL (IGV/Renta/RUS…), FK al catálogo. En una boleta 1662 la 01 NO
+    # lo trae: queda NULL hasta resolverlo con el "Detalle de Tributos Pagados".
     cod_tributo: Mapped[str | None] = mapped_column(
         String(10), ForeignKey("tributos.codigo"))
+    # Código CRUDO de la columna "Codigo-Tributo" de la boleta (p.ej. 0018). NO es
+    # el tributo fiscal ni está en el catálogo `tributos` → SIN FK. Solo trazabilidad.
+    cod_tributo_boleta: Mapped[str | None] = mapped_column(String(10))
     importe: Mapped[float | None] = mapped_column(Numeric(14, 2))
 
     # Vínculo informativo a la DJ del mismo período (puede quedar NULL).
