@@ -597,6 +597,49 @@ def _hay_resultados_01(page) -> bool:
     return False
 
 
+# verDetalleTributos('Detalle de Tributos Pagados', ruc, codForm, tipo, numOrd)
+_RE_VERDET = re.compile(
+    r"verDetalleTributos\(\s*'([^']*)'\s*,\s*'(\d+)'\s*,\s*'(\d+)'\s*,"
+    r"\s*'(\d+)'\s*,\s*'(\d+)'")
+
+
+def _capturar_detalle_tributos(page, carpeta: Path, cfg: SunatConfig) -> dict:
+    """Abre el 'Detalle de Tributos Pagados' de la 1ª boleta de la grilla 01
+    (verDetalleTributos → /cl-ti-itveripagformul/vpS01Alias). Es HTML (NO PDF):
+    ahí está el tributo fiscal real que la 01 no trae inline (la columna
+    'Codigo-Tributo' de una 1662 es un código de boleta, p.ej. 0018). Vuelca la
+    estructura; NO descarga nada."""
+    base = {"slug": "04_detalle_tributos",
+            "pantalla": "04 Detalle de Tributos Pagados (1662)"}
+    sc = _frame_con(page, "a[href*='verDetalleTributos(']")
+    if not sc:
+        return {**base, "estado": "sin_datos",
+                "detalle": "la grilla 01 no tiene boleta con enlace a Detalle"}
+    try:
+        a = sc.query_selector("a[href*='verDetalleTributos(']")
+        blob = (a.get_attribute("href") or "") + (a.get_attribute("onclick") or "")
+    except Exception:
+        blob = ""
+    m = _RE_VERDET.search(blob)
+    if not m:
+        return {**base, "estado": "no_se_pudo_leer",
+                "detalle": "no pude leer los args de verDetalleTributos"}
+    titulo, ruc, codform, tipo, norden = m.groups()
+    try:
+        sc.evaluate("(a) => verDetalleTributos(a.t, a.r, a.f, a.tp, a.n)",
+                    {"t": titulo, "r": ruc, "f": codform, "tp": tipo, "n": norden})
+    except Exception as e:
+        return {**base, "estado": "no_se_pudo_leer",
+                "detalle": _sanea(f"{type(e).__name__}: {e}", cfg)}
+    _pausa()
+    _esperar_frame_url(page, "vpS01Alias", 20) or \
+        _esperar_frame_url(page, "itveripagformul", 20)
+    info = _volcar(page, carpeta, "04_detalle_tributos", cfg)
+    info["estado"] = _estado_desde(info)
+    info["pantalla"] = f"04 Detalle de Tributos Pagados (F{codform} orden {norden})"
+    return info
+
+
 def _enviar_filtro_01(page, cfg: SunatConfig, meses: int, periodo_desde=None,
                       reabrir=None):
     """Consulta general: filtra por PERÍODO (mes/año desde-hasta) y busca. Trae la
@@ -791,6 +834,12 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                                          if periodo_desde
                                          else f"01 resultados (período, {meses} meses)")
                         res["pantallas"].append(r)
+                        # 04 Detalle de Tributos Pagados (de la 1ª boleta 1662):
+                        # el tributo fiscal real, en HTML (NO PDF).
+                        if r.get("estado") == "con_datos":
+                            cur["t"] = "04_detalle"
+                            res["pantallas"].append(
+                                _capturar_detalle_tributos(page, carpeta, cfg))
                     except Exception as e:
                         res["pantallas"].append(
                             {"slug": "01_consulta_general_resultados",
