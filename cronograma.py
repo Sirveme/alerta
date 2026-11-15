@@ -66,36 +66,65 @@ def _fila_fecha(fila) -> date | None:
     return _fecha(getattr(fila, "fecha_vencimiento", None))
 
 
-def _fila_grupo(fila) -> str:
+def _fila_campo(fila, campo, defecto=None):
     if isinstance(fila, dict):
-        return (fila.get("grupo") or GRUPO_GENERAL)
-    return getattr(fila, "grupo", GRUPO_GENERAL) or GRUPO_GENERAL
+        v = fila.get(campo, defecto)
+    else:
+        v = getattr(fila, campo, defecto)
+    return defecto if v is None else v
 
 
-def vencimiento_aplicable(filas, es_buen_contribuyente: bool | None = None) -> date | None:
+def _fila_grupo(fila) -> str:
+    return _fila_campo(fila, "grupo", GRUPO_GENERAL) or GRUPO_GENERAL
+
+
+def _fila_ambito(fila) -> str:
+    return _fila_campo(fila, "ambito", "general") or "general"
+
+
+def _fila_vigente(fila) -> bool:
+    # Si la fila no trae 'vigente' (dicts de prueba simples), se asume vigente.
+    return bool(_fila_campo(fila, "vigente", True))
+
+
+def vencimiento_aplicable(filas, es_buen_contribuyente: bool | None = None,
+                          ambito_no_aplica=None) -> date | None:
     """Fecha de vencimiento a usar para un (período, dígito), dadas sus `filas`
-    (una por grupo). Regla:
-      - es_buen_contribuyente is True  → la fecha del grupo Buen Contribuyente/UESP
-        (si existe; si no, la general).
-      - es_buen_contribuyente is False → la fecha del grupo 'general'.
-      - None (NO sabemos)              → la fecha MÁS TARDÍA de todas (conservador).
-    Devuelve None si no hay ninguna fila con fecha (→ SIN_VENCIMIENTO)."""
-    fechas = [(_fila_grupo(f), _fila_fecha(f)) for f in (filas or [])]
-    fechas = [(g, d) for g, d in fechas if d is not None]
-    if not fechas:
+    (base + prórrogas; posiblemente varias por celda).
+
+    Solo se consideran las filas **vigentes** (una prórroga posterior reemplaza a
+    la base: la superada queda vigente=False). Regla:
+      - es_buen_contribuyente is True  → grupo Buen Contribuyente/UESP (si existe).
+      - es_buen_contribuyente is False → grupo 'general'.
+      - None (NO sabemos)              → la fecha MÁS TARDÍA (conservador).
+    PRÓRROGAS con ámbito acotado (zona/tamaño): si NO podemos determinar que una
+    prórroga aplica al RUC, se **incluye** (y el max la toma) → conservador. Solo
+    se excluye un ámbito que sabemos que NO aplica (`ambito_no_aplica`: set de
+    códigos de ámbito confirmados como no aplicables a este RUC).
+    Devuelve None si no hay ninguna fila vigente con fecha (→ SIN_VENCIMIENTO)."""
+    no_aplica = set(ambito_no_aplica or ())
+    cand = []
+    for f in (filas or []):
+        d = _fila_fecha(f)
+        if d is None or not _fila_vigente(f):
+            continue
+        if _fila_ambito(f) in no_aplica:          # confirmado que NO aplica
+            continue
+        cand.append((_fila_grupo(f), d))
+    if not cand:
         return None
 
     if es_buen_contribuyente is True:
-        bc = [d for g, d in fechas if g in GRUPOS_BUEN_CONTRIBUYENTE]
-        gen = [d for g, d in fechas if g == GRUPO_GENERAL]
-        return max(bc) if bc else (max(gen) if gen else max(d for _, d in fechas))
+        bc = [d for g, d in cand if g in GRUPOS_BUEN_CONTRIBUYENTE]
+        gen = [d for g, d in cand if g == GRUPO_GENERAL]
+        return max(bc) if bc else (max(gen) if gen else max(d for _, d in cand))
 
     if es_buen_contribuyente is False:
-        gen = [d for g, d in fechas if g == GRUPO_GENERAL]
-        return max(gen) if gen else max(d for _, d in fechas)
+        gen = [d for g, d in cand if g == GRUPO_GENERAL]
+        return max(gen) if gen else max(d for _, d in cand)
 
-    # Desconocido → la MÁS TARDÍA (no alertar en falso).
-    return max(d for _, d in fechas)
+    # Desconocido → la MÁS TARDÍA de las vigentes/aplicables (no alertar en falso).
+    return max(d for _, d in cand)
 
 
 def estado_pago(fecha_pago: date | None, vencimiento: date | None) -> str:
@@ -108,11 +137,15 @@ def estado_pago(fecha_pago: date | None, vencimiento: date | None) -> str:
 
 
 def clasificar_pago(ruc: str | None, fecha_pago: date | None, filas_cronograma,
-                    es_buen_contribuyente: bool | None = None) -> dict:
+                    es_buen_contribuyente: bool | None = None,
+                    ambito_no_aplica=None) -> dict:
     """Resultado listo para la vista (sin copy; la vista pone el texto honesto).
-    `filas_cronograma` = filas de cronograma_vencimientos para el período y el
-    último dígito del RUC (puede venir vacío → SIN_VENCIMIENTO)."""
-    venc = vencimiento_aplicable(filas_cronograma, es_buen_contribuyente)
+    `filas_cronograma` = filas de cronograma_vencimientos (base + prórrogas
+    vigentes) para el período y el último dígito del RUC (vacío → SIN_VENCIMIENTO).
+    `ambito_no_aplica` = ámbitos de prórroga confirmados como NO aplicables al RUC
+    (se excluyen); el resto se incluye (conservador)."""
+    venc = vencimiento_aplicable(filas_cronograma, es_buen_contribuyente,
+                                 ambito_no_aplica)
     est = estado_pago(fecha_pago, venc)
     return {
         "estado": est,
@@ -162,5 +195,29 @@ if __name__ == "__main__":
     assert es_buen_contribuyente("10467016283", {"10467016283"}) is True
     assert es_buen_contribuyente("10467016283", set()) is False
     assert es_buen_contribuyente("10467016283", None) is None   # sin padrón → conservador
+
+    # ── PRÓRROGAS ──
+    # Base 16/06 + prórroga 30/06 (general, vigente). Sin saber si aplica → 30/06.
+    filas_pr = [
+        {"grupo": "general", "ambito": "general", "vigente": True,
+         "fecha_vencimiento": date(2026, 6, 16)},
+        {"grupo": "general", "ambito": "zona:loreto", "tipo": "prorroga",
+         "vigente": True, "fecha_vencimiento": date(2026, 6, 30)},
+    ]
+    # Pago 25/06: con la prórroga incluida (conservador) → DENTRO (no alerta falsa).
+    assert clasificar_pago("10467016283", date(2026, 6, 25), filas_pr)["estado"] == PAGO_DENTRO
+    assert vencimiento_aplicable(filas_pr) == date(2026, 6, 30)
+    # Si CONFIRMAMOS que la prórroga de zona NO aplica a este RUC → base 16/06 → FUERA.
+    r_pr = clasificar_pago("10467016283", date(2026, 6, 25), filas_pr,
+                           ambito_no_aplica={"zona:loreto"})
+    assert r_pr["estado"] == PAGO_FUERA and r_pr["vencimiento"] == date(2026, 6, 16), r_pr
+    # Una resolución superada (vigente=False) NO cuenta.
+    filas_sup = [
+        {"grupo": "general", "ambito": "general", "vigente": False,
+         "fecha_vencimiento": date(2026, 6, 30)},   # superada
+        {"grupo": "general", "ambito": "general", "vigente": True,
+         "fecha_vencimiento": date(2026, 6, 16)},   # vigente
+    ]
+    assert vencimiento_aplicable(filas_sup) == date(2026, 6, 16)
 
     print("cronograma.py autotest OK")

@@ -1822,15 +1822,22 @@ class DeclaracionTributo(Base):
 # intereses/multas.
 # ═════════════════════════════════════════════════════════════════════
 class CronogramaVencimiento(Base):
-    """Una fila por (período, último dígito de RUC, grupo). `grupo` separa el
-    régimen general del de Buenos Contribuyentes / UESP (que vence después).
-    `fecha_vencimiento` es la fecha oficial de la Resolución de Superintendencia
-    del año. Se re-carga anualmente desde la fuente SUNAT (campo `fuente`)."""
+    """Un vencimiento para (período, último dígito de RUC) bajo un `grupo`
+    (general / Buenos Contribuyentes / UESP), un `ambito` (a quién aplica) y una
+    RESOLUCIÓN. Soporta **prórrogas**: una resolución posterior NO borra la base,
+    agrega otra fila; se CONSERVAN todas y la `vigente` por celda es la de
+    `resolucion_fecha` más reciente. Si una prórroga aplica solo a ciertos
+    contribuyentes (zona/tamaño), su `ambito` lo acota; cuando no se puede
+    determinar para un RUC, el lookup usa la fecha MÁS TARDÍA (conservador). Ver
+    cronograma.py."""
     __tablename__ = "cronograma_vencimientos"
     __table_args__ = (
-        UniqueConstraint("periodo", "digito_ruc", "grupo",
-                         name="uq_cronograma_periodo_digito"),
+        # Una fila por celda × ámbito × resolución (así conviven base + prórrogas
+        # + historial). La vigencia la marca `vigente`/`resolucion_fecha`.
+        UniqueConstraint("periodo", "digito_ruc", "grupo", "ambito",
+                         "num_resolucion", name="uq_cronograma_celda_resolucion"),
         Index("ix_cronograma_periodo", "periodo"),
+        Index("ix_cronograma_vigente", "periodo", "digito_ruc", "vigente"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -1841,6 +1848,20 @@ class CronogramaVencimiento(Base):
     # 'general' | 'buenos_contribuyentes' | 'uesp'. El general cubre al grueso.
     grupo: Mapped[str] = mapped_column(String(24), default="general", nullable=False)
     fecha_vencimiento: Mapped[datetime] = mapped_column(Date, nullable=False)
+
+    # ── Prórrogas / versiones ──
+    # 'base' = cronograma anual; 'prorroga' = resolución posterior que lo mueve.
+    tipo: Mapped[str] = mapped_column(String(12), default="base", nullable=False)
+    # A quién aplica. 'general' = todos. Otro código (p.ej. 'zona:xxx',
+    # 'tamano:hasta_1700uit') acota la prórroga; `ambito_detalle` lleva las
+    # condiciones estructuradas para evaluarlas por RUC cuando se pueda.
+    ambito: Mapped[str] = mapped_column(String(40), default="general", nullable=False)
+    ambito_detalle: Mapped[dict | None] = mapped_column(JSONB)
+    # Fecha de la resolución (para ordenar vigencia: la más reciente gana).
+    resolucion_fecha: Mapped[datetime | None] = mapped_column(Date)
+    # ¿Es la vigente de su celda (período, dígito, grupo, ámbito)? Las resoluciones
+    # superadas quedan vigente=False (se conservan para auditoría).
+    vigente: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Trazabilidad legal: la fuente DE DERECHO es la Resolución de Superintendencia.
     # Se carga de la tabla HTML (más fácil) pero cada fila guarda el N° de

@@ -115,14 +115,21 @@ DDL = [
         digito_ruc          INTEGER     NOT NULL,
         grupo               VARCHAR(24) NOT NULL DEFAULT 'general',
         fecha_vencimiento   DATE        NOT NULL,
+        tipo                VARCHAR(12) NOT NULL DEFAULT 'base',
+        ambito              VARCHAR(40) NOT NULL DEFAULT 'general',
+        ambito_detalle      JSONB,
+        resolucion_fecha    DATE,
+        vigente             BOOLEAN     NOT NULL DEFAULT TRUE,
         num_resolucion      VARCHAR(60),
         fuente              VARCHAR(300),
         validado_pdf_at     TIMESTAMPTZ,
         cargado_at          TIMESTAMPTZ,
-        CONSTRAINT uq_cronograma_periodo_digito UNIQUE (periodo, digito_ruc, grupo)
+        CONSTRAINT uq_cronograma_celda_resolucion
+            UNIQUE (periodo, digito_ruc, grupo, ambito, num_resolucion)
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_cronograma_periodo ON cronograma_vencimientos (periodo)",
+    "CREATE INDEX IF NOT EXISTS ix_cronograma_vigente ON cronograma_vencimientos (periodo, digito_ruc, vigente)",
 
     # ── padron_buenos_contribuyentes (resuelve es_buen_contribuyente) ──
     # Lista oficial de RUCs del Régimen de Buenos Contribuyentes. Se carga del

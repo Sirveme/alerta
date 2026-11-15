@@ -37,6 +37,24 @@ RUC** (0–9), la **fecha de vencimiento**. Hay además fechas distintas para
   Idempotente y re-ejecutable.
 - Si SUNAT cambia el formato, el *diag-first* lo detecta (se vuelca, se confirma,
   recién se carga).
+
+### Prórrogas (resoluciones posteriores al cronograma)
+En 2026 hubo **prórrogas** de vencimientos por resoluciones posteriores
+(orientacion.sunat.gob.pe · "Prórroga de vencimientos de declaraciones y pagos
+mensuales"). El modelo las soporta así:
+- Una prórroga **no borra** la fila base: **agrega otra fila** para la misma celda
+  (período, dígito, grupo) con `tipo='prorroga'`, su `num_resolucion` y
+  `resolucion_fecha`. **Se conservan todas**; la **vigente** por celda es la de
+  `resolucion_fecha` más reciente (las superadas quedan `vigente=False`, para
+  auditoría).
+- Una prórroga puede aplicar **solo a ciertos contribuyentes** (zona, tamaño). Eso
+  va en `ambito` (código, p.ej. `zona:loreto`, `tamano:hasta_1700uit`) +
+  `ambito_detalle` (JSONB con las condiciones).
+- **Lookup conservador** (`cronograma.vencimiento_aplicable`): toma solo filas
+  **vigentes**; si **no se puede determinar** que una prórroga aplica a un RUC, la
+  **incluye** y usa la fecha **MÁS TARDÍA** (una prórroga alarga el plazo → nunca
+  alerta "fuera de plazo" en falso). Solo se excluye un ámbito cuando **sabemos**
+  que no aplica al RUC (`ambito_no_aplica`). Cubierto con autotest.
 - **Fallback manual**: si el scrape falla un año, el soporte puede cargar/confirmar
   el año a mano (mismos campos). El estado "fuera de plazo" **solo se evalúa si el
   período tiene cronograma cargado**; si no, se muestra "sin dato de vencimiento"
@@ -168,5 +186,8 @@ Pendiente (tras ver los volcados reales):
 Cómo volcar (local; públicas, sin railway/SOL):
 ```
 python diag_publico.py cronograma_2026 "<URL oficial del cronograma del año>"
+python diag_publico.py prorrogas_2026  "<URL de 'Prórroga de vencimientos ...' en orientacion.sunat.gob.pe>"
 python diag_publico.py bc_padron       "<URL del padrón de Buenos Contribuyentes>"
 ```
+(La página de prórrogas va aparte: el parser agrega filas `tipo='prorroga'` con su
+ámbito y resolución; la base y la prórroga conviven, vigente = la más reciente.)
