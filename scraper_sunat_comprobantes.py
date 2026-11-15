@@ -208,9 +208,21 @@ def normalizar_consulta(obj: dict) -> dict | None:
     items_raw = c.get("informacionItems")
     items = []
     for k, i in enumerate(items_raw if isinstance(items_raw, list) else []):
+        # Algunos emisores EMPAQUETAN datos en la descripción con "@#@" (p.ej.
+        # "COCA COLA VR 1500X08@#@ 1- @#@31.44@#@8.00@#@.00@#@2.52@#@36.15"). Se
+        # separa: 1ª parte = descripción limpia; el RESTO va a 'detalle_emisor' tal
+        # cual, SIN interpretar. Genérico para cualquier emisor.
+        raw_desc = i.get("desItem") or ""
+        if "@#@" in raw_desc:
+            primero, _, resto = raw_desc.partition("@#@")
+            descripcion = primero.strip() or None
+            detalle_emisor = resto
+        else:
+            descripcion = raw_desc.strip() or None
+            detalle_emisor = None
         items.append({
             "linea": k + 1, "codigo": i.get("desCodigo") or None,
-            "descripcion": i.get("desItem") or None,
+            "descripcion": descripcion, "detalle_emisor": detalle_emisor,
             "unidad": i.get("codUnidadMedida") or None,
             "unidad_nombre": i.get("desUnidadMedida") or None,
             "cantidad": _num(i.get("cntItems")),
@@ -473,45 +485,79 @@ def _procesar_libro(page, cap: _Captura, carpeta: Path, cfg: SunatConfig,
             cuerpo = pr["cuerpo"]
             res["lista"]["fuente"] = "captura_pasiva"
             break
-    # 2) Si no, y tenemos token + endpoint, la pedimos nosotros (compras: conocido).
+    # 2) Si no, y tenemos token + endpoint, la pedimos nosotros RECORRIENDO TODAS las
+    #    páginas (reporta el total real del período). `--n` limita SOLO las consultas
+    #    de ítems, no el listado.
+    todos_registros: list = []
     if cuerpo is None and bearer and url_propuesta:
-        url = url_propuesta.format(periodo=periodo)
-        sep = "&" if "?" in url else "?"
-        url = f"{url}{sep}codTipoOpe={cod_tipo_ope}&page=1&perPage={PERPAGE}"
-        res["lista"]["url_patron"] = _patron_url(url, cfg)
-        r = _get_api(page, url, bearer)
-        res["lista"]["estado"] = r.get("estado") or r.get("error")
+        base = url_propuesta.format(periodo=periodo)
+        sep = "&" if "?" in base else "?"
         res["lista"]["perPage"] = PERPAGE
         res["lista"]["codTipoOpe"] = cod_tipo_ope
-        if r.get("estado") == 200:
-            cuerpo = r.get("texto")
-            res["lista"]["fuente"] = "consulta_directa"
-        else:
-            # Volcar el CUERPO CRUDO del error (SUNAT suele decir qué campo falla).
-            _volcar_json(carpeta, f"lista_{libro}_error.json", r.get("texto", ""), cfg)
-            res["lista"]["cuerpo_error"] = (r.get("texto", "") or "")[:600]
-            res["errores"].append(
-                {"paso": "lista", "estado": r.get("estado"),
-                 "msg": _mensaje_sunat(r.get("texto", "")) or r.get("error")})
-
-    if cuerpo:
-        _volcar_json(carpeta, f"lista_{libro}_{periodo}.json", cuerpo, cfg)
+        max_pag = int(os.getenv("COMP_MAX_PAGINAS", "500"))
+        total_reg = None
+        pagina = 1
+        while pagina <= max_pag:
+            url = f"{base}{sep}codTipoOpe={cod_tipo_ope}&page={pagina}&perPage={PERPAGE}"
+            if pagina == 1:
+                res["lista"]["url_patron"] = _patron_url(url, cfg)
+            r = _get_api(page, url, bearer)
+            if pagina == 1:
+                res["lista"]["estado"] = r.get("estado") or r.get("error")
+            if r.get("estado") != 200:
+                if pagina == 1:
+                    _volcar_json(carpeta, f"lista_{libro}_error.json",
+                                 r.get("texto", ""), cfg)
+                    res["lista"]["cuerpo_error"] = (r.get("texto", "") or "")[:600]
+                    res["errores"].append(
+                        {"paso": "lista", "estado": r.get("estado"),
+                         "msg": _mensaje_sunat(r.get("texto", "")) or r.get("error")})
+                break
+            if pagina == 1:
+                cuerpo = r.get("texto")               # muestra (1ª página) a disco
+                res["lista"]["fuente"] = "consulta_directa"
+            try:
+                data_pg = json.loads(r["texto"])
+            except Exception:
+                break
+            regs_pg = data_pg.get("registros") or []
+            todos_registros.extend(regs_pg)
+            pag = data_pg.get("paginacion") or {}
+            total_reg = pag.get("totalRegistros", total_reg)
+            if (total_reg is not None and len(todos_registros) >= total_reg) \
+                    or len(regs_pg) < PERPAGE:
+                break
+            pagina += 1
+            _pausa_comprobante()                      # ritmo prudente entre páginas
+        res["lista"]["total_periodo"] = (total_reg if total_reg is not None
+                                         else len(todos_registros))
+        res["lista"]["paginas"] = pagina
+    elif cuerpo:                                       # captura pasiva (1 página)
         try:
-            data = json.loads(cuerpo)
+            todos_registros = (json.loads(cuerpo).get("registros") or [])
+            res["lista"]["estado"] = 200
+            res["lista"]["fuente"] = "captura_pasiva"
+            res["lista"]["total_periodo"] = len(todos_registros)
+            res["lista"]["paginas"] = 1
         except Exception:
-            data = {}
+            pass
+
+    if todos_registros or cuerpo:
+        if cuerpo:
+            _volcar_json(carpeta, f"lista_{libro}_{periodo}.json", cuerpo, cfg)
+        data_all = {"registros": todos_registros}
         # Compras: parser CONFIRMADO (campos reales RCE). Ventas: shape aún no
         # confirmada → extractor genérico por forma.
         if libro == "compras":
-            registros = parse_propuesta_rce(data)
+            registros = parse_propuesta_rce(data_all)
         else:
-            registros = _registros_comprobante(data)
+            registros = _registros_comprobante(data_all)
         res["lista"]["n_registros"] = len(registros)
         if registros:
             res["lista"]["claves_detectadas"] = registros[0].get("_claves")
         consultables = [r for r in registros if _consultable(r) is None]
         res["lista"]["n_consultables"] = len(consultables)
-        objetivo = consultables[:n]
+        objetivo = consultables[:n]                    # --n limita SOLO las consultas
         for reg in objetivo:
             clave = _clave_cpe(reg, indicador)
             bcpe = cap.bearer_cpe or cap.bearer_sire
@@ -1087,9 +1133,9 @@ def _escribir_excel(carpeta: Path, cfg: SunatConfig, res: dict):
     ws = wb.active
     ws.title = "items"
     ws.append(["libro", "fecha_emision", "serie-numero", "ruc_emisor",
-               "razon_emisor", "linea", "descripcion", "cantidad", "unidad",
-               "valor_unitario", "importe_item", "IGV_comprobante",
-               "total_comprobante", "moneda"])
+               "razon_emisor", "linea", "descripcion", "detalle_emisor",
+               "cantidad", "unidad", "valor_unitario", "importe_item",
+               "IGV_comprobante", "total_comprobante", "moneda"])
     for libro in res.get("libros", []):
         nombre = libro.get("libro")
         for comp in libro.get("comprobantes", []):
@@ -1100,7 +1146,8 @@ def _escribir_excel(carpeta: Path, cfg: SunatConfig, res: dict):
                     nombre, cab.get("fecha_emision"), sn,
                     _sanea(str(cab.get("ruc_emisor") or ""), cfg),
                     _sanea(str(cab.get("razon_emisor") or ""), cfg),
-                    it.get("linea"), it.get("descripcion"), it.get("cantidad"),
+                    it.get("linea"), it.get("descripcion"),
+                    it.get("detalle_emisor"), it.get("cantidad"),
                     it.get("unidad"), it.get("valor_unitario"), it.get("importe"),
                     cab.get("igv"), cab.get("importe_total"), cab.get("moneda"),
                 ])

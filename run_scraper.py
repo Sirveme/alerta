@@ -861,10 +861,12 @@ async def procesar_comp_diag(session, contrib: Contribuyente,
         prom = round(sum(tiempos) / len(tiempos), 2) if tiempos else None
         log(f"    · {libro.get('libro')} (ind {libro.get('indicador')}): "
             f"lista={li.get('estado')} fuente={li.get('fuente')} "
-            f"perPage={li.get('perPage')} codTipoOpe={li.get('codTipoOpe')} "
-            f"{li.get('n_registros')} reg / {li.get('n_consultables')} consultables, "
+            f"total_período={li.get('total_periodo')} ({li.get('paginas')} pág, "
+            f"perPage={li.get('perPage')}) · {li.get('n_registros')} reg / "
+            f"{li.get('n_consultables')} consultables · "
             f"{len(libro.get('comprobantes', []))} consultados, "
-            f"{libro.get('items_total')} ítems, ~{prom}s/comprobante")
+            f"{libro.get('items_total')} ítems, ~{prom}s/comprobante"
+            + (f" · {li.get('nota')}" if li.get('nota') else ""))
         if li.get("url_patron"):
             log(f"        request: {li.get('url_patron')}")
         if li.get("cuerpo_error"):
