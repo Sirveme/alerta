@@ -1,0 +1,151 @@
+# -*- coding: utf-8 -*-
+"""
+cronograma.py — alerta.pe  (proyecto decl-diag · estado "pagó fuera de plazo")
+
+Lógica PURA (sin red, sin BD) del cronograma de vencimientos SUNAT. Dado el
+conjunto de filas de `cronograma_vencimientos` para un (período, último dígito de
+RUC), decide la fecha de vencimiento APLICABLE y clasifica el pago.
+
+Regla de ORO (decisión de Duilio, 15/11/2026): **prefiero no alertar a alertar en
+falso**. Si no sabemos si el RUC es Buen Contribuyente, se usa la fecha **MÁS
+TARDÍA** (criterio conservador): un pago solo es "fuera de plazo" si cae después
+del último vencimiento posible. Una sola alerta falsa y el contador deja de
+confiar.
+
+alerta.pe **informa**: compara SOLO fechas. NUNCA dice "debe", NUNCA calcula
+intereses ni multas.
+"""
+from __future__ import annotations
+
+from datetime import date
+
+# Grupos del cronograma. 'general' = el grueso; los otros vencen DESPUÉS.
+GRUPO_GENERAL = "general"
+GRUPOS_BUEN_CONTRIBUYENTE = ("buenos_contribuyentes", "uesp")
+
+# Estados del pago (claves; el copy va en la vista).
+PAGO_DENTRO = "pago_dentro"          # pagó en o antes del vencimiento
+PAGO_FUERA = "pago_fuera"            # pagó después del vencimiento
+SIN_PAGO = "sin_pago"                # declaró, no hay pago en la fuente
+SIN_VENCIMIENTO = "sin_vencimiento"  # período sin cronograma cargado → no se evalúa
+
+
+def digito_ruc(ruc: str | None) -> int | None:
+    """Último dígito del RUC (0..9). None si no es un RUC de 11 dígitos."""
+    if not ruc:
+        return None
+    r = str(ruc).strip()
+    if not (r.isdigit() and len(r) == 11):
+        return None
+    return int(r[-1])
+
+
+def _fecha(v):
+    """Normaliza una fila: acepta dict o atributo `fecha_vencimiento` (date)."""
+    if v is None:
+        return None
+    if isinstance(v, date):
+        return v
+    return None
+
+
+def _fila_fecha(fila) -> date | None:
+    """Extrae la fecha de vencimiento de una fila (dict u ORM)."""
+    if isinstance(fila, dict):
+        return _fecha(fila.get("fecha_vencimiento"))
+    return _fecha(getattr(fila, "fecha_vencimiento", None))
+
+
+def _fila_grupo(fila) -> str:
+    if isinstance(fila, dict):
+        return (fila.get("grupo") or GRUPO_GENERAL)
+    return getattr(fila, "grupo", GRUPO_GENERAL) or GRUPO_GENERAL
+
+
+def vencimiento_aplicable(filas, es_buen_contribuyente: bool | None = None) -> date | None:
+    """Fecha de vencimiento a usar para un (período, dígito), dadas sus `filas`
+    (una por grupo). Regla:
+      - es_buen_contribuyente is True  → la fecha del grupo Buen Contribuyente/UESP
+        (si existe; si no, la general).
+      - es_buen_contribuyente is False → la fecha del grupo 'general'.
+      - None (NO sabemos)              → la fecha MÁS TARDÍA de todas (conservador).
+    Devuelve None si no hay ninguna fila con fecha (→ SIN_VENCIMIENTO)."""
+    fechas = [(_fila_grupo(f), _fila_fecha(f)) for f in (filas or [])]
+    fechas = [(g, d) for g, d in fechas if d is not None]
+    if not fechas:
+        return None
+
+    if es_buen_contribuyente is True:
+        bc = [d for g, d in fechas if g in GRUPOS_BUEN_CONTRIBUYENTE]
+        gen = [d for g, d in fechas if g == GRUPO_GENERAL]
+        return max(bc) if bc else (max(gen) if gen else max(d for _, d in fechas))
+
+    if es_buen_contribuyente is False:
+        gen = [d for g, d in fechas if g == GRUPO_GENERAL]
+        return max(gen) if gen else max(d for _, d in fechas)
+
+    # Desconocido → la MÁS TARDÍA (no alertar en falso).
+    return max(d for _, d in fechas)
+
+
+def estado_pago(fecha_pago: date | None, vencimiento: date | None) -> str:
+    """Clasifica comparando SOLO fechas. Sin importes, sin intereses."""
+    if vencimiento is None:
+        return SIN_VENCIMIENTO
+    if fecha_pago is None:
+        return SIN_PAGO
+    return PAGO_DENTRO if fecha_pago <= vencimiento else PAGO_FUERA
+
+
+def clasificar_pago(ruc: str | None, fecha_pago: date | None, filas_cronograma,
+                    es_buen_contribuyente: bool | None = None) -> dict:
+    """Resultado listo para la vista (sin copy; la vista pone el texto honesto).
+    `filas_cronograma` = filas de cronograma_vencimientos para el período y el
+    último dígito del RUC (puede venir vacío → SIN_VENCIMIENTO)."""
+    venc = vencimiento_aplicable(filas_cronograma, es_buen_contribuyente)
+    est = estado_pago(fecha_pago, venc)
+    return {
+        "estado": est,
+        "vencimiento": venc,
+        "fecha_pago": fecha_pago,
+        "digito_ruc": digito_ruc(ruc),
+        "conservador": es_buen_contribuyente is None,  # se usó la fecha más tardía
+    }
+
+
+# ── Autotest (sin BD): valida la regla conservadora con el caso real ──
+if __name__ == "__main__":
+    # RUC 10467016283 (dígito 3). Período 202605.
+    # Supongamos cronograma 202605 dígito 3: general 16/06/2026, BC 23/06/2026.
+    filas = [
+        {"grupo": "general", "fecha_vencimiento": date(2026, 6, 16)},
+        {"grupo": "buenos_contribuyentes", "fecha_vencimiento": date(2026, 6, 23)},
+    ]
+    pago = date(2026, 9, 25)   # pagó el 25/09/2026
+    r = clasificar_pago("10467016283", pago, filas, es_buen_contribuyente=None)
+    assert r["estado"] == PAGO_FUERA, r
+    assert r["vencimiento"] == date(2026, 6, 23), r   # usó la MÁS TARDÍA
+    assert r["conservador"] is True
+
+    # Pago dentro de plazo (antes de la fecha más tardía).
+    r2 = clasificar_pago("10467016283", date(2026, 6, 20), filas)
+    assert r2["estado"] == PAGO_DENTRO, r2
+
+    # Caso borde: pago el mismo día de la fecha conservadora → dentro.
+    r3 = clasificar_pago("10467016283", date(2026, 6, 23), filas)
+    assert r3["estado"] == PAGO_DENTRO, r3
+
+    # Sin cronograma del período → no se evalúa (nunca se asume).
+    r4 = clasificar_pago("10467016283", pago, [])
+    assert r4["estado"] == SIN_VENCIMIENTO, r4
+
+    # Declaró, sin pago → nunca "debe".
+    r5 = clasificar_pago("10467016283", None, filas)
+    assert r5["estado"] == SIN_PAGO, r5
+
+    # Si SÍ sabemos que NO es Buen Contribuyente → usa general (16/06); 20/06 fuera.
+    r6 = clasificar_pago("10467016283", date(2026, 6, 20), filas,
+                         es_buen_contribuyente=False)
+    assert r6["estado"] == PAGO_FUERA and r6["vencimiento"] == date(2026, 6, 16), r6
+
+    print("cronograma.py autotest OK")

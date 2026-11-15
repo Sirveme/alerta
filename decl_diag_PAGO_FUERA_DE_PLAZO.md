@@ -24,16 +24,19 @@ RUC** (0–9), la **fecha de vencimiento**. Hay además fechas distintas para
 
 ### Cómo se carga y se actualiza (propuesta)
 - Tabla **`cronograma_vencimientos`** (ya en `migrar_declaraciones.py`, sin correr):
-  `(anio, periodo AAAAMM, digito_ruc 0–9, grupo, fecha_vencimiento, fuente, cargado_at)`,
-  única por `(periodo, digito_ruc, grupo)`.
+  `(anio, periodo AAAAMM, digito_ruc 0–9, grupo, fecha_vencimiento, num_resolucion,
+  fuente, validado_pdf_at, cargado_at)`, única por `(periodo, digito_ruc, grupo)`.
+  **Cada fila guarda el N° de resolución y su URL** (trazabilidad legal).
 - **Cargador anual** `cargar_cronograma_sunat(anio)` (a escribir cuando se apruebe):
-  baja la tabla oficial del año, la parsea y hace **upsert** por la llave única.
-  `fuente` guarda la URL/Resolución; `cargado_at`, cuándo.
-- **Disparo**: una vez al año (diciembre/enero), desde el worker (tarea programada)
-  **o** un botón en `/interno` para el soporte. Idempotente y re-ejecutable.
-- **Verificación antes de usar**: una vista en `/interno` muestra el año cargado
-  (12 períodos × 10 dígitos + grupos) para revisarlo de un vistazo; si SUNAT cambia
-  el formato, el *diag-first* lo detecta (se vuelca, se confirma, recién se carga).
+  baja la **tabla HTML** oficial del año, la parsea y hace **upsert** por la llave
+  única, grabando `num_resolucion` + `fuente`. **Validación contra el PDF** de la
+  Resolución **al menos una vez al año** → sella `validado_pdf_at`.
+- **Disparo (ambos)**: tarea del **worker en diciembre/enero** + **botón en
+  `/interno`**. El botón hace **preview → confirmar**: muestra la vista previa del
+  año (períodos × dígitos × grupos) y **solo guarda cuando Duilio confirma**.
+  Idempotente y re-ejecutable.
+- Si SUNAT cambia el formato, el *diag-first* lo detecta (se vuelca, se confirma,
+  recién se carga).
 - **Fallback manual**: si el scrape falla un año, el soporte puede cargar/confirmar
   el año a mano (mismos campos). El estado "fuera de plazo" **solo se evalúa si el
   período tiene cronograma cargado**; si no, se muestra "sin dato de vencimiento"
@@ -46,19 +49,24 @@ RUC** (0–9), la **fecha de vencimiento**. Hay además fechas distintas para
 Para un **período** con declaración y pago, usando el **último dígito del RUC**:
 
 ```
-venc = cronograma[periodo, digito=ultimo_digito(ruc), grupo='general'].fecha_vencimiento
+filas = cronograma[periodo, digito=ultimo_digito(ruc)]   # general + BC/UESP
+venc  = vencimiento_aplicable(filas, es_buen_contribuyente)
+       # es_buen_contribuyente None (no sabemos) → MÁS TARDÍA (conservador)
 si no hay 'venc' (período sin cronograma cargado):
-    estado_pago = "sin dato de vencimiento"      # no se evalúa plazo
+    estado_pago = SIN_VENCIMIENTO         # "sin dato de vencimiento"; no se evalúa
 elif hay pago (fecha_pago):
-    estado_pago = "pagó dentro de plazo"   si fecha_pago <= venc
-                  "pagó fuera de plazo"    si fecha_pago >  venc
+    estado_pago = PAGO_DENTRO   si fecha_pago <= venc
+                  PAGO_FUERA    si fecha_pago >  venc
 else:
-    estado_pago = "declaró; sin pago en la fuente"   # NUNCA "debe"
+    estado_pago = SIN_PAGO                # "declaró; sin pago en la fuente" — NUNCA "debe"
 ```
+(Implementado en `cronograma.py`: `clasificar_pago(...)`.)
 
-- El **último dígito** del RUC sale del propio RUC (público). El grupo por defecto
-  es `general`; *Buenos Contribuyentes/UESP* usan su fila `grupo` (se activa cuando
-  tengamos ese indicador en la ficha del contribuyente; mientras tanto, `general`).
+- El **último dígito** del RUC sale del propio RUC (público). Se consideran todas
+  las filas del período (grupo `general` + `buenos_contribuyentes`/`uesp`). Si **no
+  sabemos** si el RUC es Buen Contribuyente → se usa la fecha **más tardía**
+  (conservador). Cuando tengamos el indicador en la ficha del contribuyente, se
+  pasa `es_buen_contribuyente=True/False` y usa la fila exacta.
 - El estado es **por período**; el desglose fino por tributo es fase posterior.
 - Solo compara **fechas**. No toca importes de deuda, no suma intereses.
 
@@ -104,12 +112,33 @@ Modelos en `models.py` (raíz): `DeclaracionJurada`, `PagoTributario`,
 
 ---
 
-## 4) Qué decido / confirmo con Duilio
-1. **Fuente del cronograma**: ¿scrapeo de la tabla oficial de SUNAT del año, o
-   parseo del PDF de la Resolución? (propongo la tabla HTML; PDF como respaldo).
-2. **Disparo anual**: ¿tarea del worker en diciembre/enero, botón en `/interno`, o
-   ambos?
-3. **Buenos Contribuyentes/UESP**: ¿incorporamos ya el indicador (otra fecha) o
-   arrancamos solo `general`?
-4. **Sin cronograma del período**: confirmar que se muestra "sin dato de
-   vencimiento" (no se evalúa plazo) — nunca se asume.
+## 4) Decisiones TOMADAS (Duilio, 15/11/2026)
+1. **Fuente**: la **Resolución de Superintendencia** es la fuente **legal**. Se
+   carga de la **tabla HTML** (más fácil), pero **cada fila guarda el N° de
+   resolución (`num_resolucion`) y su URL (`fuente`)**, y se **valida contra el
+   PDF al menos una vez al año** (`validado_pdf_at`). Campos ya en el modelo/tabla.
+2. **Disparo**: **ambos**. Tarea del **worker en dic/ene** + **botón en
+   `/interno`**. El botón **primero muestra una vista previa** (períodos × dígitos
+   × grupos) y **recién guarda cuando Duilio confirma** (flujo preview→confirmar,
+   nunca guarda directo).
+3. **Buenos Contribuyentes/UESP**: **sí, desde ya**. Si **no sabemos** si el RUC es
+   Buen Contribuyente → se usa la fecha **MÁS TARDÍA** (criterio **conservador**):
+   un pago es "fuera de plazo" solo si cae **después del último vencimiento
+   posible**. Regla de oro: **prefiero no alertar a alertar en falso** (una sola
+   alerta falsa y el contador deja de confiar). Implementado en `cronograma.py`
+   (`vencimiento_aplicable(..., es_buen_contribuyente=None) → max(fechas)`), con
+   autotest.
+4. **Sin cronograma del período**: **confirmado** → se muestra **"sin dato de
+   vencimiento"** (no se evalúa plazo, nunca se asume). Es el estado
+   `SIN_VENCIMIENTO` de `cronograma.py`.
+
+### Estado de implementación (rama, sin migrar / sin merge)
+- `cronograma.py`: lógica pura + regla conservadora + estados
+  (pago_dentro/pago_fuera/sin_pago/sin_vencimiento) + autotest. ✔
+- `models.CronogramaVencimiento` y tabla `cronograma_vencimientos`:
+  `num_resolucion`, `fuente`, `validado_pdf_at`, `cargado_at`. ✔ (migración sin correr)
+- **Pendiente de construir cuando se apruebe**: el cargador anual
+  `cargar_cronograma_sunat(anio)` (scrape tabla HTML + guardar N° resolución/URL +
+  validación PDF) y la vista `/interno` con **preview→confirmar**; el enlace del
+  `es_buen_contribuyente` del RUC (de la ficha SUNAT) cuando lo tengamos — hasta
+  entonces, `None` → conservador.

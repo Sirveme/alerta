@@ -1842,6 +1842,10 @@ class CronogramaVencimiento(Base):
     grupo: Mapped[str] = mapped_column(String(24), default="general", nullable=False)
     fecha_vencimiento: Mapped[datetime] = mapped_column(Date, nullable=False)
 
-    # Trazabilidad de la carga (de dónde salió y cuándo), para auditar el año.
-    fuente: Mapped[str | None] = mapped_column(String(300))           # URL/Resolución
+    # Trazabilidad legal: la fuente DE DERECHO es la Resolución de Superintendencia.
+    # Se carga de la tabla HTML (más fácil) pero cada fila guarda el N° de
+    # resolución y su URL, y se valida contra el PDF al menos 1 vez al año.
+    num_resolucion: Mapped[str | None] = mapped_column(String(60))    # p.ej. "000XXX-2025/SUNAT"
+    fuente: Mapped[str | None] = mapped_column(String(300))           # URL (tabla/Resolución)
+    validado_pdf_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cargado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -112,7 +112,9 @@ DDL = [
         digito_ruc          INTEGER     NOT NULL,
         grupo               VARCHAR(24) NOT NULL DEFAULT 'general',
         fecha_vencimiento   DATE        NOT NULL,
+        num_resolucion      VARCHAR(60),
         fuente              VARCHAR(300),
+        validado_pdf_at     TIMESTAMPTZ,
         cargado_at          TIMESTAMPTZ,
         CONSTRAINT uq_cronograma_periodo_digito UNIQUE (periodo, digito_ruc, grupo)
     )
