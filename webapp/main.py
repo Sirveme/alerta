@@ -76,13 +76,19 @@ async def _sin_sesion(request: Request, exc: RedirigirALogin):
 # ─── PWA: service worker en la raíz (scope completo) y manifest ───
 @app.get("/sw.js", include_in_schema=False)
 async def service_worker():
-    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript")
+    # El SW NUNCA debe cachearse (navegador ni CDN): es la pieza que invalida al
+    # resto, y si queda rancio nada se actualiza (incidente Cloudflare 2026-11-14,
+    # /sw.js servido con HIT por 4 h). no-store/no-cache → se revalida siempre.
+    # En Cloudflare, además, conviene una regla de Bypass para /sw.js.
+    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript",
+                        headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
 
 
 @app.get("/manifest.json", include_in_schema=False)
 async def manifest():
     return FileResponse(STATIC_DIR / "manifest.json",
-                        media_type="application/manifest+json")
+                        media_type="application/manifest+json",
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/healthz", include_in_schema=False)

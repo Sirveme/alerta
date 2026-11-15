@@ -34,6 +34,16 @@ BASE_URL = os.getenv("BASE_URL", "https://alerta.pe").rstrip("/")
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+# Versión de assets para cache-busting del CDN (incidente Cloudflare 2026-11-14):
+# Cloudflare cachea los estáticos por extensión (max-age edge); sin versión en la
+# URL, un deploy NO invalida el edge y se sigue sirviendo la copia vieja. Railway
+# inyecta RAILWAY_GIT_COMMIT_SHA en cada build → usamos sus 8 primeros chars como
+# `?v=` en las plantillas: cada deploy cambia la URL y Cloudflare la ve como objeto
+# nuevo (MISS → fresco), sin purga manual. En local cae a ASSET_VER o 'dev'.
+ASSET_VER = (os.getenv("RAILWAY_GIT_COMMIT_SHA")
+             or os.getenv("ASSET_VER") or "dev")[:8]
+templates.env.globals["v"] = ASSET_VER
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Filtros Jinja
