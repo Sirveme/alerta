@@ -166,6 +166,19 @@ def _iso(f):
     return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else (f or None)
 
 
+def _limpiar_descripcion(s: str | None) -> str | None:
+    """Normaliza espacios y, si la descripción es la MISMA frase repetida 2 veces
+    (p.ej. 'T4 MADURO X 30 G (PERSA)  T4 MADURO X 30 G (PERSA)'), la deja una sola
+    vez. No cambia el contenido, solo quita la duplicación exacta."""
+    if not s:
+        return None
+    t = re.sub(r"\s+", " ", s).strip()
+    if not t:
+        return None
+    m = re.fullmatch(r"(.+?)\s+\1", t)   # "X X" con X idéntico → X
+    return m.group(1) if m else t
+
+
 # ───────────────────────── parseo del DETALLE (api-cpe) ─────────────────────────
 # Port de `asistente-sol/src/lote/comprobante.js::normalizarConsulta` (validado).
 def _totales_de(c: dict) -> dict:
@@ -215,20 +228,24 @@ def normalizar_consulta(obj: dict) -> dict | None:
         raw_desc = i.get("desItem") or ""
         if "@#@" in raw_desc:
             primero, _, resto = raw_desc.partition("@#@")
-            descripcion = primero.strip() or None
+            descripcion = _limpiar_descripcion(primero)
             detalle_emisor = resto
         else:
-            descripcion = raw_desc.strip() or None
+            descripcion = _limpiar_descripcion(raw_desc)
             detalle_emisor = None
+        # OJO: los montos vienen TAL CUAL de SUNAT, sin interpretar. En varios
+        # emisores cantidad × valor_unitario_sin_imp ≠ importe_linea_emisor (p.ej.
+        # CERVECERIA SAN JUAN 12 × 47.40 ≠ 811.20): suele ser por impuestos/descuentos
+        # incluidos. NO se calcula ni se corrige nada aquí.
         items.append({
             "linea": k + 1, "codigo": i.get("desCodigo") or None,
             "descripcion": descripcion, "detalle_emisor": detalle_emisor,
             "unidad": i.get("codUnidadMedida") or None,
             "unidad_nombre": i.get("desUnidadMedida") or None,
             "cantidad": _num(i.get("cntItems")),
-            "valor_unitario": _num(i.get("mtoValUnitario")),
+            "valor_unitario_sin_imp": _num(i.get("mtoValUnitario")),
             "descuento": _num(i.get("mtoDesc")),
-            "importe": _num(i.get("mtoImpTotal")),
+            "importe_linea_emisor": _num(i.get("mtoImpTotal")),
             "icbper": _num(i.get("mtoICBPER")),
         })
     return {"cabecera": cabecera, "items": items}
@@ -1132,9 +1149,12 @@ def _escribir_excel(carpeta: Path, cfg: SunatConfig, res: dict):
     wb = Workbook()
     ws = wb.active
     ws.title = "items"
+    # Columnas de montos nombradas para dejar claro que vienen TAL CUAL de SUNAT
+    # (sin interpretar): valor_unitario_sin_imp e importe_linea_emisor pueden NO
+    # cumplir cantidad × valor = importe (impuestos/descuentos incluidos por el emisor).
     ws.append(["libro", "fecha_emision", "serie-numero", "ruc_emisor",
                "razon_emisor", "linea", "descripcion", "detalle_emisor",
-               "cantidad", "unidad", "valor_unitario", "importe_item",
+               "cantidad", "unidad", "valor_unitario_sin_imp", "importe_linea_emisor",
                "IGV_comprobante", "total_comprobante", "moneda"])
     for libro in res.get("libros", []):
         nombre = libro.get("libro")
@@ -1148,7 +1168,8 @@ def _escribir_excel(carpeta: Path, cfg: SunatConfig, res: dict):
                     _sanea(str(cab.get("razon_emisor") or ""), cfg),
                     it.get("linea"), it.get("descripcion"),
                     it.get("detalle_emisor"), it.get("cantidad"),
-                    it.get("unidad"), it.get("valor_unitario"), it.get("importe"),
+                    it.get("unidad"), it.get("valor_unitario_sin_imp"),
+                    it.get("importe_linea_emisor"),
                     cab.get("igv"), cab.get("importe_total"), cab.get("moneda"),
                 ])
     try:

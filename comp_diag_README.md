@@ -33,6 +33,15 @@ railway run -s alertape-worker python run_scraper.py <RUC> comp-diag --periodo A
 `procedenciaMasiva`: `mtoSumIGV`, `mtoImporteTotal`), **no por línea** — la consulta
 no trae IGV por ítem. El Excel lo marca así en el encabezado.
 
+**Montos TAL CUAL de SUNAT (sin interpretar):** las columnas de ítem se llaman
+`valor_unitario_sin_imp` (`mtoValUnitario`) e `importe_linea_emisor` (`mtoImpTotal`).
+En varios emisores **`cantidad × valor_unitario_sin_imp ≠ importe_linea_emisor`**
+(p.ej. CERVECERIA SAN JUAN 12 × 47.40 ≠ 811.20): suele deberse a impuestos/descuentos
+que el emisor incluye en la línea. alerta.pe **no calcula ni corrige** esos montos.
+**Descripción**: si el emisor empaqueta datos con `@#@`, la 1ª parte es la descripción
+y el resto va a `detalle_emisor` sin interpretar; si la descripción viene repetida dos
+veces idéntica, se deja una sola vez.
+
 ## Ritmo y límites (de `asistente-sol/motor.js`)
 - Pausa **3–5 s** entre comprobantes, nada en paralelo contra SOL.
 - Timeout 30 s por petición. 401/403 = sesión/token vencido (corta el libro).
