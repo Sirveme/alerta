@@ -158,6 +158,63 @@ def _scopes(page):
             yield fr
 
 
+# ── Clasificación del estado de una pantalla ─────────────────────────
+# SOL muestra tablas de LAYOUT (cabecera, pie, calendario del NPD) con filas que
+# NO son datos. Para no cantar con_datos en falso, solo cuentan las filas de una
+# tabla de RESULTADOS (cuyos encabezados tienen señales reales) y, además, no
+# debe aparecer un marcador de "sin registros".
+_MARCA_SIN_REGISTROS = (
+    "no existen registros", "no se encontraron", "no se encontro",
+    "no hay registros", "1 a 0 de 0", "sin resultados", "no se hallaron",
+    "no existe informacion", "no existe información", "no se encontró",
+    "no se encontraron declaraciones", "no se encontraron solicitudes",
+)
+# Usuario SECUNDARIO sin el perfil para la opción (p.ej. FACTURA1/FACTURAL):
+# SOL responde con un aviso de permisos, no con una tabla vacía.
+_MARCA_SIN_ACCESO = (
+    "no cuenta con los permisos", "no cuenta con permiso", "no tiene permiso",
+    "no tiene acceso", "no esta autorizado", "no está autorizado",
+    "acceso denegado", "no cuenta con el perfil", "no tiene el perfil",
+    "opcion no disponible", "opción no disponible", "no autorizado",
+    "no tiene asignada", "no cuenta con privilegios", "usted no tiene",
+    "no esta habilitado", "no está habilitado", "perfil no",
+)
+# Encabezados que delatan una tabla de RESULTADOS (≥2 → es tabla de datos).
+_SIG_ENCABEZADOS = (
+    "periodo", "orden", "importe", "formulario", "tributo", "npd",
+    "monto exigible", "banco", "fecha de pres",
+)
+
+
+def _texto_scopes(page) -> str:
+    """Texto visible de la página + sus frames (para marcadores)."""
+    partes = []
+    for sc in _scopes(page):
+        try:
+            partes.append(sc.inner_text("body"))
+        except Exception:
+            pass
+    return re.sub(r"\s+", " ", " ".join(partes)).lower()
+
+
+def _hay_marcador(texto: str, marcadores) -> bool:
+    return any(m in texto for m in marcadores)
+
+
+def _tabla_es_resultado(t: dict) -> bool:
+    heads = " ".join(t.get("encabezados") or []).lower()
+    return sum(1 for k in _SIG_ENCABEZADOS if k in heads) >= 2
+
+
+def _estado_desde(info: dict) -> str:
+    """Estado honesto de una pantalla a partir de las señales de _volcar."""
+    if info.get("estado") == "no_se_pudo_leer":
+        return "no_se_pudo_leer"
+    if info.get("sin_acceso"):
+        return "sin_acceso"
+    return "con_datos" if info.get("tiene_datos") else "sin_datos"
+
+
 def _volcar(page, carpeta: Path, slug: str, cfg: SunatConfig) -> dict:
     """Vuelca HTML enmascarado (página + frames SUNAT) y devuelve la estructura.
     Captura de pantalla solo si DECL_DIAG_SHOTS=1 (puede mostrar el usuario SOL)."""
@@ -185,7 +242,15 @@ def _volcar(page, carpeta: Path, slug: str, cfg: SunatConfig) -> dict:
                     info["iframes"].append(_patron_url(url, cfg))
         except Exception:
             pass
-    info["tiene_datos"] = any(t["n_filas"] > 0 for t in info["tablas"])
+    # Datos REALES: filas de tablas de resultados (no layout) y sin marcador de
+    # "sin registros". Además, detecta falta de acceso (usuario secundario).
+    texto = _texto_scopes(page)
+    info["sin_acceso"] = _hay_marcador(texto, _MARCA_SIN_ACCESO)
+    filas_resultado = sum(t["n_filas"] for t in info["tablas"]
+                          if _tabla_es_resultado(t))
+    sin_registros = _hay_marcador(texto, _MARCA_SIN_REGISTROS)
+    info["tiene_datos"] = (filas_resultado > 0) and not sin_registros
+    info["filas_resultado"] = filas_resultado
     if SHOTS:
         try:
             page.screenshot(path=str(carpeta / f"{slug}.png"), full_page=True)
@@ -332,8 +397,7 @@ def diag_declaraciones(cfg: SunatConfig) -> dict:
                                 "detalle": "opción no encontrada por texto", "at": ahora}
                     else:
                         info = _volcar(destino, carpeta, tg["slug"], cfg)
-                        info["estado"] = ("con_datos" if info["tiene_datos"]
-                                          else "sin_datos")
+                        info["estado"] = _estado_desde(info)
                         info["at"] = ahora
                         if destino is not page:               # cerrar popup
                             try:
@@ -548,8 +612,7 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict
                                 "detalle": "no se pudo invocar el código", "at": ahora}
                     else:
                         info = _volcar(page, carpeta, tg["slug"], cfg)
-                        info["estado"] = ("con_datos" if info["tiene_datos"]
-                                          else "sin_datos")
+                        info["estado"] = _estado_desde(info)
                         info["at"] = ahora
                 except Exception as e:
                     info = {"slug": tg["slug"], "estado": "no_se_pudo_leer",
@@ -566,7 +629,7 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict
                         cur["t"] = "01_resultados"
                         _enviar_filtro_01(page, cfg, meses)
                         r = _volcar(page, carpeta, "01_consulta_general_resultados", cfg)
-                        r["estado"] = ("con_datos" if r["tiene_datos"] else "sin_datos")
+                        r["estado"] = _estado_desde(r)
                         r["pantalla"] = f"01 resultados (período, {meses} meses)"
                         res["pantallas"].append(r)
                     except Exception as e:
@@ -581,8 +644,7 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict
                         cur["t"] = "02_resultados"
                         sc = _enviar_rango_02(page, cfg, meses)
                         r = _volcar(page, carpeta, "02_djj_pagos_resultados", cfg)
-                        r["estado"] = ("con_datos" if r["tiene_datos"]
-                                       else "sin_datos")
+                        r["estado"] = _estado_desde(r)
                         r["pantalla"] = f"02 resultados (rango {meses} meses)"
                         res["pantallas"].append(r)
                         cur["t"] = "03_constancia"
