@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="es" data-rol="soporte">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Cronograma de vencimientos · interno</title>
+<style>
+  :root{
+    --fondo:#0E1117; --superficie:#161B24; --superficie-2:#1A1F2B;
+    --borde:#2E3548; --texto:#F0F3F8; --texto-suave:#8A94A8;
+    --verde:#3DD68C; --rojo:#F0526E; --ambar:#E8A53D; --marca:#6EA8FE; --ancho:1040px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--fondo);color:var(--texto);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.5;}
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:11px 18px;border-bottom:1px solid var(--borde);}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:.95rem;}
+  .chip{font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:#0E1117;background:var(--marca);padding:3px 9px;border-radius:999px;}
+  .wrap{max-width:var(--ancho);margin:0 auto;padding:18px;}
+  h1{font-size:1.2rem;margin:.2rem 0 1rem;}
+  h2{font-size:1rem;margin:1.4rem 0 .6rem;}
+  .card{background:var(--superficie);border:1px solid var(--borde);border-radius:14px;
+    padding:16px;margin-bottom:16px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}
+  label{display:block;font-size:.82rem;color:var(--texto-suave);margin:8px 0 4px;}
+  input,select{width:100%;padding:9px 10px;background:var(--superficie-2);
+    border:1px solid var(--borde);border-radius:9px;color:var(--texto);font-size:.9rem;}
+  .btn{display:inline-block;margin-top:12px;padding:9px 16px;border:0;border-radius:9px;
+    font-weight:700;cursor:pointer;font-size:.9rem;}
+  .btn--prev{background:var(--superficie-2);color:var(--texto);border:1px solid var(--borde);}
+  .btn--ok{background:var(--verde);color:#08120C;}
+  .muted{color:var(--texto-suave);font-size:.84rem;}
+  .msg{padding:10px 12px;border-radius:10px;margin-bottom:14px;font-size:.9rem;
+    background:color-mix(in srgb,var(--marca) 16%,transparent);
+    border:1px solid color-mix(in srgb,var(--marca) 40%,transparent);}
+  .err{background:color-mix(in srgb,var(--rojo) 14%,transparent);
+    border-color:color-mix(in srgb,var(--rojo) 44%,transparent);}
+  table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:8px;}
+  th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--borde);}
+  th{color:var(--texto-suave);font-weight:600;}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.72rem;
+    background:var(--superficie-2);border:1px solid var(--borde);}
+  code{background:var(--superficie-2);padding:1px 5px;border-radius:5px;}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="brand"><span class="chip">interno</span> Cronograma de vencimientos</div>
+  <a class="muted" href="/interno/mapa">← Mapa global</a>
+</div>
+<div class="wrap">
+  <h1>Cronograma SUNAT + Padrón de Buenos Contribuyentes</h1>
+  <p class="muted">Estado "pagó fuera de plazo". Flujo <b>preview → confirmar</b>:
+    nada se guarda sin que lo confirmes. alerta.pe informa; no dice "debe".</p>
+
+  {% set msg = request.query_params.get('msg') %}
+  {% if msg %}<div class="msg{% if 'Error' in msg %} err{% endif %}">{{ msg }}</div>{% endif %}
+
+  <!-- Estado actual -->
+  <div class="card">
+    <h2>Cargado hoy</h2>
+    {% if estado.sin_tablas %}
+      <div class="msg err">Las tablas aún no existen (migración pendiente):
+        <code>{{ estado.error }}</code>. El preview funciona igual; el guardado
+        requiere aplicar <code>migrar_declaraciones.py</code>.</div>
+    {% else %}
+      <p class="muted">Padrón BC: <b>{{ estado.padron or 0 }}</b> RUC(s).</p>
+      {% if estado.anios %}
+      <table><thead><tr><th>Año cronograma</th><th>Filas</th></tr></thead><tbody>
+        {% for a in estado.anios %}<tr><td>{{ a.anio }}</td><td>{{ a.n }}</td></tr>{% endfor %}
+      </tbody></table>
+      {% else %}<p class="muted">Aún no hay cronograma cargado.</p>{% endif %}
+    {% endif %}
+  </div>
+
+  <!-- Formularios de carga -->
+  <div class="card">
+    <h2>Cargar cronograma anual</h2>
+    <form method="post" action="/interno/cronograma/preview">
+      <input type="hidden" name="fuente" value="cronograma">
+      <div class="grid">
+        <div><label>URL del cronograma (HTML oficial)</label>
+          <input name="url" placeholder="https://www.sunat.gob.pe/orientacion/cronogramas/AAAA/cObligacionMensualAAAA.html"
+                 value="{% if preview and preview.fuente=='cronograma' %}{{ preview.url }}{% endif %}"></div>
+        <div><label>Año</label>
+          <input name="anio" inputmode="numeric" placeholder="2026"
+                 value="{% if preview and preview.fuente=='cronograma' %}{{ preview.anio }}{% endif %}"></div>
+        <div><label>N° Resolución</label>
+          <input name="num_resolucion" placeholder="281-2022/SUNAT"
+                 value="{% if preview and preview.fuente=='cronograma' %}{{ preview.num_resolucion }}{% endif %}"></div>
+      </div>
+      <button class="btn btn--prev" type="submit">Previsualizar</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Cargar padrón de Buenos Contribuyentes</h2>
+    <form method="post" action="/interno/cronograma/preview">
+      <input type="hidden" name="fuente" value="padron">
+      <label>URL del ZIP (BueCont_TXT.zip)</label>
+      <input name="url" placeholder="https://www.sunat.gob.pe/descarga/BueCont/BueCont_TXT.zip"
+             value="{% if preview and preview.fuente=='padron' %}{{ preview.url }}{% endif %}">
+      <button class="btn btn--prev" type="submit">Previsualizar</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Prórrogas (solo lectura por ahora)</h2>
+    <form method="post" action="/interno/cronograma/preview">
+      <input type="hidden" name="fuente" value="prorrogas">
+      <label>URL de la página de prórrogas</label>
+      <input name="url" placeholder="https://orientacion.sunat.gob.pe/Prorroga-de-vencimientos-..."
+             value="{% if preview and preview.fuente=='prorrogas' %}{{ preview.url }}{% endif %}">
+      <button class="btn btn--prev" type="submit">Previsualizar</button>
+    </form>
+    <p class="muted">Las prórrogas traen el ámbito (a quién aplican) en prosa y
+      varían por resolución → se muestran para mapeo manual; el guardado automático
+      está deshabilitado a propósito.</p>
+  </div>
+
+  <!-- Preview -->
+  {% if preview %}
+  <div class="card">
+    <h2>Vista previa — {{ preview.fuente }}</h2>
+    {% if preview.error %}
+      <div class="msg err">{{ preview.error }}</div>
+    {% elif preview.fuente in ('cronograma','padron') %}
+      <p>Se guardarían <b>{{ preview.total }}</b> fila(s). Muestra de
+        {{ preview.filas|length }}:</p>
+      {% if preview.fuente=='cronograma' %}
+      <table><thead><tr><th>Período</th><th>Díg</th><th>Grupo</th><th>Vence</th>
+        <th>Resol.</th></tr></thead><tbody>
+        {% for f in preview.filas %}<tr><td>{{ f.periodo }}</td><td>{{ f.digito_ruc }}</td>
+          <td><span class="pill">{{ f.grupo }}</span></td><td>{{ f.fecha_vencimiento }}</td>
+          <td class="muted">{{ f.num_resolucion or '—' }}</td></tr>{% endfor %}
+      </tbody></table>
+      {% else %}
+      <table><thead><tr><th>RUC</th><th>Nombre</th><th>Desde</th><th>Resol.</th></tr></thead><tbody>
+        {% for f in preview.filas %}<tr><td>{{ f.ruc }}</td><td>{{ f.nombre }}</td>
+          <td>{{ f.vigencia_desde }}</td><td class="muted">{{ f.num_resolucion }}</td></tr>{% endfor %}
+      </tbody></table>
+      {% endif %}
+      <form method="post" action="/interno/cronograma/guardar">
+        <input type="hidden" name="fuente" value="{{ preview.fuente }}">
+        <input type="hidden" name="url" value="{{ preview.url }}">
+        <input type="hidden" name="anio" value="{{ preview.anio }}">
+        <input type="hidden" name="num_resolucion" value="{{ preview.num_resolucion }}">
+        <button class="btn btn--ok" type="submit">Confirmar y guardar</button>
+      </form>
+    {% elif preview.fuente=='prorrogas' %}
+      <p>{{ preview.bloques|length }} bloque(s). Mapear período/ámbito a mano antes
+        de cargar (UI de mapeo pendiente):</p>
+      {% for b in preview.bloques %}
+      <div class="card" style="background:var(--superficie-2)">
+        <b>Contexto:</b> {{ b.contexto }}
+        <table><thead><tr><th>Dígito / otros</th><th>Vence</th></tr></thead><tbody>
+          {% for x in b.filas %}<tr><td>{{ x.etiqueta }}</td><td>{{ x.fecha }}</td></tr>{% endfor %}
+        </tbody></table>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <p class="muted">Generado {{ generado }}. Solo SOPORTE_GLOBAL.</p>
+</div>
+</body>
+</html>
