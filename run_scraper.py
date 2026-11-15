@@ -831,6 +831,16 @@ async def procesar_comp_diag(session, contrib: Contribuyente,
         f"(NO persiste, NO descarga)...")
     res = await asyncio.to_thread(
         _comp_diag_sync, contrib.ruc, cred.usuario_sol, clave, periodo, n)
+    # Estado de cada pantalla abierta (abrió / dio token / sin acceso).
+    for pa in res.get("pantallas", []):
+        log(f"    · pantalla {pa.get('slug')} (code {pa.get('code')}): "
+            f"abrió={pa.get('abierto')} token={pa.get('bearer')} "
+            f"sin_acceso={pa.get('sin_acceso')}")
+    if res.get("con_errores"):
+        log(f"  {contrib.ruc}: COMP-DIAG CON ERRORES — {res.get('motivo')}. "
+            f"Revisa las capturas en {res.get('carpeta')} "
+            f"(*_tab*.html/.png). NO se escribió en la BD.", "ERROR")
+        return 0
     if not res.get("exito"):
         log(f"  {contrib.ruc}: COMP-DIAG no completó (motivo={res.get('motivo')}). "
             f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")

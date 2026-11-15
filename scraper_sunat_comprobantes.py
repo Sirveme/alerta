@@ -73,6 +73,27 @@ TIPOS_CONSULTABLES = {"01": "Factura", "03": "Boleta",
                       "07": "Nota de crédito", "08": "Nota de débito"}
 _SERIE_ELECTRONICA = re.compile(r"^[FBE][A-Z0-9]{3}$")
 
+# Pantallas que DISPARAN los tokens, por CÓDIGO de menú SOL (data-id del árbol;
+# confirmados en el volcado del menú 00_menu.html). Se abren en PESTAÑA NUEVA (no
+# en el iframe ifrVCE), así que la captura es a nivel de CONTEXTO. Overridables por
+# env si SUNAT cambia los códigos.
+#   11.5.3.1.2 = "Consultas Facturas y Notas"  → SPA e-factura → api-cpe (Bearer CPE)
+#   60.2.2.1.1 = "Gestion de Compras" (SIRE RCE) → api-sire (Bearer SIRE + propuesta)
+#   25.2.1.1.4 = "Preliminar del Registro de Ventas Electrónico" (RVIE) → api-sire
+PANTALLAS = [
+    {"slug": "cpe_consulta", "code": os.getenv("COMP_CODE_CPE", "11.5.3.1.2"),
+     "label": "Consultas Facturas y Notas", "necesita": "cpe"},
+    {"slug": "sire_compras", "code": os.getenv("COMP_CODE_RCE", "60.2.2.1.1"),
+     "label": "Gestion de Compras (SIRE RCE)", "necesita": "sire"},
+    {"slug": "sire_ventas", "code": os.getenv("COMP_CODE_RVIE", "25.2.1.1.4"),
+     "label": "Preliminar del Registro de Ventas Electrónico (RVIE)",
+     "necesita": "sire"},
+]
+# Hosts de las SPA (confirmados en las grabaciones de asistente-sol) por si hace
+# falta navegar directo como respaldo.
+SPA_CPE = ("https://e-factura.sunat.gob.pe/app/contribuyentems/servicio/"
+           "consultacpe/consulta/nuevaconsulta/1.0.0/index.html")
+
 
 # ───────────────────────── utilidades de montos/fechas ─────────────────────────
 def _num(v):
@@ -450,53 +471,84 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
                         "AppleWebKit/537.36 (KHTML, like Gecko) "
                         "Chrome/120.0.0.0 Safari/537.36"))
         cap = _Captura(cfg)
+        # Captura a nivel de CONTEXTO: las pantallas SIRE/CPE abren PESTAÑA NUEVA,
+        # así escuchamos el Bearer y las respuestas de TODAS las páginas/tabs.
+        ctx.on("request", cap.on_request)
+        ctx.on("response", cap.on_response)
         page = ctx.new_page()
-        page.on("request", cap.on_request)
-        page.on("response", cap.on_response)
         try:
             if not login_sol(page, cfg):
                 res["motivo"] = "login"
                 log("  comp-diag: login SOL rechazado.", "ERROR")
                 return res
-            log("  comp-diag: login OK. Abro menú y capturo endpoints SIRE/CPE...", "OK")
+            log("  comp-diag: login OK. Navego por CÓDIGO a las pantallas que "
+                "disparan los tokens...", "OK")
 
-            # Catálogo de menú (para la guía de perfil mínimo: qué opciones necesita
-            # el usuario secundario). Enmascarado.
+            # Catálogo de menú + volcado de la página completa del menú (árbol con
+            # los data-id; sirve para verificar/actualizar los códigos y para la
+            # guía de perfil mínimo).
             try:
-                cat = _menu_catalogo(page, cfg)
-                res["menu_catalogo"] = cat
-                _volcar_json(carpeta, "00_menu.json", cat, cfg)
-                res["opciones_sire"] = [
-                    c for c in cat
-                    if any(t in _norm(c.get("texto", ""))
-                           for t in ("sire", "registro de compras", "registro de ventas",
-                                     "comprobante de pago", "rce", "rvie"))]
+                res["menu_catalogo"] = _menu_catalogo(page, cfg)
+                _volcar_json(carpeta, "00_menu.json", res["menu_catalogo"], cfg)
+            except Exception:
+                pass
+            try:
+                (carpeta / "00_menu_page.html").write_text(
+                    _sanea(page.content(), cfg), encoding="utf-8")
             except Exception:
                 pass
 
-            # Abrir las opciones SIRE/Comprobantes (best-effort por texto) para que
-            # la SPA dispare sus llamadas (así capturamos Bearer + endpoints reales,
-            # incluido el de VENTAS que no teníamos confirmado).
-            for c in (res.get("opciones_sire") or [])[:6]:
-                code = (c.get("onclick") or "")
-                m = re.search(r"code=([0-9.]+)", code) or re.search(r"'([0-9.]{5,})'", code)
-                if m:
-                    _ir_por_codigo(page, m.group(1), c.get("texto", "")[:50])
-                    _esperar(2.5)
-                # Si no hay código, el href/onclick quedó enmascarado: se omite.
-
-            _esperar(3)   # dar tiempo a que la SPA cargue y porte el Bearer
-
-            # Marcador de falta de perfil (usuario secundario sin SIRE).
-            if _hay_marcador(_texto_scopes(page), _MARCA_SIN_ACCESO):
-                res["sin_acceso"] = True
+            # Abrir cada pantalla por su código y ESPERAR (hasta 30 s) a que su SPA
+            # porte el Bearer, igual que esperábamos el iframe ifrVCE. Se vuelca una
+            # captura de cada pantalla abierta para ver qué pasó.
+            res["pantallas"] = []
+            for tg in PANTALLAS:
+                antes = _tiene_bearer(cap, tg["necesita"])
+                log(f"  comp-diag: abro {tg['slug']} (code {tg['code']})...", "INFO")
+                abierto = _ir_por_codigo(page, tg["code"], tg["label"][:50])
+                got = _esperar_bearer(page, cap, tg["necesita"], 30) if abierto else False
+                # Fallback CPE: navegar directo a la SPA si el menú no disparó token.
+                if tg["slug"] == "cpe_consulta" and not got:
+                    try:
+                        pg2 = ctx.new_page()
+                        pg2.goto(SPA_CPE, wait_until="domcontentloaded",
+                                 timeout=TIMEOUT_MS)
+                        got = _esperar_bearer(pg2, cap, "cpe", 20)
+                    except Exception:
+                        pass
+                sin_acc = _hay_marcador(_texto_scopes(page), _MARCA_SIN_ACCESO)
+                if sin_acc:
+                    res["sin_acceso"] = True
+                res["pantallas"].append(
+                    {"slug": tg["slug"], "code": tg["code"],
+                     "abierto": abierto, "bearer": bool(got and not antes) or bool(got),
+                     "sin_acceso": sin_acc})
+                _volcar_pantallas(ctx, carpeta, cfg, tg["slug"])
 
             # Mapa de red capturado (patrón+estado), sin valores sensibles.
             _volcar_json(carpeta, "red_api.json", cap.red, cfg)
             res["bearer_capturado"] = {"sire": bool(cap.bearer_sire),
                                        "cpe": bool(cap.bearer_cpe)}
 
-            # Procesar compras (ind=2) y ventas (ind=1).
+            # Si NO se capturó ningún token, NO se puede consultar nada: CON ERRORES.
+            if not cap.bearer_sire and not cap.bearer_cpe:
+                res["con_errores"] = True
+                falla = []
+                for pa in res["pantallas"]:
+                    falla.append(f"{pa['slug']}="
+                                 + ("sin_acceso" if pa["sin_acceso"]
+                                    else "no cargó" if not pa["abierto"]
+                                    else "sin token"))
+                res["motivo"] = ("no se obtuvo token SIRE/CPE ("
+                                 + "; ".join(falla) + ")")
+                log(f"  comp-diag: CON ERRORES — {res['motivo']}.", "ERROR")
+                res["exito"] = False
+                _volcar_json(carpeta, "resumen.json",
+                             {k: v for k, v in res.items()
+                              if k != "menu_catalogo"}, cfg)
+                return res
+
+            # Procesar compras (ind=2) y ventas (ind=1) solo con token disponible.
             res["libros"].append(_procesar_libro(
                 page, cap, carpeta, cfg, "compras", periodo, 2, n,
                 API_SIRE + _PROPUESTA_RCE, cod_tipo_ope))
@@ -526,6 +578,47 @@ def _endpoint_ventas(cap: _Captura) -> str | None:
             # reemplaza el período concreto por el placeholder {periodo}
             return re.sub(r"/\d{6}/", "/{periodo}/", base)
     return None
+
+
+def _tiene_bearer(cap: _Captura, cual: str) -> bool:
+    if cual == "cpe":
+        return bool(cap.bearer_cpe)
+    if cual == "sire":
+        return bool(cap.bearer_sire)
+    return bool(cap.bearer_cpe or cap.bearer_sire)
+
+
+def _esperar_bearer(page, cap: _Captura, cual: str, timeout_s: float = 30.0) -> bool:
+    """Espera (bombeando el event-loop con wait_for_timeout, para que los handlers
+    de request/response corran) hasta `timeout_s` a que aparezca el Bearer pedido.
+    Igual que esperábamos a que el iframe ifrVCE navegara en decl-diag."""
+    fin = time.monotonic() + timeout_s
+    while time.monotonic() < fin:
+        if _tiene_bearer(cap, cual):
+            return True
+        try:
+            page.wait_for_timeout(500)   # cede al loop; dispara on_request/on_response
+        except Exception:
+            try:
+                time.sleep(0.5)
+            except Exception:
+                return _tiene_bearer(cap, cual)
+    return _tiene_bearer(cap, cual)
+
+
+def _volcar_pantallas(ctx, carpeta: Path, cfg: SunatConfig, slug: str):
+    """Captura de cada página/tab abierta (HTML enmascarado + screenshot) para ver
+    qué pasó al abrir la pantalla."""
+    for i, pg in enumerate(ctx.pages):
+        try:
+            (carpeta / f"{slug}_tab{i}.html").write_text(
+                _sanea(pg.content(), cfg), encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            pg.screenshot(path=str(carpeta / f"{slug}_tab{i}.png"), full_page=True)
+        except Exception:
+            pass
 
 
 def _esperar(seg: float):
