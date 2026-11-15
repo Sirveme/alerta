@@ -525,33 +525,83 @@ def _periodo_a_fecha(periodo: str | None):
         return None
 
 
+def _sumar_meses(d: date, n: int) -> date:
+    """Suma n meses a una fecha (día 1, seguro)."""
+    total = d.month - 1 + n
+    return date(d.year + total // 12, total % 12 + 1, 1)
+
+
+def _hay_resultados_01(page) -> bool:
+    """¿La 01 avanzó a la grilla de resultados? La delata la tabla de detalle."""
+    for sc in _scopes(page):
+        try:
+            if sc.query_selector("#tblDetalleDeclPagos"):
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def _enviar_filtro_01(page, cfg: SunatConfig, meses: int, periodo_desde=None):
     """Consulta general: filtra por PERÍODO (mes/año desde-hasta) y busca. Trae la
-    grilla período×tributo×importe pagado. Devuelve el scope o None.
+    grilla período×tributo×importe pagado.
 
-    Si `periodo_desde` (AAAAMM) viene dado, el 'desde' es ese período exacto (útil
-    para cerrar un período suelto, p.ej. el 1662 de 202605); si no, se calcula
-    retrocediendo `meses` desde hoy."""
+    La 01 valida en JS que el rango NO supere **6 meses** (`validarFormCGeneral`;
+    si no, `alert('El rango de consulta es mayor a 6 meses...')` y NO envía). Por
+    eso con `periodo_desde` el 'hasta' = desde + 5 meses (bloque de 6), sin pasar
+    de hoy. Sin `periodo_desde`, retrocede `meses` desde hoy (≤6).
+
+    Devuelve `(scope, aviso)`: `aviso` = texto del alert de SUNAT si lo hubo
+    (rango inválido), si no None."""
     fr = _frame_con(page, "form[name='consultageneral']")
     if not fr:
         log("    01: no encontré el formulario consultageneral.", "WARN")
-        return None
+        return None, None
     hoy = date.today()
-    desde = _periodo_a_fecha(periodo_desde) or (hoy - timedelta(days=int(30.4 * meses)))
+    hoy_m1 = date(hoy.year, hoy.month, 1)
+    desde_f = _periodo_a_fecha(periodo_desde)
+    if desde_f:
+        desde = desde_f
+        tope = _sumar_meses(desde, 5)           # bloque de 6 meses (desde..desde+5)
+        hasta = tope if tope <= hoy_m1 else hoy_m1
+    else:
+        desde = hoy - timedelta(days=int(30.4 * meses))
+        hasta = hoy
+
+    # Captura del alert de SUNAT (rango inválido). Con un listener, Playwright ya
+    # no auto-descarta: el handler debe cerrarlo.
+    avisos: list[str] = []
+
+    def _on_dialog(d):
+        try:
+            avisos.append(d.message)
+        finally:
+            try:
+                d.dismiss()
+            except Exception:
+                pass
+
+    page.on("dialog", _on_dialog)
     try:
         _sel(fr, "adesde", str(desde.year))
         _sel(fr, "mdesde", f"{desde.month:02d}", str(desde.month))
-        _sel(fr, "ahasta", str(hoy.year))
-        _sel(fr, "mhasta", f"{hoy.month:02d}", str(hoy.month))
+        _sel(fr, "ahasta", str(hasta.year))
+        _sel(fr, "mhasta", f"{hasta.month:02d}", str(hasta.month))
         fr.evaluate("if (typeof validarFormCGeneral==='function'){"
                     "validarFormCGeneral();} else {"
                     "document.consultageneral.submit();}")
-        log(f"    01: enviado período {desde:%m/%Y}–{hoy:%m/%Y}.", "INFO")
+        log(f"    01: enviado período {desde:%m/%Y}–{hasta:%m/%Y}.", "INFO")
     except Exception as e:
         log(f"    01: no pude enviar el filtro: {_sanea(str(e), cfg)}", "WARN")
-        return fr
-    _pausa()
-    return _frame_con(page, "form[name='consultageneral']") or fr
+    finally:
+        _pausa()
+        try:
+            page.remove_listener("dialog", _on_dialog)
+        except Exception:
+            pass
+    aviso = _sanea(avisos[0], cfg) if avisos else None
+    scope = _frame_con(page, "form[name='consultageneral']") or fr
+    return scope, aviso
 
 
 def _resumen_constancias(scope, cfg: SunatConfig) -> dict:
@@ -651,9 +701,19 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                 if tg["slug"] == "01_consulta_general" and info["estado"] != "no_se_pudo_leer":
                     try:
                         cur["t"] = "01_resultados"
-                        _enviar_filtro_01(page, cfg, meses, periodo_desde)
+                        _sc01, aviso01 = _enviar_filtro_01(
+                            page, cfg, meses, periodo_desde)
                         r = _volcar(page, carpeta, "01_consulta_general_resultados", cfg)
-                        r["estado"] = _estado_desde(r)
+                        if aviso01 or not _hay_resultados_01(page):
+                            # El formulario NO avanzó a resultados: es un error de
+                            # filtro/navegación, NO "sin datos" (confundirlos haría
+                            # ver un fallo como "no hay declaraciones" → grave).
+                            r["estado"] = "error_filtro"
+                            r["aviso"] = aviso01 or (
+                                "La Consulta general no avanzó a resultados "
+                                "(revisa el rango ≤ 6 meses).")
+                        else:
+                            r["estado"] = _estado_desde(r)
                         r["pantalla"] = (f"01 resultados (desde {periodo_desde})"
                                          if periodo_desde
                                          else f"01 resultados (período, {meses} meses)")

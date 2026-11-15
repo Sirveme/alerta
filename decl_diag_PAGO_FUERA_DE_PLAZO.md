@@ -101,6 +101,13 @@ Modelos en `models.py` (raíz): `DeclaracionJurada`, `PagoTributario`,
   período×tributo×importe) + `02` por **fecha de presentación** en bloques de ≤6
   meses (para no perder presentaciones/pagos **tardíos** de períodos viejos, como
   el 1662 de 202605 que 01 no vio por ventana). Upsert por `num_orden`.
+  > La **01 valida en JS un tope de 6 meses** (`validarFormCGeneral` → alert
+  > *"El rango de consulta es mayor a 6 meses…"*). Por eso cada bloque de 01 es de
+  > **≤6 meses** (con `--periodo-desde`, el diag pone `hasta = desde + 5 meses`).
+  > Si el formulario **no avanza** a resultados, el diag lo reporta como
+  > **`error_filtro`** (con el texto del aviso de SUNAT), **nunca** como
+  > `sin_datos`: un fallo de navegación visto como "no hay declaraciones" sería
+  > grave.
 - **Incremental:** `02` por **fecha de presentación** de los **últimos ~40 días**
   → detecta `num_orden` nuevos (incluye tardíos de períodos viejos); por cada
   período tocado, refrescar `01` de ese período (importe/banco del pago).
