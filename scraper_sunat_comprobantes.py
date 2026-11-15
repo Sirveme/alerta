@@ -68,7 +68,15 @@ PAUSA = (float(os.getenv("COMP_PAUSA_MIN", "3")),
          float(os.getenv("COMP_PAUSA_MAX", "5")))   # entre comprobantes
 TIMEOUT_MS = int(os.getenv("COMP_TIMEOUT_MS", "30000"))
 N_DEFAULT = int(os.getenv("COMP_N", "5"))
-PERPAGE = int(os.getenv("COMP_PERPAGE", "1000"))
+# La SPA real usa perPage de 2 dígitos (grabación: perPage=99). perPage=1000 daba
+# 422 "errores de validación". Default conservador = 20 (overridable).
+PERPAGE = int(os.getenv("COMP_PERPAGE", "20"))
+# Endpoint de VENTAS (RVIE): no confirmado en grabaciones. Si la SPA no lo dispara,
+# se intenta por simetría con RCE (overridable). Se reporta como no confirmado.
+_PROPUESTA_RVIE = os.getenv(
+    "COMP_PROPUESTA_RVIE",
+    "/v1/contribuyente/migeigv/libros/rvie/propuesta/web/propuesta/"
+    "{periodo}/busqueda")
 
 # Tipos consultables como comprobante electrónico (resto = "no aplica").
 TIPOS_CONSULTABLES = {"01": "Factura", "03": "Boleta",
@@ -117,6 +125,29 @@ _MARCA_RECHAZO_SESION = (
     "autenticación", "autenticacion", "token inválido", "token invalido",
     "unauthorized", "401", "oauth",
 )
+# Interstitial SUNAT "VALIDA TUS DATOS DE CONTACTO" (correo/celular no validados).
+# Bloquea las operaciones. SOLO se permite CERRAR el aviso ("Finalizar") y seguir
+# ("Continuar sin confirmar"): NINGUNO cambia datos. NUNCA "Aquí"/actualizar, ni
+# enviar/validar códigos, ni escribir en campos de contacto.
+_MARCA_CONTACTO = (
+    "valida tus datos de contacto", "valida tus datos", "datos de contacto",
+    "continuar sin confirmar", "no has validado", "valida tu correo",
+    "valida tu celular", "correo y celular",
+)
+_BOTONES_SEGUROS_CONTACTO = ("Finalizar", "Continuar sin confirmar")
+
+# PII a enmascarar en volcados/capturas (datos personales del contribuyente).
+_RE_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_RE_CELULAR = re.compile(r"\b9\d{8}\b")
+
+
+def _mask_pii(txt: str) -> str:
+    """Enmascara correo y celular (9 dígitos) además del enmascarado general."""
+    if not txt:
+        return txt
+    txt = _RE_EMAIL.sub("***@***", txt)
+    txt = _RE_CELULAR.sub("9########", txt)
+    return txt
 
 
 # ───────────────────────── utilidades de montos/fechas ─────────────────────────
@@ -192,15 +223,28 @@ def normalizar_consulta(obj: dict) -> dict | None:
 
 
 def _mensaje_sunat(texto: str) -> str | None:
-    """Mensaje de error de SUNAT (422/500) para mostrarlo al contador."""
+    """Mensaje de error de SUNAT (422/500) para mostrarlo al contador. Busca el
+    detalle de validación en varias formas conocidas (errors/mensaje/field)."""
     try:
         j = json.loads(texto)
     except Exception:
         return None
-    errs = j.get("errors")
-    e = errs[0] if isinstance(errs, list) and errs else None
-    msg = (e or {}).get("desError") if isinstance(e, dict) else None
-    return (str(msg or j.get("message") or j.get("msg") or "")[:200]) or None
+    if isinstance(j, dict):
+        errs = j.get("errors") or j.get("listaError") or j.get("validaciones")
+        if isinstance(errs, list) and errs:
+            e = errs[0]
+            if isinstance(e, dict):
+                det = (e.get("desError") or e.get("mensaje") or e.get("msg")
+                       or e.get("campo") or e.get("field") or e.get("detalle"))
+                if det:
+                    return str(det)[:200]
+            elif isinstance(e, str):
+                return e[:200]
+        directo = (j.get("message") or j.get("msg") or j.get("mensaje")
+                   or j.get("detalle") or j.get("error"))
+        if directo:
+            return str(directo)[:200]
+    return None
 
 
 # ───────────────────────── extracción de la lista SIRE (por forma) ──────────────
@@ -364,10 +408,10 @@ def _get_api(page, url: str, bearer: str) -> dict:
 
 
 def _volcar_json(carpeta: Path, nombre: str, obj, cfg: SunatConfig):
-    """Escribe un JSON/texto ENMASCARADO a disco."""
+    """Escribe un JSON/texto ENMASCARADO a disco (incluye PII: correo/celular)."""
     try:
         txt = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False, indent=1)
-        (carpeta / nombre).write_text(_sanea(txt, cfg), encoding="utf-8")
+        (carpeta / nombre).write_text(_mask_pii(_sanea(txt, cfg)), encoding="utf-8")
     except Exception:
         pass
 
@@ -396,12 +440,18 @@ def _procesar_libro(page, cap: _Captura, carpeta: Path, cfg: SunatConfig,
         url = url_propuesta.format(periodo=periodo)
         sep = "&" if "?" in url else "?"
         url = f"{url}{sep}codTipoOpe={cod_tipo_ope}&page=1&perPage={PERPAGE}"
+        res["lista"]["url_patron"] = _patron_url(url, cfg)
         r = _get_api(page, url, bearer)
         res["lista"]["estado"] = r.get("estado") or r.get("error")
+        res["lista"]["perPage"] = PERPAGE
+        res["lista"]["codTipoOpe"] = cod_tipo_ope
         if r.get("estado") == 200:
             cuerpo = r.get("texto")
             res["lista"]["fuente"] = "consulta_directa"
         else:
+            # Volcar el CUERPO CRUDO del error (SUNAT suele decir qué campo falla).
+            _volcar_json(carpeta, f"lista_{libro}_error.json", r.get("texto", ""), cfg)
+            res["lista"]["cuerpo_error"] = (r.get("texto", "") or "")[:600]
             res["errores"].append(
                 {"paso": "lista", "estado": r.get("estado"),
                  "msg": _mensaje_sunat(r.get("texto", "")) or r.get("error")})
@@ -510,12 +560,39 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
         ctx.on("response", cap.on_response)
         page = ctx.new_page()
         try:
-            if not login_sol(page, cfg):
-                res["motivo"] = "login"
-                log("  comp-diag: login SOL rechazado.", "ERROR")
+            try:
+                ok_login = login_sol(page, cfg)
+            except Exception as e:
+                msg = f"{type(e).__name__}: {e}"
+                # Caída de red / DNS (p.ej. ERR_NAME_NOT_RESOLVED, getaddrinfo) NO es
+                # un rechazo de credenciales: se reporta como sin conexión.
+                if re.search(r"ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|"
+                             r"getaddrinfo|ENOTFOUND| ERR_CONNECTION|net::ERR|"
+                             r"ERR_TIMED_OUT|Timeout.*exceeded.*goto", msg, re.I):
+                    res["motivo"] = "sin_conexion"
+                    log(f"  comp-diag: SIN CONEXIÓN / DNS ({_sanea(msg, cfg)}). "
+                        f"No es rechazo de login.", "ERROR")
+                else:
+                    res["motivo"] = "login_error"
+                    log(f"  comp-diag: error en login ({_sanea(msg, cfg)}).", "ERROR")
                 return res
-            log("  comp-diag: login OK. Navego por CÓDIGO a las pantallas que "
-                "disparan los tokens...", "OK")
+            if not ok_login:
+                res["motivo"] = "login"
+                log("  comp-diag: login SOL rechazado (credenciales).", "ERROR")
+                return res
+            log("  comp-diag: login OK. Reviso interstitial de contacto y navego "
+                "por CÓDIGO a las pantallas que disparan los tokens...", "OK")
+
+            # Interstitial 'VALIDA TUS DATOS DE CONTACTO' (bloquea las operaciones).
+            try:
+                page.wait_for_timeout(1500)
+                if _manejar_contacto_sin_validar(ctx):
+                    res["contacto_sin_validar"] = True
+                    log("  comp-diag: contacto_sin_validar — SUNAT exige validar "
+                        "correo y celular. Cerré el aviso con 'Finalizar'/'Continuar "
+                        "sin confirmar' (sin tocar datos).", "WARN")
+            except Exception:
+                pass
 
             # Catálogo de menú + volcado de la página completa del menú (árbol con
             # los data-id; sirve para verificar/actualizar los códigos y para la
@@ -527,7 +604,7 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
                 pass
             try:
                 (carpeta / "00_menu_page.html").write_text(
-                    _sanea(page.content(), cfg), encoding="utf-8")
+                    _mask_pii(_sanea(page.content(), cfg)), encoding="utf-8")
             except Exception:
                 pass
 
@@ -541,6 +618,13 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
                 # Dar un respiro a que abra la tab y cargue algo de contenido.
                 try:
                     page.wait_for_timeout(2000)
+                except Exception:
+                    pass
+                # El interstitial de contacto puede reaparecer en la tab de la SPA:
+                # cerrarlo de forma segura (Finalizar / Continuar sin confirmar).
+                try:
+                    if _manejar_contacto_sin_validar(ctx):
+                        res["contacto_sin_validar"] = True
                 except Exception:
                     pass
                 # GUARDIÁN: si CUALQUIER tab es una pantalla de aceptación/
@@ -637,7 +721,22 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
                 page, cap, carpeta, cfg, "ventas", periodo, 1, n,
                 _endpoint_ventas(cap), cod_tipo_ope))
 
-            res["exito"] = True
+            # Si alguna LISTA falló (4xx/5xx) o no trajo registros por error, el
+            # resumen NO puede decir OK: CON ERRORES (lista <estado>).
+            fallas_lista = []
+            for lb in res["libros"]:
+                est = lb.get("lista", {}).get("estado")
+                if isinstance(est, int) and est >= 400:
+                    fallas_lista.append(f"{lb['libro']} lista {est}")
+                elif lb.get("errores"):
+                    fallas_lista.append(f"{lb['libro']} {lb['errores'][0].get('msg')}")
+            if fallas_lista:
+                res["con_errores"] = True
+                res["motivo"] = "CON ERRORES (" + "; ".join(fallas_lista) + ")"
+                res["exito"] = False
+                log(f"  comp-diag: {res['motivo']}.", "ERROR")
+            else:
+                res["exito"] = True
             _volcar_json(carpeta, "resumen.json",
                          {k: v for k, v in res.items() if k != "menu_catalogo"}, cfg)
             _escribir_excel(carpeta, cfg, res)
@@ -650,15 +749,14 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
 
 
 def _endpoint_ventas(cap: _Captura) -> str | None:
-    """Endpoint de la propuesta de VENTAS (RVIE). No está confirmado en las
-    grabaciones → se toma del tráfico capturado si la página lo llamó; si no, None
-    (y el diag lo reporta como pendiente, sin adivinar)."""
+    """Endpoint de la propuesta de VENTAS (RVIE). Preferimos el REAL capturado del
+    tráfico de la SPA; si la SPA no lo disparó, caemos al candidato por simetría con
+    RCE (COMP_PROPUESTA_RVIE), marcado como NO confirmado en el reporte."""
     for pr in cap.propuestas:
         if libro_de_url(pr["url"]) == "ventas":
             base = pr["url"].split("?")[0]
-            # reemplaza el período concreto por el placeholder {periodo}
             return re.sub(r"/\d{6}/", "/{periodo}/", base)
-    return None
+    return API_SIRE + _PROPUESTA_RVIE
 
 
 def _abrir_menu(page, code: str, label: str) -> bool:
@@ -675,6 +773,61 @@ def _abrir_menu(page, code: str, label: str) -> bool:
             return _ir_por_codigo(page, code, label)
         except Exception:
             return False
+
+
+def _manejar_contacto_sin_validar(ctx) -> bool:
+    """Detecta el interstitial 'VALIDA TUS DATOS DE CONTACTO'. Si está, lo CIERRA de
+    forma segura: SOLO pulsa 'Finalizar' (cerrar aviso) y 'Continuar sin confirmar'
+    (no cambia datos). NUNCA toca 'Aquí'/actualizar, ni envía/valida códigos, ni
+    escribe en campos de contacto. Devuelve True si lo detectó (estado útil:
+    'contacto_sin_validar' → el contador debe validar correo y celular en SOL)."""
+    detectado = False
+    try:
+        paginas = list(ctx.pages)
+    except Exception:
+        paginas = []
+    for pg in paginas:
+        try:
+            txt = pg.inner_text("body").lower()
+        except Exception:
+            continue
+        if not _hay_marcador(txt, _MARCA_CONTACTO):
+            continue
+        detectado = True
+        # Precaución: si la MISMA pantalla fuera de aceptación/consentimiento, manda
+        # el guardián (NO tocar nada), no el cierre de contacto.
+        try:
+            es_ace, _ = detectar_aceptacion(pg)
+            if es_ace:
+                continue
+        except Exception:
+            pass
+        # Cerrar SOLO con los botones seguros, por texto EXACTO. Nada más.
+        for etiqueta in _BOTONES_SEGUROS_CONTACTO:
+            try:
+                b = pg.get_by_role("button", name=re.compile(
+                    rf"^\s*{re.escape(etiqueta)}\s*$", re.I))
+                if b and b.count() > 0:
+                    b.first.click(timeout=2500)
+                    try:
+                        pg.wait_for_timeout(800)
+                    except Exception:
+                        pass
+                    continue
+            except Exception:
+                pass
+            try:
+                b = pg.get_by_text(re.compile(
+                    rf"^\s*{re.escape(etiqueta)}\s*$", re.I))
+                if b and b.count() > 0:
+                    b.first.click(timeout=2500)
+                    try:
+                        pg.wait_for_timeout(800)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    return detectado
 
 
 def _clasificar_no_disponible(ctx) -> str | None:
@@ -838,13 +991,26 @@ def _cerrar_tabs_extra(ctx, page):
 
 def _volcar_pantallas(ctx, carpeta: Path, cfg: SunatConfig, slug: str):
     """Captura de cada página/tab abierta (HTML enmascarado + screenshot) para ver
-    qué pasó al abrir la pantalla."""
+    qué pasó. Si la pantalla trae datos de contacto (correo/celular), se OMITE el
+    PNG (no se puede enmascarar un pixel) y se deja solo el HTML enmascarado."""
     for i, pg in enumerate(ctx.pages):
+        tiene_contacto = False
         try:
+            html = pg.content()
+            tiene_contacto = _hay_marcador(html.lower(), _MARCA_CONTACTO)
             (carpeta / f"{slug}_tab{i}.html").write_text(
-                _sanea(pg.content(), cfg), encoding="utf-8")
+                _mask_pii(_sanea(html, cfg)), encoding="utf-8")
         except Exception:
             pass
+        if tiene_contacto:
+            # No se toma PNG: mostraría correo/celular en claro (PII).
+            try:
+                (carpeta / f"{slug}_tab{i}.png.OMITIDO.txt").write_text(
+                    "PNG omitido: la pantalla trae datos de contacto (PII). "
+                    "Ver el HTML enmascarado.", encoding="utf-8")
+            except Exception:
+                pass
+            continue
         try:
             pg.screenshot(path=str(carpeta / f"{slug}_tab{i}.png"), full_page=True)
         except Exception:

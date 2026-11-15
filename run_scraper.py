@@ -842,32 +842,46 @@ async def procesar_comp_diag(session, contrib: Contribuyente,
     bc0 = res.get("bearer_capturado", {})
     log(f"    · tokens capturados: SIRE={_sino(bc0.get('sire'))} "
         f"CPE={_sino(bc0.get('cpe'))}")
-    if res.get("con_errores"):
-        log(f"  {contrib.ruc}: COMP-DIAG CON ERRORES — {res.get('motivo')}. "
-            f"Revisa las capturas en {res.get('carpeta')} "
-            f"(*_tab*.html/.png). NO se escribió en la BD.", "ERROR")
+    # Casos que no llegan a navegar: sin conexión / error de login (no credenciales).
+    if res.get("motivo") == "sin_conexion":
+        log(f"  {contrib.ruc}: COMP-DIAG SIN CONEXIÓN / DNS — no es rechazo de login. "
+            f"Reintenta cuando haya red.", "ERROR")
         return 0
-    if not res.get("exito"):
-        log(f"  {contrib.ruc}: COMP-DIAG no completó (motivo={res.get('motivo')}). "
-            f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")
-        return 0
+    if res.get("contacto_sin_validar"):
+        log(f"  {contrib.ruc}: ALERTA contacto_sin_validar — SUNAT exige validar "
+            f"correo y celular en SOL (interstitial 'Valida tus datos de contacto'). "
+            f"Se cerró sin tocar datos.", "WARN")
     if res.get("sin_acceso"):
         log(f"  {contrib.ruc}: COMP-DIAG SIN ACCESO a SIRE — el contador debe "
-            f"asignar el perfil (Registro de Compras/Ventas Electrónico). "
-            f"Volcado en {res.get('carpeta')}.", "WARN")
+            f"asignar el perfil (Registro de Compras/Ventas Electrónico).", "WARN")
+    # Detalle por libro (siempre, también cuando hay error de lista).
     for libro in res.get("libros", []):
         li = libro.get("lista", {})
         tiempos = libro.get("tiempos", [])
         prom = round(sum(tiempos) / len(tiempos), 2) if tiempos else None
         log(f"    · {libro.get('libro')} (ind {libro.get('indicador')}): "
             f"lista={li.get('estado')} fuente={li.get('fuente')} "
+            f"perPage={li.get('perPage')} codTipoOpe={li.get('codTipoOpe')} "
             f"{li.get('n_registros')} reg / {li.get('n_consultables')} consultables, "
             f"{len(libro.get('comprobantes', []))} consultados, "
             f"{libro.get('items_total')} ítems, ~{prom}s/comprobante")
+        if li.get("url_patron"):
+            log(f"        request: {li.get('url_patron')}")
+        if li.get("cuerpo_error"):
+            log(f"        cuerpo error SUNAT: {li.get('cuerpo_error')}", "WARN")
         if li.get("claves_detectadas"):
             log(f"        campos lista detectados: {li.get('claves_detectadas')}")
         for err in libro.get("errores", []):
             log(f"        aviso {libro.get('libro')}: {err}", "WARN")
+    if res.get("con_errores"):
+        log(f"  {contrib.ruc}: COMP-DIAG {res.get('motivo')}. "
+            f"Volcado en {res.get('carpeta')} (lista_*_error.json tiene el cuerpo "
+            f"crudo de SUNAT). NO se escribió en la BD.", "ERROR")
+        return 0
+    if not res.get("exito"):
+        log(f"  {contrib.ruc}: COMP-DIAG no completó (motivo={res.get('motivo')}). "
+            f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")
+        return 0
     log(f"  {contrib.ruc}: COMP-DIAG OK — volcado en {res.get('carpeta')} "
         f"(lista_*.json, detalle_*.json, red_api.json, muestra_items.xlsx). "
         f"NO se escribió en la BD.", "OK")
