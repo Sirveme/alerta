@@ -140,12 +140,33 @@ Modelos en `models.py` (raíz): `DeclaracionJurada`, `PagoTributario`,
    `SIN_VENCIMIENTO` de `cronograma.py`.
 
 ### Estado de implementación (rama, sin migrar / sin merge)
+Decisión 16/11/2026: **diag-first** para el cronograma Y el padrón BC.
+
+Hecho:
 - `cronograma.py`: lógica pura + regla conservadora + estados
-  (pago_dentro/pago_fuera/sin_pago/sin_vencimiento) + autotest. ✔
-- `models.CronogramaVencimiento` y tabla `cronograma_vencimientos`:
-  `num_resolucion`, `fuente`, `validado_pdf_at`, `cargado_at`. ✔ (migración sin correr)
-- **Pendiente de construir cuando se apruebe**: el cargador anual
-  `cargar_cronograma_sunat(anio)` (scrape tabla HTML + guardar N° resolución/URL +
-  validación PDF) y la vista `/interno` con **preview→confirmar**; el enlace del
-  `es_buen_contribuyente` del RUC (de la ficha SUNAT) cuando lo tengamos — hasta
-  entonces, `None` → conservador.
+  (pago_dentro/pago_fuera/sin_pago/sin_vencimiento) + `es_buen_contribuyente(ruc,
+  padrón)` (None sin padrón → conservador) + autotest. ✔
+- `models.CronogramaVencimiento` (+ `num_resolucion`/`fuente`/`validado_pdf_at`) y
+  `models.PadronBuenContribuyente`; tablas en `migrar_declaraciones.py`. ✔ (sin correr)
+- `diag_publico.py`: **volcador diag-first de páginas públicas** (sin login, sin
+  BD). Vuelca estructura (HTML, tablas con encabezados+n_filas+muestra, forms,
+  enlaces útiles, red) a `descargas/<slug>_<ts>/`. Es el paso que desbloquea el
+  parser. ✔
+
+Pendiente (tras ver los volcados reales):
+1. **Parser + cargador del cronograma** `cargar_cronograma_sunat(anio)`: parsea la
+   tabla real (del volcado), hace upsert por `(periodo, digito, grupo)`, graba
+   `num_resolucion`+`fuente`, valida vs PDF 1×/año (`validado_pdf_at`).
+2. **Parser + cargador del padrón BC**: upsert por `ruc`.
+3. **Vista `/interno/cronograma`** (SOPORTE_GLOBAL, como `/interno/mapa`), con
+   **preview→confirmar**: GET muestra la vista previa parseada (períodos × dígitos
+   × grupos) SIN guardar; un botón **Confirmar** recién hace el upsert. Muestra
+   también lo ya cargado por año. Disparo también por tarea del worker (dic/ene),
+   usando el mismo cargador con un flag de confirmación automática solo si la
+   validación estructural pasa (si no, queda en estado "por confirmar").
+
+Cómo volcar (local; públicas, sin railway/SOL):
+```
+python diag_publico.py cronograma_2026 "<URL oficial del cronograma del año>"
+python diag_publico.py bc_padron       "<URL del padrón de Buenos Contribuyentes>"
+```

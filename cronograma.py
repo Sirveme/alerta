@@ -40,6 +40,16 @@ def digito_ruc(ruc: str | None) -> int | None:
     return int(r[-1])
 
 
+def es_buen_contribuyente(ruc, rucs_bc_vigentes) -> bool | None:
+    """¿El RUC es Buen Contribuyente? Decide desde el padrón ya cargado.
+      - `rucs_bc_vigentes` = set de RUCs BC vigentes → True/False.
+      - `rucs_bc_vigentes` = None (NO hay padrón cargado) → **None**: se aplica la
+        regla CONSERVADORA (fecha más tardía), nunca se asume que no lo es."""
+    if rucs_bc_vigentes is None or not ruc:
+        return None
+    return str(ruc).strip() in rucs_bc_vigentes
+
+
 def _fecha(v):
     """Normaliza una fila: acepta dict o atributo `fecha_vencimiento` (date)."""
     if v is None:
@@ -147,5 +157,10 @@ if __name__ == "__main__":
     r6 = clasificar_pago("10467016283", date(2026, 6, 20), filas,
                          es_buen_contribuyente=False)
     assert r6["estado"] == PAGO_FUERA and r6["vencimiento"] == date(2026, 6, 16), r6
+
+    # Padrón BC: resolución de es_buen_contribuyente.
+    assert es_buen_contribuyente("10467016283", {"10467016283"}) is True
+    assert es_buen_contribuyente("10467016283", set()) is False
+    assert es_buen_contribuyente("10467016283", None) is None   # sin padrón → conservador
 
     print("cronograma.py autotest OK")

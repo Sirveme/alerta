@@ -1849,3 +1849,33 @@ class CronogramaVencimiento(Base):
     fuente: Mapped[str | None] = mapped_column(String(300))           # URL (tabla/Resolución)
     validado_pdf_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cargado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Padrón de Buenos Contribuyentes (proyecto decl-diag). Lista de RUCs en el
+# Régimen de Buenos Contribuyentes (vencen en fecha más tardía). Se CARGA del
+# padrón oficial de SUNAT (diag-first; ver diag_publico.py + cargador pendiente).
+# Sirve para resolver `es_buen_contribuyente(ruc)` en cronograma.py; si un RUC no
+# está, se usa la regla CONSERVADORA (fecha más tardía), no se asume que no lo es.
+# ═════════════════════════════════════════════════════════════════════
+class PadronBuenContribuyente(Base):
+    """Un RUC del padrón de Buenos Contribuyentes, con su vigencia. `grupo`
+    distingue régimen general de BC vs UESP si el padrón lo separa."""
+    __tablename__ = "padron_buenos_contribuyentes"
+    __table_args__ = (
+        UniqueConstraint("ruc", name="uq_padron_bc_ruc"),
+        Index("ix_padron_bc_vigente", "vigente"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    ruc: Mapped[str] = mapped_column(String(11), nullable=False)
+    grupo: Mapped[str] = mapped_column(String(24), default="buenos_contribuyentes",
+                                       nullable=False)  # 'buenos_contribuyentes'|'uesp'
+    vigente: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    vigencia_desde: Mapped[datetime | None] = mapped_column(Date)
+    vigencia_hasta: Mapped[datetime | None] = mapped_column(Date)
+
+    # Trazabilidad de la carga (de qué padrón/fecha salió).
+    fuente: Mapped[str | None] = mapped_column(String(300))
+    cargado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

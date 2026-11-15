@@ -11,6 +11,9 @@ Crea:
   · cronograma_vencimientos — vencimientos SUNAT por período y último dígito de RUC
                               (estado "pagó fuera de plazo"; se carga de fuente
                               oficial cada año, NO hardcodeado).
+  · padron_buenos_contribuyentes — RUCs del Régimen de Buenos Contribuyentes
+                              (resuelve es_buen_contribuyente; se carga del padrón
+                              SUNAT, diag-first).
 
 Coincide con los modelos DeclaracionJurada / PagoTributario / DeclaracionTributo
 de models.py.
@@ -120,6 +123,24 @@ DDL = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS ix_cronograma_periodo ON cronograma_vencimientos (periodo)",
+
+    # ── padron_buenos_contribuyentes (resuelve es_buen_contribuyente) ──
+    # Lista oficial de RUCs del Régimen de Buenos Contribuyentes. Se carga del
+    # padrón SUNAT (diag-first). Si un RUC no está → regla conservadora.
+    """
+    CREATE TABLE IF NOT EXISTS padron_buenos_contribuyentes (
+        id              UUID PRIMARY KEY,
+        ruc             VARCHAR(11) NOT NULL,
+        grupo           VARCHAR(24) NOT NULL DEFAULT 'buenos_contribuyentes',
+        vigente         BOOLEAN NOT NULL DEFAULT TRUE,
+        vigencia_desde  DATE,
+        vigencia_hasta  DATE,
+        fuente          VARCHAR(300),
+        cargado_at      TIMESTAMPTZ,
+        CONSTRAINT uq_padron_bc_ruc UNIQUE (ruc)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_padron_bc_vigente ON padron_buenos_contribuyentes (vigente)",
 ]
 
 
@@ -129,7 +150,8 @@ async def main():
             await conn.execute(text(sentencia))
         # Verificación.
         for tabla in ("declaraciones_juradas", "pagos_tributarios",
-                      "declaraciones_tributos", "cronograma_vencimientos"):
+                      "declaraciones_tributos", "cronograma_vencimientos",
+                      "padron_buenos_contribuyentes"):
             n = await conn.scalar(text(f"SELECT count(*) FROM {tabla}"))
             print(f"  {tabla}: OK ({n} filas)")
     print("Migración de Declaraciones y Pagos lista (aditiva, idempotente).")
