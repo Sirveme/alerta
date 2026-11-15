@@ -835,8 +835,10 @@ async def procesar_comp_diag(session, contrib: Contribuyente,
     def _sino(x):
         return "sí" if x else "no"
     for pa in res.get("pantallas", []):
+        # OJO: no escribir 'token=' en el log: el enmascarador de seguridad_logs
+        # redacta 'token=<valor>' → saldría 'token=***'. Se usa 'bearer='.
         log(f"    · pantalla {pa.get('slug')} (code {pa.get('code')}): "
-            f"abrió={_sino(pa.get('abierto'))} token={_sino(pa.get('bearer'))} "
+            f"abrió={_sino(pa.get('abierto'))} bearer={_sino(pa.get('bearer'))} "
             f"estado={pa.get('estado')}"
             + (f" [{pa.get('detalle')}]" if pa.get('detalle') else ""))
     bc0 = res.get("bearer_capturado", {})
