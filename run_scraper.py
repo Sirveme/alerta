@@ -30,20 +30,22 @@ from sqlalchemy.orm import selectinload
 
 # ── DECL-DIAG en LOCAL: usar la URL PÚBLICA del Postgres ─────────────────────
 # La DATABASE_URL del worker apunta al host INTERNO de Railway (*.railway.internal),
-# que NO resuelve desde tu PC (socket.gaierror: getaddrinfo failed). SOLO para el
-# modo `decl-diag`, y SOLO si existe, usamos DATABASE_PUBLIC_URL ANTES de importar
-# db (el engine se arma al importar db.py). No afecta a ningún otro modo ni al
-# worker en prod (que corre worker.py, no este __main__, y nunca pasa 'decl-diag').
+# que NO resuelve desde tu PC (socket.gaierror: getaddrinfo failed). SOLO para los
+# modos de DIAG locales (decl-diag / comp-diag), y SOLO si existe, usamos
+# DATABASE_PUBLIC_URL ANTES de importar db (el engine se arma al importar db.py). No
+# afecta a ningún otro modo ni al worker en prod (que corre worker.py, no este
+# __main__, y nunca pasa estos args).
 if any(a.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag",
-                     "decl-diag2", "--decl-diag2")
+                     "decl-diag2", "--decl-diag2",
+                     "comp-diag", "--comp-diag", "comprobantes-diag")
        for a in sys.argv[1:]):
     _pub = os.getenv("DATABASE_PUBLIC_URL")
     if _pub:
         os.environ["DATABASE_URL"] = _pub
-        print("[decl-diag] Conectando por DATABASE_PUBLIC_URL (host público de "
+        print("[diag] Conectando por DATABASE_PUBLIC_URL (host público de "
               "Railway), no por la interna.", flush=True)
     else:
-        print("[decl-diag] AVISO: no hay DATABASE_PUBLIC_URL en el entorno; usaré "
+        print("[diag] AVISO: no hay DATABASE_PUBLIC_URL en el entorno; usaré "
               "DATABASE_URL (fallará si es la interna). Ver instrucciones.",
               flush=True)
 
