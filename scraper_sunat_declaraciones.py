@@ -476,14 +476,41 @@ def _frame_con(page, selector: str):
     return None
 
 
-def _enviar_rango_02(page, cfg: SunatConfig, meses: int):
+def _esperar_frame_con(page, selector: str, timeout_s: float = 30.0,
+                       intervalo: float = 0.5):
+    """Como `_frame_con` pero ESPERA hasta `timeout_s` a que el selector aparezca
+    en ALGÚN frame. Las operaciones SOL cargan async dentro del iframe `ifrVCE`
+    ('Cargando aplicación…'); sin esperar, el form puede no existir todavía."""
+    fin = time.monotonic() + timeout_s
+    while time.monotonic() < fin:
+        sc = _frame_con(page, selector)
+        if sc:
+            return sc
+        try:
+            time.sleep(intervalo)
+        except Exception:
+            break
+    return _frame_con(page, selector)
+
+
+def _enviar_rango_02(page, cfg: SunatConfig, meses: int, reabrir=None):
     """En la Consulta DDJJ y pagos rellena un rango de `meses` (DD/MM/YYYY, bajo el
-    límite de 6 meses) y pulsa Buscar. Devuelve el scope con resultados o None."""
-    fr = _frame_con(page, "form[name='formFechas']")
+    límite de 6 meses) y pulsa Buscar. Devuelve `(scope, aviso)`: aviso = motivo si
+    el formulario no cargó (iframe async), None si OK. `reabrir` = callable para 1
+    reintento."""
+    fr = _esperar_frame_con(page, "form[name='formFechas']", 30)
+    if not fr and reabrir:
+        log("    02: formulario no apareció; reintento reabriendo la opción…", "WARN")
+        try:
+            reabrir()
+        except Exception:
+            pass
+        fr = _esperar_frame_con(page, "form[name='formFechas']", 30)
     if not fr:
-        log("    02: no encontré el formulario de fechas (¿cargó la operación?).",
+        log("    02: el formulario de fechas no cargó tras esperar + reintento.",
             "WARN")
-        return None
+        return None, ("El formulario de la Consulta de DDJJ y pagos no cargó "
+                      "(iframe ifrVCE) tras esperar 30s y 1 reintento.")
     hoy = date.today()
     desde = hoy - timedelta(days=int(30.4 * meses))
     try:
@@ -493,9 +520,9 @@ def _enviar_rango_02(page, cfg: SunatConfig, meses: int):
         log(f"    02: enviado rango {desde:%d/%m/%Y}–{hoy:%d/%m/%Y}.", "INFO")
     except Exception as e:
         log(f"    02: no pude enviar el rango: {_sanea(str(e), cfg)}", "WARN")
-        return fr
+        return fr, None
     _pausa()
-    return _frame_con(page, "form[name='formComprobante']") or fr
+    return (_frame_con(page, "form[name='formComprobante']") or fr), None
 
 
 def _sel(fr, name: str, *vals) -> bool:
@@ -542,7 +569,8 @@ def _hay_resultados_01(page) -> bool:
     return False
 
 
-def _enviar_filtro_01(page, cfg: SunatConfig, meses: int, periodo_desde=None):
+def _enviar_filtro_01(page, cfg: SunatConfig, meses: int, periodo_desde=None,
+                      reabrir=None):
     """Consulta general: filtra por PERÍODO (mes/año desde-hasta) y busca. Trae la
     grilla período×tributo×importe pagado.
 
@@ -552,11 +580,23 @@ def _enviar_filtro_01(page, cfg: SunatConfig, meses: int, periodo_desde=None):
     de hoy. Sin `periodo_desde`, retrocede `meses` desde hoy (≤6).
 
     Devuelve `(scope, aviso)`: `aviso` = texto del alert de SUNAT si lo hubo
-    (rango inválido), si no None."""
-    fr = _frame_con(page, "form[name='consultageneral']")
+    (rango inválido) o el motivo si el form no cargó; None si todo OK.
+
+    `reabrir` (callable sin args): reabre la opción de menú para 1 reintento si el
+    formulario no apareció (el iframe `ifrVCE` carga async)."""
+    fr = _esperar_frame_con(page, "form[name='consultageneral']", 30)
+    if not fr and reabrir:
+        log("    01: formulario no apareció; reintento reabriendo la opción…", "WARN")
+        try:
+            reabrir()
+        except Exception:
+            pass
+        fr = _esperar_frame_con(page, "form[name='consultageneral']", 30)
     if not fr:
-        log("    01: no encontré el formulario consultageneral.", "WARN")
-        return None, None
+        log("    01: el formulario consultageneral no cargó tras esperar + reintento.",
+            "WARN")
+        return None, ("El formulario de la Consulta general no cargó (iframe "
+                      "ifrVCE) tras esperar 30s y 1 reintento.")
     hoy = date.today()
     hoy_m1 = date(hoy.year, hoy.month, 1)
     desde_f = _periodo_a_fecha(periodo_desde)
@@ -702,7 +742,9 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                     try:
                         cur["t"] = "01_resultados"
                         _sc01, aviso01 = _enviar_filtro_01(
-                            page, cfg, meses, periodo_desde)
+                            page, cfg, meses, periodo_desde,
+                            reabrir=lambda: _ir_por_codigo(
+                                page, tg["code"], tg["desc"]))
                         r = _volcar(page, carpeta, "01_consulta_general_resultados", cfg)
                         if aviso01 or not _hay_resultados_01(page):
                             # El formulario NO avanzó a resultados: es un error de
@@ -728,9 +770,17 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                 if tg["slug"] == "02_djj_pagos" and info["estado"] != "no_se_pudo_leer":
                     try:
                         cur["t"] = "02_resultados"
-                        sc = _enviar_rango_02(page, cfg, meses)
+                        sc, aviso02 = _enviar_rango_02(
+                            page, cfg, meses,
+                            reabrir=lambda: _ir_por_codigo(
+                                page, tg["code"], tg["desc"]))
                         r = _volcar(page, carpeta, "02_djj_pagos_resultados", cfg)
-                        r["estado"] = _estado_desde(r)
+                        if aviso02:
+                            # El form no cargó: error de navegación, NO "sin datos".
+                            r["estado"] = "error_filtro"
+                            r["aviso"] = aviso02
+                        else:
+                            r["estado"] = _estado_desde(r)
                         r["pantalla"] = f"02 resultados (rango {meses} meses)"
                         res["pantallas"].append(r)
                         cur["t"] = "03_constancia"
@@ -744,7 +794,16 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                              "pantalla": "03 Constancia (0621/1662)"})
                 _pausa()
             res["red"] = red
+            # exito = el diag CORRIÓ (login + navegación), aunque alguna pantalla
+            # falle. Las pantallas con error se listan aparte para que el resumen
+            # NO cante "OK" si hubo error_filtro/no_se_pudo_leer.
             res["exito"] = True
+            res["pantallas_error"] = [
+                {"slug": p.get("slug"), "estado": p.get("estado"),
+                 "aviso": p.get("aviso") or p.get("detalle")}
+                for p in res["pantallas"]
+                if p.get("estado") in ("error_filtro", "no_se_pudo_leer")]
+            res["con_errores"] = bool(res["pantallas_error"])
         finally:
             try:
                 ctx.close(); nav.close()

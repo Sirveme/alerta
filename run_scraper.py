@@ -879,8 +879,18 @@ async def procesar_decl_diag2(session, contrib: Contribuyente,
         log(f"    · {pant.get('slug')}: {pant.get('estado', '—')} "
             f"({len(tablas)} tabla(s), {cols} encabezado(s)) "
             f"{pant.get('detalle', '')}".rstrip())
-    log(f"  {contrib.ruc}: DECL-DIAG2 OK — {len(res.get('red', []))} petición(es) "
-        f"de red. Volcado en {res.get('carpeta')}. NO se escribió en la BD.", "OK")
+    errores = res.get("pantallas_error", [])
+    if errores:
+        detalle = "; ".join(
+            f"{e.get('slug')}={e.get('estado')}"
+            + (f" ({e.get('aviso')})" if e.get("aviso") else "")
+            for e in errores)
+        log(f"  {contrib.ruc}: DECL-DIAG2 CON ERRORES — {len(errores)} pantalla(s): "
+            f"{detalle}. {len(res.get('red', []))} petición(es) de red. "
+            f"Volcado en {res.get('carpeta')}. NO se escribió en la BD.", "ERROR")
+    else:
+        log(f"  {contrib.ruc}: DECL-DIAG2 OK — {len(res.get('red', []))} petición(es) "
+            f"de red. Volcado en {res.get('carpeta')}. NO se escribió en la BD.", "OK")
     return len(res.get("pantallas", []))
 
 
