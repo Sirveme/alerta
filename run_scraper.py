@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -58,6 +59,7 @@ import gcs
 import scraper_sunat_playwgth as scraper
 import scraper_sunafil   # lector de la casilla SUNAFIL (SUNAFIL-1)
 import scraper_sunat_declaraciones as scraper_decl  # diag Declaraciones y Pagos
+import scraper_sunat_comprobantes as scraper_comp   # diag Comprobantes (compras/ventas con ítems)
 
 TZ_LIMA = ZoneInfo("America/Lima")
 
@@ -801,6 +803,61 @@ def _decl_diag2_sync(ruc: str, usuario_sol: str, clave_sol: str,
     return scraper_decl.diag_declaraciones_fase2(cfg, periodo_desde=periodo_desde)
 
 
+def _comp_diag_sync(ruc: str, usuario_sol: str, clave_sol: str,
+                    periodo: str, n: int) -> dict:
+    """Diag de Comprobantes (sync, Playwright): lista del período (compras+ventas)
+    desde SIRE + ítems de los primeros `n` desde api-cpe. NO BD, NO PDFs."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper_comp.comp_diag(cfg, periodo, n=n)
+
+
+async def procesar_comp_diag(session, contrib: Contribuyente,
+                             periodo: str, n: int) -> int:
+    """DIAGNÓSTICO de Comprobantes compras/ventas con ítems. SOLO LEE la credencial
+    para loguear; NO escribe en la BD, NO descarga archivos. Correr LOCAL."""
+    cred = contrib.credencial
+    if not cred:
+        log(f"  {contrib.ruc}: sin credencial registrada, no puedo loguear.", "WARN")
+        return 0
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    log(f"  {contrib.ruc}: COMP-DIAG período {periodo}, primeros {n} por libro "
+        f"(NO persiste, NO descarga)...")
+    res = await asyncio.to_thread(
+        _comp_diag_sync, contrib.ruc, cred.usuario_sol, clave, periodo, n)
+    if not res.get("exito"):
+        log(f"  {contrib.ruc}: COMP-DIAG no completó (motivo={res.get('motivo')}). "
+            f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")
+        return 0
+    if res.get("sin_acceso"):
+        log(f"  {contrib.ruc}: COMP-DIAG SIN ACCESO a SIRE — el contador debe "
+            f"asignar el perfil (Registro de Compras/Ventas Electrónico). "
+            f"Volcado en {res.get('carpeta')}.", "WARN")
+    bc = res.get("bearer_capturado", {})
+    log(f"    · Bearer capturado: SIRE={bc.get('sire')} CPE={bc.get('cpe')}")
+    for libro in res.get("libros", []):
+        li = libro.get("lista", {})
+        tiempos = libro.get("tiempos", [])
+        prom = round(sum(tiempos) / len(tiempos), 2) if tiempos else None
+        log(f"    · {libro.get('libro')} (ind {libro.get('indicador')}): "
+            f"lista={li.get('estado')} fuente={li.get('fuente')} "
+            f"{li.get('n_registros')} reg / {li.get('n_consultables')} consultables, "
+            f"{len(libro.get('comprobantes', []))} consultados, "
+            f"{libro.get('items_total')} ítems, ~{prom}s/comprobante")
+        if li.get("claves_detectadas"):
+            log(f"        campos lista detectados: {li.get('claves_detectadas')}")
+        for err in libro.get("errores", []):
+            log(f"        aviso {libro.get('libro')}: {err}", "WARN")
+    log(f"  {contrib.ruc}: COMP-DIAG OK — volcado en {res.get('carpeta')} "
+        f"(lista_*.json, detalle_*.json, red_api.json, muestra_items.xlsx). "
+        f"NO se escribió en la BD.", "OK")
+    return sum(len(l.get("comprobantes", [])) for l in res.get("libros", []))
+
+
 async def _contrib_para_diag(session, ruc_filtro: str | None):
     """Como _contribuyentes_a_scrapear pero SIN filtrar por estado: así el diag
     encuentra tu RUC aunque lo hayas puesto 'inactivo' para sacarlo del worker
@@ -1022,8 +1079,18 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
                ceros: bool = False, ceros_diag: bool = False,
                sunafil: bool = False, sunafil_diag: bool = False,
                decl_diag: bool = False, decl_diag2: bool = False,
-               decl_diag2_periodo: str | None = None) -> None:
+               decl_diag2_periodo: str | None = None,
+               comp_diag: bool = False, comp_periodo: str | None = None,
+               comp_n: int = 5) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
+    if comp_diag:
+        log("modo COMP-DIAG: lista del período (compras+ventas) desde SIRE + ítems "
+            "de los primeros N por api-cpe (NO BD, NO descargas). Correr LOCAL.",
+            "WARN")
+        if not ruc_filtro or not comp_periodo:
+            log("COMP-DIAG requiere RUC y --periodo AAAAMM. Uso: "
+                "run_scraper.py <RUC> comp-diag --periodo 202610 [--n 5]", "ERROR")
+            return
     if decl_diag or decl_diag2:
         log(f"modo DECL-DIAG{'2' if decl_diag2 else ''}: "
             + ("navega por código + rango + constancia 0621"
@@ -1058,14 +1125,16 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
     elif forzar:
         log("modo FORZAR: se scrapea aunque esté fresco.", "WARN")
     async with get_session() as session:
-        if decl_diag or decl_diag2:
+        if decl_diag or decl_diag2 or comp_diag:
             contribs = await _contrib_para_diag(session, ruc_filtro)
         else:
             contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if decl_diag2:
+                if comp_diag:
+                    await procesar_comp_diag(session, contrib, comp_periodo, comp_n)
+                elif decl_diag2:
                     await procesar_decl_diag2(session, contrib, decl_diag2_periodo)
                 elif decl_diag:
                     await procesar_decl_diag(session, contrib)
@@ -1110,6 +1179,7 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> decl-diag → login + vuelca ESTRUCTURA de Declaraciones y Pagos (NO BD, LOCAL)
     #   python run_scraper.py <RUC> decl-diag2 → fase 2: navega por código + rango + constancia 0621 (NO BD, LOCAL)
     #   python run_scraper.py <RUC> decl-diag2 --periodo-desde 202605 → fuerza el 'desde' de la pantalla 01 a ese período
+    #   python run_scraper.py <RUC> comp-diag --periodo 202610 [--n 5] → comprobantes compras/ventas con ítems (NO BD, LOCAL)
     ruc = None
     forzar = False
     solo_censo = False
@@ -1125,17 +1195,42 @@ if __name__ == "__main__":
     decl_diag = False
     decl_diag2 = False
     decl_diag2_periodo = None
-    _esperar_periodo = False
+    comp_diag = False
+    comp_periodo = None
+    comp_n = 5
+    _esperar_periodo = False      # --periodo-desde (decl-diag2)
+    _esperar_comp_periodo = False  # --periodo (comp-diag)
+    _esperar_n = False             # --n (comp-diag)
     for arg in sys.argv[1:]:
         if _esperar_periodo:
             decl_diag2_periodo = arg.strip()
             _esperar_periodo = False
+            continue
+        if _esperar_comp_periodo:
+            comp_periodo = arg.strip()
+            _esperar_comp_periodo = False
+            continue
+        if _esperar_n:
+            comp_n = int(re.sub(r"\D", "", arg) or "5")
+            _esperar_n = False
             continue
         if arg.lower().startswith("--periodo-desde="):
             decl_diag2_periodo = arg.split("=", 1)[1].strip()
             continue
         if arg.lower() in ("--periodo-desde", "periodo-desde"):
             _esperar_periodo = True
+            continue
+        if arg.lower().startswith("--periodo="):
+            comp_periodo = arg.split("=", 1)[1].strip()
+            continue
+        if arg.lower() in ("--periodo", "periodo"):
+            _esperar_comp_periodo = True
+            continue
+        if arg.lower().startswith("--n="):
+            comp_n = int(re.sub(r"\D", "", arg.split("=", 1)[1]) or "5")
+            continue
+        if arg.lower() in ("--n", "-n"):
+            _esperar_n = True
             continue
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
@@ -1163,6 +1258,8 @@ if __name__ == "__main__":
             decl_diag2 = True
         elif arg.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag"):
             decl_diag = True
+        elif arg.lower() in ("comp-diag", "--comp-diag", "comprobantes-diag"):
+            comp_diag = True
         else:
             ruc = arg
     asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill,
@@ -1170,4 +1267,5 @@ if __name__ == "__main__":
                      pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag,
                      sunafil=sunafil, sunafil_diag=sunafil_diag,
                      decl_diag=decl_diag, decl_diag2=decl_diag2,
-                     decl_diag2_periodo=decl_diag2_periodo))
+                     decl_diag2_periodo=decl_diag2_periodo,
+                     comp_diag=comp_diag, comp_periodo=comp_periodo, comp_n=comp_n))
