@@ -42,6 +42,9 @@ except Exception:                                   # pragma: no cover
     def _mask(x):
         return str(x) if x is not None else ""
 
+# Guardián de seguridad transversal: nunca tocar pantallas de aceptación.
+from guardian_aceptacion import texto_es_aceptacion
+
 TZ_LIMA = ZoneInfo("America/Lima")
 DEST = Path("./descargas")
 PAUSA_SEG = float(os.getenv("DECL_DIAG_PAUSA_SEG", "4"))      # entre pantallas
@@ -221,6 +224,9 @@ def _estado_desde(info: dict) -> str:
     """Estado honesto de una pantalla a partir de las señales de _volcar."""
     if info.get("estado") == "no_se_pudo_leer":
         return "no_se_pudo_leer"
+    # SEGURIDAD: una pantalla de aceptación/consentimiento se reporta y NO se toca.
+    if info.get("aceptacion"):
+        return "pantalla_de_aceptacion"
     if info.get("sin_acceso"):
         return "sin_acceso"
     return "con_datos" if info.get("tiene_datos") else "sin_datos"
@@ -257,6 +263,8 @@ def _volcar(page, carpeta: Path, slug: str, cfg: SunatConfig) -> dict:
     # "sin registros". Además, detecta falta de acceso (usuario secundario).
     texto = _texto_scopes(page)
     info["sin_acceso"] = _hay_marcador(texto, _MARCA_SIN_ACCESO)
+    # SEGURIDAD: marcar (no tocar) pantallas de aceptación/consentimiento.
+    info["aceptacion"] = bool(texto_es_aceptacion(texto))
     filas_resultado = sum(t["n_filas"] for t in info["tablas"]
                           if _tabla_es_resultado(t))
     sin_registros = _hay_marcador(texto, _MARCA_SIN_REGISTROS)
@@ -838,7 +846,10 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
                 # Si el usuario NO tiene acceso a esta opción (secundario sin perfil),
                 # no tiene sentido enviar el filtro/rango: se salta directo a la
                 # siguiente pantalla. Así no se pierden ~30-60 s por sub-paso.
-                if info["estado"] == "sin_acceso":
+                if info["estado"] in ("sin_acceso", "pantalla_de_aceptacion"):
+                    if info["estado"] == "pantalla_de_aceptacion":
+                        log(f"  decl-diag2: {tg['slug']} es pantalla de aceptación "
+                            f"— NO se toca nada, se salta.", "WARN")
                     _pausa()
                     continue
 

@@ -49,6 +49,8 @@ from scraper_sunat_declaraciones import (
     _sanea, _patron_url, _norm, _scopes, _menu_catalogo, _ir_por_codigo,
     _texto_scopes, _MARCA_SIN_ACCESO, _hay_marcador,
 )
+# Guardián de seguridad: nunca tocar pantallas de aceptación/consentimiento.
+from guardian_aceptacion import detectar_aceptacion
 
 TZ_LIMA = ZoneInfo("America/Lima")
 DEST = Path("./descargas")
@@ -73,26 +75,44 @@ TIPOS_CONSULTABLES = {"01": "Factura", "03": "Boleta",
                       "07": "Nota de crédito", "08": "Nota de débito"}
 _SERIE_ELECTRONICA = re.compile(r"^[FBE][A-Z0-9]{3}$")
 
-# Pantallas que DISPARAN los tokens, por CÓDIGO de menú SOL (data-id del árbol;
-# confirmados en el volcado del menú 00_menu.html). Se abren en PESTAÑA NUEVA (no
-# en el iframe ifrVCE), así que la captura es a nivel de CONTEXTO. Overridables por
-# env si SUNAT cambia los códigos.
-#   11.5.3.1.2 = "Consultas Facturas y Notas"  → SPA e-factura → api-cpe (Bearer CPE)
-#   60.2.2.1.1 = "Gestion de Compras" (SIRE RCE) → api-sire (Bearer SIRE + propuesta)
-#   25.2.1.1.4 = "Preliminar del Registro de Ventas Electrónico" (RVIE) → api-sire
+# Pantallas que DISPARAN los tokens, por CÓDIGO de menú SOL (data-id del árbol
+# 00_menu.html). Se abren en PESTAÑA NUEVA (no en ifrVCE) y SOL las lanza con
+# `MenuInternet.htm?action=execute&code=<code>` (NO iconExecute). Overridables por
+# env. Códigos elegidos por el patrón de longitud de las grabaciones de
+# asistente-sol (enmascaradas): CPE `99.99.9.9.9`, SIRE `99.9.9.9.9`.
+#   11.16.3.1.1 = "Consultas de Comprobantes"  → SPA e-factura consultacpe (Bearer CPE)
+#                 (NO 11.5.3.1.2 "Consultas Facturas y Notas": esa es la JSP vieja)
+#   60.2.2.1.1  = "Gestion de Compras" SIRE RCE  → api-sire (Bearer SIRE + propuesta)
+#   60.2.1.1.1  = "Gestión de Ventas e Ingresos Electrónicos" SIRE RVIE → api-sire
+#                 (NO 25.2.1.1.4: ese es el SLE-PORTAL viejo con pantalla de ACEPTACIÓN)
 PANTALLAS = [
-    {"slug": "cpe_consulta", "code": os.getenv("COMP_CODE_CPE", "11.5.3.1.2"),
-     "label": "Consultas Facturas y Notas", "necesita": "cpe"},
+    {"slug": "cpe_consulta", "code": os.getenv("COMP_CODE_CPE", "11.16.3.1.1"),
+     "label": "Consultas de Comprobantes", "necesita": "cpe"},
     {"slug": "sire_compras", "code": os.getenv("COMP_CODE_RCE", "60.2.2.1.1"),
      "label": "Gestion de Compras (SIRE RCE)", "necesita": "sire"},
-    {"slug": "sire_ventas", "code": os.getenv("COMP_CODE_RVIE", "25.2.1.1.4"),
-     "label": "Preliminar del Registro de Ventas Electrónico (RVIE)",
+    {"slug": "sire_ventas", "code": os.getenv("COMP_CODE_RVIE", "60.2.1.1.1"),
+     "label": "Gestión de Ventas e Ingresos Electrónicos (SIRE RVIE)",
      "necesita": "sire"},
 ]
-# Hosts de las SPA (confirmados en las grabaciones de asistente-sol) por si hace
-# falta navegar directo como respaldo.
+# Hosts de las SPA (confirmados en las grabaciones) por si hace falta navegar
+# directo como respaldo.
 SPA_CPE = ("https://e-factura.sunat.gob.pe/app/contribuyentems/servicio/"
            "consultacpe/consulta/nuevaconsulta/1.0.0/index.html")
+
+# "Reintentar en 5 minutos" / no disponible = SUNAT intermitente (no es rechazo de
+# nuestra sesión). Se separa de un rechazo de sesión/OAuth (401/sesión/autenticación).
+_MARCA_NO_DISPONIBLE = (
+    "reintente en 5 minutos", "reintentar en 5 minutos", "intente en 5 minutos",
+    "no se puede acceder", "no está disponible", "no esta disponible",
+    "servicio no disponible", "intente más tarde", "intente mas tarde",
+    "en estos momentos no", "temporalmente no disponible",
+)
+_MARCA_RECHAZO_SESION = (
+    "inicie sesión", "inicie sesion", "vuelva a iniciar", "sesión expiró",
+    "sesion expiro", "sesión ha expirado", "su sesión", "no autenticado",
+    "autenticación", "autenticacion", "token inválido", "token invalido",
+    "unauthorized", "401", "oauth",
+)
 
 
 # ───────────────────────── utilidades de montos/fechas ─────────────────────────
@@ -503,9 +523,36 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
             # captura de cada pantalla abierta para ver qué pasó.
             res["pantallas"] = []
             for tg in PANTALLAS:
-                antes = _tiene_bearer(cap, tg["necesita"])
                 log(f"  comp-diag: abro {tg['slug']} (code {tg['code']})...", "INFO")
-                abierto = _ir_por_codigo(page, tg["code"], tg["label"][:50])
+                abierto = _abrir_menu(page, tg["code"], tg["label"])
+                # Dar un respiro a que abra la tab y cargue algo de contenido.
+                try:
+                    page.wait_for_timeout(2000)
+                except Exception:
+                    pass
+                # GUARDIÁN: si CUALQUIER tab es una pantalla de aceptación/
+                # consentimiento, abortarla de inmediato SIN tocar nada.
+                aceptacion = None
+                try:
+                    for pg in ctx.pages:
+                        es_ace, det = detectar_aceptacion(pg)
+                        if es_ace:
+                            aceptacion = det
+                            break
+                except Exception:
+                    pass
+                if aceptacion:
+                    log(f"    · {tg['slug']}: pantalla_de_aceptacion ({aceptacion}) "
+                        f"— NO se tocó nada.", "WARN")
+                    _volcar_pantallas(ctx, carpeta, cfg, tg["slug"])
+                    res["pantallas"].append(
+                        {"slug": tg["slug"], "code": tg["code"], "abierto": abierto,
+                         "bearer": _tiene_bearer(cap, tg["necesita"]),
+                         "estado": "pantalla_de_aceptacion", "detalle": aceptacion,
+                         "sin_acceso": False})
+                    _cerrar_tabs_extra(ctx, page)
+                    continue
+
                 got = _esperar_bearer(page, cap, tg["necesita"], 30) if abierto else False
                 # Fallback CPE: navegar directo a la SPA si el menú no disparó token.
                 if tg["slug"] == "cpe_consulta" and not got:
@@ -513,17 +560,24 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
                         pg2 = ctx.new_page()
                         pg2.goto(SPA_CPE, wait_until="domcontentloaded",
                                  timeout=TIMEOUT_MS)
-                        got = _esperar_bearer(pg2, cap, "cpe", 20)
+                        pg2.wait_for_timeout(1500)
+                        es_ace, det = detectar_aceptacion(pg2)
+                        if not es_ace:
+                            got = _esperar_bearer(pg2, cap, "cpe", 20)
                     except Exception:
                         pass
                 sin_acc = _hay_marcador(_texto_scopes(page), _MARCA_SIN_ACCESO)
                 if sin_acc:
                     res["sin_acceso"] = True
+                # Distinguir 'reintente en 5 minutos' (SUNAT) de rechazo de sesión.
+                no_disp = None if got else _clasificar_no_disponible(ctx)
+                estado = ("ok" if got else ("sin_acceso" if sin_acc
+                          else no_disp or "sin_token"))
                 res["pantallas"].append(
-                    {"slug": tg["slug"], "code": tg["code"],
-                     "abierto": abierto, "bearer": bool(got and not antes) or bool(got),
-                     "sin_acceso": sin_acc})
+                    {"slug": tg["slug"], "code": tg["code"], "abierto": abierto,
+                     "bearer": bool(got), "estado": estado, "sin_acceso": sin_acc})
                 _volcar_pantallas(ctx, carpeta, cfg, tg["slug"])
+                _cerrar_tabs_extra(ctx, page)
 
             # Mapa de red capturado (patrón+estado), sin valores sensibles.
             _volcar_json(carpeta, "red_api.json", cap.red, cfg)
@@ -533,12 +587,8 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
             # Si NO se capturó ningún token, NO se puede consultar nada: CON ERRORES.
             if not cap.bearer_sire and not cap.bearer_cpe:
                 res["con_errores"] = True
-                falla = []
-                for pa in res["pantallas"]:
-                    falla.append(f"{pa['slug']}="
-                                 + ("sin_acceso" if pa["sin_acceso"]
-                                    else "no cargó" if not pa["abierto"]
-                                    else "sin token"))
+                falla = [f"{pa['slug']}={pa.get('estado', 'sin_token')}"
+                         for pa in res["pantallas"]]
                 res["motivo"] = ("no se obtuvo token SIRE/CPE ("
                                  + "; ".join(falla) + ")")
                 log(f"  comp-diag: CON ERRORES — {res['motivo']}.", "ERROR")
@@ -580,6 +630,43 @@ def _endpoint_ventas(cap: _Captura) -> str | None:
     return None
 
 
+def _abrir_menu(page, code: str, label: str) -> bool:
+    """Lanza una opción de SOL por su CÓDIGO con el MISMO mecanismo que la web para
+    las SPA nuevas (SIRE/CPE): `ejecuta('MenuInternet.htm?action=execute&code=…')`
+    (NO iconExecute, que da 404 en esas pantallas). Fallback a _ir_por_codigo."""
+    url = f"MenuInternet.htm?action=execute&code={code}"
+    try:
+        page.evaluate("(a) => ejecuta(a.u, false, '', '', a.c)",
+                      {"u": url, "c": code})
+        return True
+    except Exception:
+        try:
+            return _ir_por_codigo(page, code, label)
+        except Exception:
+            return False
+
+
+def _clasificar_no_disponible(ctx) -> str | None:
+    """Mira el texto de las tabs abiertas y distingue 'sunat_no_disponible'
+    (intermitente, 'reintente en 5 minutos') de 'rechazo_sesion' (la SPA pide su
+    propio login/OAuth). Devuelve el estado o None."""
+    texto = ""
+    try:
+        for pg in ctx.pages:
+            try:
+                texto += " " + pg.inner_text("body")
+            except Exception:
+                pass
+    except Exception:
+        return None
+    t = re.sub(r"\s+", " ", texto.lower())
+    if _hay_marcador(t, _MARCA_RECHAZO_SESION):
+        return "rechazo_sesion"
+    if _hay_marcador(t, _MARCA_NO_DISPONIBLE):
+        return "sunat_no_disponible"
+    return None
+
+
 def _tiene_bearer(cap: _Captura, cual: str) -> bool:
     if cual == "cpe":
         return bool(cap.bearer_cpe)
@@ -604,6 +691,20 @@ def _esperar_bearer(page, cap: _Captura, cual: str, timeout_s: float = 30.0) -> 
             except Exception:
                 return _tiene_bearer(cap, cual)
     return _tiene_bearer(cap, cual)
+
+
+def _cerrar_tabs_extra(ctx, page):
+    """Cierra las pestañas extra (deja la del menú) para que la detección de la
+    siguiente pantalla no se contamine. NO hace clic en contenido; solo cierra."""
+    try:
+        for pg in list(ctx.pages):
+            if pg is not page:
+                try:
+                    pg.close()
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 
 def _volcar_pantallas(ctx, carpeta: Path, cfg: SunatConfig, slug: str):

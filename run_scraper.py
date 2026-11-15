@@ -831,11 +831,17 @@ async def procesar_comp_diag(session, contrib: Contribuyente,
         f"(NO persiste, NO descarga)...")
     res = await asyncio.to_thread(
         _comp_diag_sync, contrib.ruc, cred.usuario_sol, clave, periodo, n)
-    # Estado de cada pantalla abierta (abrió / dio token / sin acceso).
+    # Estado de cada pantalla abierta (abrió / dio token sí-no / estado).
+    def _sino(x):
+        return "sí" if x else "no"
     for pa in res.get("pantallas", []):
         log(f"    · pantalla {pa.get('slug')} (code {pa.get('code')}): "
-            f"abrió={pa.get('abierto')} token={pa.get('bearer')} "
-            f"sin_acceso={pa.get('sin_acceso')}")
+            f"abrió={_sino(pa.get('abierto'))} token={_sino(pa.get('bearer'))} "
+            f"estado={pa.get('estado')}"
+            + (f" [{pa.get('detalle')}]" if pa.get('detalle') else ""))
+    bc0 = res.get("bearer_capturado", {})
+    log(f"    · tokens capturados: SIRE={_sino(bc0.get('sire'))} "
+        f"CPE={_sino(bc0.get('cpe'))}")
     if res.get("con_errores"):
         log(f"  {contrib.ruc}: COMP-DIAG CON ERRORES — {res.get('motivo')}. "
             f"Revisa las capturas en {res.get('carpeta')} "
@@ -849,8 +855,6 @@ async def procesar_comp_diag(session, contrib: Contribuyente,
         log(f"  {contrib.ruc}: COMP-DIAG SIN ACCESO a SIRE — el contador debe "
             f"asignar el perfil (Registro de Compras/Ventas Electrónico). "
             f"Volcado en {res.get('carpeta')}.", "WARN")
-    bc = res.get("bearer_capturado", {})
-    log(f"    · Bearer capturado: SIRE={bc.get('sire')} CPE={bc.get('cpe')}")
     for libro in res.get("libros", []):
         li = libro.get("lista", {})
         tiempos = libro.get("tiempos", [])
