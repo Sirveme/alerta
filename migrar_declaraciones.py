@@ -23,10 +23,23 @@ Uso (cuando se apruebe):
     python migrar_declaraciones.py
 """
 import asyncio
+import os
+import sys
 
-from sqlalchemy import text
+# Para correr en LOCAL con `railway run`: el host interno de Railway no resuelve
+# desde tu PC; si existe DATABASE_PUBLIC_URL, se usa esa (igual que decl-diag /
+# consultar_credencial). Debe ir ANTES de importar `db` (que lee DATABASE_URL).
+if os.getenv("DATABASE_PUBLIC_URL"):
+    os.environ["DATABASE_URL"] = os.environ["DATABASE_PUBLIC_URL"]
+    print("[migrar] Conectando por DATABASE_PUBLIC_URL...")
 
-from db import engine
+from sqlalchemy import text  # noqa: E402
+
+from db import engine  # noqa: E402
+
+TABLAS = ("declaraciones_juradas", "pagos_tributarios",
+          "declaraciones_tributos", "cronograma_vencimientos",
+          "padron_buenos_contribuyentes")
 
 DDL = [
     # ── declaraciones_juradas ──────────────────────────────────────────
@@ -162,14 +175,31 @@ async def main():
         for sentencia in DDL:
             await conn.execute(text(sentencia))
         # Verificación.
-        for tabla in ("declaraciones_juradas", "pagos_tributarios",
-                      "declaraciones_tributos", "cronograma_vencimientos",
-                      "padron_buenos_contribuyentes"):
+        for tabla in TABLAS:
             n = await conn.scalar(text(f"SELECT count(*) FROM {tabla}"))
             print(f"  {tabla}: OK ({n} filas)")
     print("Migración de Declaraciones y Pagos lista (aditiva, idempotente).")
     await engine.dispose()
 
 
+async def check():
+    """SOLO LECTURA: verifica que las 5 tablas existen y reporta su conteo. NO
+    ejecuta DDL. Uso: python migrar_declaraciones.py check"""
+    async with engine.connect() as conn:
+        for tabla in TABLAS:
+            existe = await conn.scalar(text("SELECT to_regclass(:t)"),
+                                       {"t": f"public.{tabla}"})
+            if existe is None:
+                print(f"  {tabla}: NO EXISTE")
+                continue
+            n = await conn.scalar(text(f"SELECT count(*) FROM {tabla}"))
+            print(f"  {tabla}: existe, {n} fila(s)"
+                  f"{'  ← vacía ✔' if n == 0 else ''}")
+    await engine.dispose()
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    if len(sys.argv) > 1 and sys.argv[1] == "check":
+        asyncio.run(check())
+    else:
+        asyncio.run(main())
