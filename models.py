@@ -1811,3 +1811,37 @@ class DeclaracionTributo(Base):
 
     declaracion: Mapped["DeclaracionJurada | None"] = relationship(back_populates="tributos")
     tributo: Mapped["Tributo | None"] = relationship()
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Cronograma de vencimientos SUNAT (proyecto decl-diag · estado "pagó fuera de
+# plazo"). Catálogo GLOBAL (no por contribuyente): por período y último dígito
+# del RUC, la fecha de vencimiento oficial. Se CARGA de la fuente oficial de SUNAT
+# cada año (NO hardcodeado). Ver decl_diag_PAGO_FUERA_DE_PLAZO.md.
+# alerta.pe INFORMA (declaró/pagó vs. venció); NUNCA dice "debe" ni calcula
+# intereses/multas.
+# ═════════════════════════════════════════════════════════════════════
+class CronogramaVencimiento(Base):
+    """Una fila por (período, último dígito de RUC, grupo). `grupo` separa el
+    régimen general del de Buenos Contribuyentes / UESP (que vence después).
+    `fecha_vencimiento` es la fecha oficial de la Resolución de Superintendencia
+    del año. Se re-carga anualmente desde la fuente SUNAT (campo `fuente`)."""
+    __tablename__ = "cronograma_vencimientos"
+    __table_args__ = (
+        UniqueConstraint("periodo", "digito_ruc", "grupo",
+                         name="uq_cronograma_periodo_digito"),
+        Index("ix_cronograma_periodo", "periodo"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    anio: Mapped[int] = mapped_column(Integer, nullable=False)        # año del cronograma
+    periodo: Mapped[str] = mapped_column(String(6), nullable=False)   # AAAAMM (período tributario)
+    digito_ruc: Mapped[int] = mapped_column(Integer, nullable=False)  # 0..9 (último dígito del RUC)
+    # 'general' | 'buenos_contribuyentes' | 'uesp'. El general cubre al grueso.
+    grupo: Mapped[str] = mapped_column(String(24), default="general", nullable=False)
+    fecha_vencimiento: Mapped[datetime] = mapped_column(Date, nullable=False)
+
+    # Trazabilidad de la carga (de dónde salió y cuándo), para auditar el año.
+    fuente: Mapped[str | None] = mapped_column(String(300))           # URL/Resolución
+    cargado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

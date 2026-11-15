@@ -509,15 +509,35 @@ def _sel(fr, name: str, *vals) -> bool:
     return False
 
 
-def _enviar_filtro_01(page, cfg: SunatConfig, meses: int):
+def _periodo_a_fecha(periodo: str | None):
+    """AAAAMM → date(primer día del mes). None si no es válido."""
+    if not periodo:
+        return None
+    m = re.fullmatch(r"(\d{4})(\d{2})", str(periodo).strip())
+    if not m:
+        return None
+    y, mo = int(m.group(1)), int(m.group(2))
+    if not (1 <= mo <= 12):
+        return None
+    try:
+        return date(y, mo, 1)
+    except ValueError:
+        return None
+
+
+def _enviar_filtro_01(page, cfg: SunatConfig, meses: int, periodo_desde=None):
     """Consulta general: filtra por PERÍODO (mes/año desde-hasta) y busca. Trae la
-    grilla período×tributo×importe pagado. Devuelve el scope o None."""
+    grilla período×tributo×importe pagado. Devuelve el scope o None.
+
+    Si `periodo_desde` (AAAAMM) viene dado, el 'desde' es ese período exacto (útil
+    para cerrar un período suelto, p.ej. el 1662 de 202605); si no, se calcula
+    retrocediendo `meses` desde hoy."""
     fr = _frame_con(page, "form[name='consultageneral']")
     if not fr:
         log("    01: no encontré el formulario consultageneral.", "WARN")
         return None
     hoy = date.today()
-    desde = hoy - timedelta(days=int(30.4 * meses))
+    desde = _periodo_a_fecha(periodo_desde) or (hoy - timedelta(days=int(30.4 * meses)))
     try:
         _sel(fr, "adesde", str(desde.year))
         _sel(fr, "mdesde", f"{desde.month:02d}", str(desde.month))
@@ -563,9 +583,13 @@ def _resumen_constancias(scope, cfg: SunatConfig) -> dict:
             "detalle": "constancia = PDF; en diag NO se descarga"}
 
 
-def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict:
+def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None,
+                             periodo_desde: str | None = None) -> dict:
     """Fase 2: navega por código, envía rango en la 02 y captura la constancia
-    0621. NO escribe en BD, NO descarga PDFs."""
+    0621. NO escribe en BD, NO descarga PDFs.
+
+    `periodo_desde` (AAAAMM, opcional): fuerza el 'desde' de la pantalla 01 a ese
+    período exacto (p.ej. `202605` para cerrar el importe/banco de un 1662 viejo)."""
     meses = MESES_FASE2 if meses is None else meses
     res = {"exito": False, "pantallas": [], "carpeta": None, "red": [], "fase": 2}
     ts = datetime.now(TZ_LIMA).strftime("%Y%m%d_%H%M%S")
@@ -627,10 +651,12 @@ def diag_declaraciones_fase2(cfg: SunatConfig, meses: int | None = None) -> dict
                 if tg["slug"] == "01_consulta_general" and info["estado"] != "no_se_pudo_leer":
                     try:
                         cur["t"] = "01_resultados"
-                        _enviar_filtro_01(page, cfg, meses)
+                        _enviar_filtro_01(page, cfg, meses, periodo_desde)
                         r = _volcar(page, carpeta, "01_consulta_general_resultados", cfg)
                         r["estado"] = _estado_desde(r)
-                        r["pantalla"] = f"01 resultados (período, {meses} meses)"
+                        r["pantalla"] = (f"01 resultados (desde {periodo_desde})"
+                                         if periodo_desde
+                                         else f"01 resultados (período, {meses} meses)")
                         res["pantallas"].append(r)
                     except Exception as e:
                         res["pantallas"].append(

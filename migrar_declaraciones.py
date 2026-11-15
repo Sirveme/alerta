@@ -5,9 +5,12 @@ ADITIVA e IDEMPOTENTE. Crea SOLO tablas nuevas; NO toca nada existente.
 
 Crea:
   · declaraciones_juradas   — una presentación de DJ (0621…) por fila.
-  · pagos_tributarios       — boletas/pagos (1662…) con banco, tributo e importe.
+  · pagos_tributarios       — boletas/pagos (1662/1663…) con banco, tributo e importe.
   · declaraciones_tributos  — desglose por tributo (fase posterior: constancia PDF
                               o 'Detalle de Tributos Pagados' HTML).
+  · cronograma_vencimientos — vencimientos SUNAT por período y último dígito de RUC
+                              (estado "pagó fuera de plazo"; se carga de fuente
+                              oficial cada año, NO hardcodeado).
 
 Coincide con los modelos DeclaracionJurada / PagoTributario / DeclaracionTributo
 de models.py.
@@ -96,6 +99,25 @@ DDL = [
     "CREATE INDEX IF NOT EXISTS ix_decltrib_decl ON declaraciones_tributos (declaracion_id)",
     "CREATE INDEX IF NOT EXISTS ix_decltrib_pago ON declaraciones_tributos (pago_id)",
     "CREATE INDEX IF NOT EXISTS ix_decltrib_periodo_trib ON declaraciones_tributos (periodo_tributo, cod_tributo)",
+
+    # ── cronograma_vencimientos (estado "pagó fuera de plazo") ─────────
+    # Catálogo GLOBAL (no por contribuyente): por período y último dígito de RUC,
+    # la fecha de vencimiento oficial. Se CARGA de la fuente SUNAT cada año
+    # (ver decl_diag_PAGO_FUERA_DE_PLAZO.md). NO hardcodeado.
+    """
+    CREATE TABLE IF NOT EXISTS cronograma_vencimientos (
+        id                  UUID PRIMARY KEY,
+        anio                INTEGER     NOT NULL,
+        periodo             VARCHAR(6)  NOT NULL,
+        digito_ruc          INTEGER     NOT NULL,
+        grupo               VARCHAR(24) NOT NULL DEFAULT 'general',
+        fecha_vencimiento   DATE        NOT NULL,
+        fuente              VARCHAR(300),
+        cargado_at          TIMESTAMPTZ,
+        CONSTRAINT uq_cronograma_periodo_digito UNIQUE (periodo, digito_ruc, grupo)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS ix_cronograma_periodo ON cronograma_vencimientos (periodo)",
 ]
 
 
@@ -105,7 +127,7 @@ async def main():
             await conn.execute(text(sentencia))
         # Verificación.
         for tabla in ("declaraciones_juradas", "pagos_tributarios",
-                      "declaraciones_tributos"):
+                      "declaraciones_tributos", "cronograma_vencimientos"):
             n = await conn.scalar(text(f"SELECT count(*) FROM {tabla}"))
             print(f"  {tabla}: OK ({n} filas)")
     print("Migración de Declaraciones y Pagos lista (aditiva, idempotente).")

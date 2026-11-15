@@ -791,12 +791,14 @@ def _decl_diag_sync(ruc: str, usuario_sol: str, clave_sol: str) -> dict:
     return scraper_decl.diag_declaraciones(cfg)
 
 
-def _decl_diag2_sync(ruc: str, usuario_sol: str, clave_sol: str) -> dict:
+def _decl_diag2_sync(ruc: str, usuario_sol: str, clave_sol: str,
+                     periodo_desde: str | None = None) -> dict:
     """Diag FASE 2: navega por código, envía rango en la 02 y captura la
-    constancia 0621 (sync, Playwright). NO BD, NO descarga PDFs."""
+    constancia 0621 (sync, Playwright). NO BD, NO descarga PDFs.
+    `periodo_desde` (AAAAMM) fuerza el 'desde' de la pantalla 01."""
     cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
                               clave_sol=clave_sol, headless=True)
-    return scraper_decl.diag_declaraciones_fase2(cfg)
+    return scraper_decl.diag_declaraciones_fase2(cfg, periodo_desde=periodo_desde)
 
 
 async def _contrib_para_diag(session, ruc_filtro: str | None):
@@ -848,10 +850,12 @@ async def procesar_decl_diag(session, contrib: Contribuyente) -> int:
     return len(res.get("pantallas", []))
 
 
-async def procesar_decl_diag2(session, contrib: Contribuyente) -> int:
+async def procesar_decl_diag2(session, contrib: Contribuyente,
+                              periodo_desde: str | None = None) -> int:
     """DIAGNÓSTICO FASE 2 de Declaraciones y Pagos: navega por código, envía un
     rango corto en la Consulta DDJJ y pagos y captura la constancia 0621. NO
-    escribe en la BD, NO descarga PDFs. Correr LOCAL con railway run."""
+    escribe en la BD, NO descarga PDFs. Correr LOCAL con railway run.
+    `periodo_desde` (AAAAMM) fuerza el 'desde' de la pantalla 01."""
     cred = contrib.credencial
     if not cred:
         log(f"  {contrib.ruc}: sin credencial registrada, no puedo loguear.", "WARN")
@@ -864,7 +868,7 @@ async def procesar_decl_diag2(session, contrib: Contribuyente) -> int:
     log(f"  {contrib.ruc}: DECL-DIAG2 — navego por código + rango + constancia "
         f"(NO persiste, NO descarga)...")
     res = await asyncio.to_thread(
-        _decl_diag2_sync, contrib.ruc, cred.usuario_sol, clave)
+        _decl_diag2_sync, contrib.ruc, cred.usuario_sol, clave, periodo_desde)
     if not res.get("exito"):
         log(f"  {contrib.ruc}: DECL-DIAG2 no completó (motivo={res.get('motivo')}). "
             f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")
@@ -996,7 +1000,8 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
                pdf: bool = False, pdf_diag: bool = False,
                ceros: bool = False, ceros_diag: bool = False,
                sunafil: bool = False, sunafil_diag: bool = False,
-               decl_diag: bool = False, decl_diag2: bool = False) -> None:
+               decl_diag: bool = False, decl_diag2: bool = False,
+               decl_diag2_periodo: str | None = None) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
     if decl_diag or decl_diag2:
         log(f"modo DECL-DIAG{'2' if decl_diag2 else ''}: "
@@ -1040,7 +1045,7 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
         for contrib in contribs:
             try:
                 if decl_diag2:
-                    await procesar_decl_diag2(session, contrib)
+                    await procesar_decl_diag2(session, contrib, decl_diag2_periodo)
                 elif decl_diag:
                     await procesar_decl_diag(session, contrib)
                 elif sunafil or sunafil_diag:
@@ -1083,6 +1088,7 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> sunafil  → lee la casilla SUNAFIL e ingesta (fuente=sunafil)
     #   python run_scraper.py <RUC> decl-diag → login + vuelca ESTRUCTURA de Declaraciones y Pagos (NO BD, LOCAL)
     #   python run_scraper.py <RUC> decl-diag2 → fase 2: navega por código + rango + constancia 0621 (NO BD, LOCAL)
+    #   python run_scraper.py <RUC> decl-diag2 --periodo-desde 202605 → fuerza el 'desde' de la pantalla 01 a ese período
     ruc = None
     forzar = False
     solo_censo = False
@@ -1097,7 +1103,19 @@ if __name__ == "__main__":
     sunafil_diag = False
     decl_diag = False
     decl_diag2 = False
+    decl_diag2_periodo = None
+    _esperar_periodo = False
     for arg in sys.argv[1:]:
+        if _esperar_periodo:
+            decl_diag2_periodo = arg.strip()
+            _esperar_periodo = False
+            continue
+        if arg.lower().startswith("--periodo-desde="):
+            decl_diag2_periodo = arg.split("=", 1)[1].strip()
+            continue
+        if arg.lower() in ("--periodo-desde", "periodo-desde"):
+            _esperar_periodo = True
+            continue
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
         elif arg.lower() in ("censo", "--censo", "-c"):
@@ -1130,4 +1148,5 @@ if __name__ == "__main__":
                      genhtml=genhtml, genhtml_diag=genhtml_diag,
                      pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag,
                      sunafil=sunafil, sunafil_diag=sunafil_diag,
-                     decl_diag=decl_diag, decl_diag2=decl_diag2))
+                     decl_diag=decl_diag, decl_diag2=decl_diag2,
+                     decl_diag2_periodo=decl_diag2_periodo))
