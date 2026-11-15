@@ -80,14 +80,18 @@ _SERIE_ELECTRONICA = re.compile(r"^[FBE][A-Z0-9]{3}$")
 # `MenuInternet.htm?action=execute&code=<code>` (NO iconExecute). Overridables por
 # env. Códigos elegidos por el patrón de longitud de las grabaciones de
 # asistente-sol (enmascaradas): CPE `99.99.9.9.9`, SIRE `99.9.9.9.9`.
-#   11.16.3.1.1 = "Consultas de Comprobantes"  → SPA e-factura consultacpe (Bearer CPE)
-#                 (NO 11.5.3.1.2 "Consultas Facturas y Notas": esa es la JSP vieja)
+#   11.38.1.1.1 = "Nueva Consulta de comprobantes de pago" (ruta confirmada por el
+#                 contador: Comprobantes de pago > Comprobantes de Pago > Consulta de
+#                 Comprobantes de Pago) → SPA "Consulta de Comprobante de Pago" (api-cpe).
+#                 OJO: en algunos perfiles la opción aparece 2 veces (+ "Descarga de
+#                 Resultados" 11.38.1.1.2, sin uso); se vuelca 00_menu_page.html para
+#                 confirmar el code real del RUC si difiere. (NO 11.5.3.1.2 JSP vieja.)
 #   60.2.2.1.1  = "Gestion de Compras" SIRE RCE  → api-sire (Bearer SIRE + propuesta)
 #   60.2.1.1.1  = "Gestión de Ventas e Ingresos Electrónicos" SIRE RVIE → api-sire
 #                 (NO 25.2.1.1.4: ese es el SLE-PORTAL viejo con pantalla de ACEPTACIÓN)
 PANTALLAS = [
-    {"slug": "cpe_consulta", "code": os.getenv("COMP_CODE_CPE", "11.16.3.1.1"),
-     "label": "Consultas de Comprobantes", "necesita": "cpe"},
+    {"slug": "cpe_consulta", "code": os.getenv("COMP_CODE_CPE", "11.38.1.1.1"),
+     "label": "Nueva Consulta de comprobantes de pago", "necesita": "cpe"},
     {"slug": "sire_compras", "code": os.getenv("COMP_CODE_RCE", "60.2.2.1.1"),
      "label": "Gestion de Compras (SIRE RCE)", "necesita": "sire"},
     {"slug": "sire_ventas", "code": os.getenv("COMP_CODE_RVIE", "60.2.1.1.1"),
@@ -290,6 +294,7 @@ class _Captura:
         self.bearer_cpe = None
         self.red: list[dict] = []
         self.propuestas: list[dict] = []   # {url, patron, cuerpo} de busquedas vistas
+        self.consultas_cpe: list[dict] = []  # respuestas consultacpe que hizo la SPA
 
     def on_request(self, req):
         try:
@@ -320,6 +325,14 @@ class _Captura:
                     self.propuestas.append(
                         {"url": url, "patron": _patron_url(url, self.cfg),
                          "cuerpo": resp.text()})
+                except Exception:
+                    pass
+            # Detalle con ítems que la propia SPA pidió al pulsar "Consultar".
+            if "consultacpe/comprobantes/" in url.lower() \
+                    and resp.request.method == "GET" and resp.status == 200:
+                try:
+                    self.consultas_cpe.append(
+                        {"url": url, "cuerpo": resp.text()})
                 except Exception:
                     pass
         except Exception:
@@ -579,10 +592,28 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
                 _volcar_pantallas(ctx, carpeta, cfg, tg["slug"])
                 _cerrar_tabs_extra(ctx, page)
 
+            # Si el Bearer de api-cpe no apareció al navegar (a veces solo se emite al
+            # pulsar "Consultar"), lo obtenemos con UNA consulta real del 1er
+            # comprobante (solo lectura, permitido por el guardián).
+            if cap.bearer_sire and not cap.bearer_cpe:
+                log("  comp-diag: no llegó token CPE al navegar; intento UNA consulta "
+                    "real (Individual/Recibido) del 1er comprobante...", "INFO")
+                try:
+                    if _mint_cpe_token(ctx, page, cap, cfg, periodo,
+                                       cod_tipo_ope, carpeta):
+                        log("  comp-diag: token CPE obtenido tras la consulta real.",
+                            "OK")
+                except Exception:
+                    pass
+                _cerrar_tabs_extra(ctx, page)
+
             # Mapa de red capturado (patrón+estado), sin valores sensibles.
             _volcar_json(carpeta, "red_api.json", cap.red, cfg)
             res["bearer_capturado"] = {"sire": bool(cap.bearer_sire),
                                        "cpe": bool(cap.bearer_cpe)}
+            # Guardar los detalles que la propia SPA pidió (si hubo consulta real).
+            for i, cq in enumerate(cap.consultas_cpe[:N_DEFAULT]):
+                _volcar_json(carpeta, f"detalle_spa_{i}.json", cq.get("cuerpo", ""), cfg)
 
             # Si NO se capturó ningún token, NO se puede consultar nada: CON ERRORES.
             if not cap.bearer_sire and not cap.bearer_cpe:
@@ -665,6 +696,104 @@ def _clasificar_no_disponible(ctx) -> str | None:
     if _hay_marcador(t, _MARCA_NO_DISPONIBLE):
         return "sunat_no_disponible"
     return None
+
+
+def _spa_cpe_page(ctx):
+    """Devuelve la tab cuya URL es la SPA de consulta de comprobantes (e-factura /
+    consultacpe), o None."""
+    try:
+        for pg in ctx.pages:
+            u = (pg.url or "").lower()
+            if "consultacpe" in u or "e-factura.sunat" in u:
+                return pg
+    except Exception:
+        pass
+    return None
+
+
+def _mint_cpe_token(ctx, page, cap: _Captura, cfg: SunatConfig,
+                    periodo: str, cod_tipo_ope: str, carpeta: Path) -> bool:
+    """Si el Bearer de api-cpe NO apareció solo, lo obtiene haciendo UNA consulta
+    REAL del 1er comprobante en la SPA Individual (Recibido). Consultar es SOLO
+    LECTURA → permitido por el guardián. Best-effort: si no encuentra los campos,
+    desiste sin tocar nada raro (solo rellena inputs y pulsa el botón 'Consultar')."""
+    # 1) Un candidato: 1er comprobante consultable de la propuesta de compras.
+    reg = None
+    if cap.bearer_sire:
+        url = (API_SIRE + _PROPUESTA_RCE).format(periodo=periodo)
+        url += f"?codTipoOpe={cod_tipo_ope}&page=1&perPage={PERPAGE}"
+        r = _get_api(page, url, cap.bearer_sire)
+        if r.get("estado") == 200:
+            try:
+                regs = _registros_comprobante(json.loads(r["texto"]))
+                reg = next((x for x in regs if _consultable(x) is None), None)
+            except Exception:
+                reg = None
+    if not reg:
+        return False
+    # 2) La SPA de CPE (ya abierta por el menú, o la abrimos directa).
+    spa = _spa_cpe_page(ctx)
+    if spa is None:
+        try:
+            spa = ctx.new_page()
+            spa.goto(SPA_CPE, wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+            spa.wait_for_timeout(2000)
+        except Exception:
+            return False
+    # GUARDIÁN antes de tocar nada.
+    es_ace, _ = detectar_aceptacion(spa)
+    if es_ace:
+        return False
+    # 3) Rellenar Individual (Recibido) y pulsar SOLO el botón 'Consultar'.
+    tipo = str(reg.get("tipo") or "").zfill(2)
+    serie = str(reg.get("serie") or "").upper()
+    ruc = str(reg.get("ruc_emisor") or "")
+    numero = str(int(re.sub(r"\D", "", str(reg.get("numero") or "0")) or "0"))
+    try:
+        _rellenar_campo(spa, ["ruc", "emisor"], ruc)
+        _rellenar_campo(spa, ["serie"], serie)
+        _rellenar_campo(spa, ["numero", "número", "num"], numero)
+        # Filtro "Recibido" (radio/botón) — best-effort por texto.
+        for txt in ("Recibido", "RECIBIDO"):
+            try:
+                el = spa.get_by_text(txt, exact=False)
+                if el and el.count() > 0:
+                    el.first.click(timeout=2000)
+                    break
+            except Exception:
+                pass
+        # SOLO 'Consultar' (nunca Aceptar/Continuar/Registrar/Presentar).
+        try:
+            spa.get_by_role("button", name=re.compile(r"consultar", re.I)).first.click(
+                timeout=3000)
+        except Exception:
+            try:
+                spa.get_by_text(re.compile(r"^\s*consultar\s*$", re.I)).first.click(
+                    timeout=3000)
+            except Exception:
+                return False
+    except Exception:
+        return False
+    got = _esperar_bearer(spa, cap, "cpe", 20)
+    _volcar_pantallas(ctx, carpeta, cfg, "cpe_mint")
+    return got
+
+
+def _rellenar_campo(page, pistas, valor):
+    """Rellena el 1er input cuyo name/id/placeholder/aria-label contenga alguna
+    pista. Best-effort, no rompe."""
+    if not valor:
+        return
+    for p in pistas:
+        for sel in (f"input[name*='{p}' i]", f"input[id*='{p}' i]",
+                    f"input[placeholder*='{p}' i]", f"input[aria-label*='{p}' i]"):
+            try:
+                loc = page.locator(sel)
+                if loc.count() > 0:
+                    loc.first.fill(str(valor), timeout=2000)
+                    return
+            except Exception:
+                pass
 
 
 def _tiene_bearer(cap: _Captura, cual: str) -> bool:
