@@ -269,6 +269,42 @@ def _match_pista(clave: str, nombres) -> bool:
     return any(k == n or k.endswith(n) for n in nombres)
 
 
+def parse_propuesta_rce(data) -> list[dict]:
+    """Parser CONFIRMADO de la propuesta de COMPRAS (RCE), campos reales de SUNAT
+    (volcado 15/11/2026, Oficinas & Depas). La lista viene en `data['registros']`.
+    OJO: en COMPRAS el EMISOR del comprobante es el PROVEEDOR
+    (`numDocIdentidadProveedor`), no `numRuc` (ese es el titular/comprador)."""
+    regs = data.get("registros") if isinstance(data, dict) else None
+    out: list[dict] = []
+    for r in regs or []:
+        if not isinstance(r, dict):
+            continue
+        m = r.get("montos") or {}
+        igv = sum(_num(m.get(k)) or 0 for k in
+                  ("mtoIgvIpmDG", "mtoIgvIpmDGNG", "mtoIgvIpmDNG"))
+        out.append({
+            "tipo": r.get("codTipoCDP"),
+            "desc_tipo": r.get("desTipoCDP"),
+            "serie": r.get("numSerieCDP"),
+            "numero": r.get("numCDP"),
+            # Emisor = proveedor (en compras es de quien RECIBIMOS el comprobante).
+            "ruc_emisor": r.get("numDocIdentidadProveedor"),
+            "tipo_doc_emisor": r.get("codTipoDocIdentidadProveedor"),
+            "razon_emisor": r.get("nomRazonSocialProveedor"),
+            "fecha": r.get("fecEmision"),
+            "moneda": r.get("codMoneda"),
+            "igv": igv or None,
+            "total": _num(m.get("mtoTotalCp")),
+            "estado": r.get("desEstadoComprobante"),
+            "periodo": r.get("perTributario"),
+            "_claves": {"tipo": "codTipoCDP", "serie": "numSerieCDP",
+                        "numero": "numCDP", "ruc_emisor": "numDocIdentidadProveedor",
+                        "razon_emisor": "nomRazonSocialProveedor",
+                        "total": "montos.mtoTotalCp", "igv": "montos.mtoIgvIpm*"},
+        })
+    return out
+
+
 def _registros_comprobante(obj) -> list[dict]:
     """Recorre el JSON y junta los registros que parecen un comprobante: tienen
     una SERIE electrónica (FBE+3) o, en su defecto, campos tipo/serie/numero/ruc."""
@@ -419,12 +455,14 @@ def _volcar_json(carpeta: Path, nombre: str, obj, cfg: SunatConfig):
 # ───────────────────────── una vuelta por un libro (compras/ventas) ─────────────
 def _procesar_libro(page, cap: _Captura, carpeta: Path, cfg: SunatConfig,
                     libro: str, periodo: str, indicador: int, n: int,
-                    url_propuesta: str | None, cod_tipo_ope: str) -> dict:
+                    url_propuesta: str | None, cod_tipo_ope: str,
+                    endpoint_confirmado: bool = True) -> dict:
     """Pide la lista del período (si hay endpoint+token) y consulta los ítems de
     los primeros `n` comprobantes consultables. `libro`='compras'|'ventas'."""
     res = {"libro": libro, "indicador": indicador, "periodo": periodo,
            "lista": {"estado": None, "n_registros": 0, "n_consultables": 0,
-                     "claves_detectadas": None, "fuente": None},
+                     "claves_detectadas": None, "fuente": None,
+                     "endpoint_confirmado": endpoint_confirmado},
            "comprobantes": [], "items_total": 0, "tiempos": [], "errores": []}
 
     bearer = cap.bearer_sire
@@ -462,7 +500,12 @@ def _procesar_libro(page, cap: _Captura, carpeta: Path, cfg: SunatConfig,
             data = json.loads(cuerpo)
         except Exception:
             data = {}
-        registros = _registros_comprobante(data)
+        # Compras: parser CONFIRMADO (campos reales RCE). Ventas: shape aún no
+        # confirmada → extractor genérico por forma.
+        if libro == "compras":
+            registros = parse_propuesta_rce(data)
+        else:
+            registros = _registros_comprobante(data)
         res["lista"]["n_registros"] = len(registros)
         if registros:
             res["lista"]["claves_detectadas"] = registros[0].get("_claves")
@@ -717,15 +760,21 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
             res["libros"].append(_procesar_libro(
                 page, cap, carpeta, cfg, "compras", periodo, 2, n,
                 API_SIRE + _PROPUESTA_RCE, cod_tipo_ope))
+            url_rvie, rvie_ok = _endpoint_ventas(cap)
             res["libros"].append(_procesar_libro(
                 page, cap, carpeta, cfg, "ventas", periodo, 1, n,
-                _endpoint_ventas(cap), cod_tipo_ope))
+                url_rvie, cod_tipo_ope, endpoint_confirmado=rvie_ok))
 
-            # Si alguna LISTA falló (4xx/5xx) o no trajo registros por error, el
-            # resumen NO puede decir OK: CON ERRORES (lista <estado>).
+            # Si una LISTA de endpoint CONFIRMADO falla (4xx/5xx), el resumen NO puede
+            # decir OK: CON ERRORES. Un endpoint NO confirmado (ventas RVIE en pausa,
+            # prioridad baja) NO marca error: se reporta como 'endpoint_no_confirmado'.
             fallas_lista = []
             for lb in res["libros"]:
-                est = lb.get("lista", {}).get("estado")
+                li = lb.get("lista", {})
+                est = li.get("estado")
+                if not li.get("endpoint_confirmado"):
+                    li["nota"] = "endpoint_no_confirmado (pausa, prioridad baja)"
+                    continue
                 if isinstance(est, int) and est >= 400:
                     fallas_lista.append(f"{lb['libro']} lista {est}")
                 elif lb.get("errores"):
@@ -748,15 +797,16 @@ def comp_diag(cfg: SunatConfig, periodo: str, n: int = N_DEFAULT) -> dict:
     return res
 
 
-def _endpoint_ventas(cap: _Captura) -> str | None:
-    """Endpoint de la propuesta de VENTAS (RVIE). Preferimos el REAL capturado del
-    tráfico de la SPA; si la SPA no lo disparó, caemos al candidato por simetría con
-    RCE (COMP_PROPUESTA_RVIE), marcado como NO confirmado en el reporte."""
+def _endpoint_ventas(cap: _Captura) -> tuple[str, bool]:
+    """Endpoint de la propuesta de VENTAS (RVIE) y si está CONFIRMADO. Preferimos el
+    REAL capturado del tráfico de la SPA (confirmado=True); si la SPA no lo disparó,
+    caemos al candidato por simetría con RCE (confirmado=False → pausa, prioridad
+    baja; su fallo NO marca CON ERRORES todo el run)."""
     for pr in cap.propuestas:
         if libro_de_url(pr["url"]) == "ventas":
             base = pr["url"].split("?")[0]
-            return re.sub(r"/\d{6}/", "/{periodo}/", base)
-    return API_SIRE + _PROPUESTA_RVIE
+            return (re.sub(r"/\d{6}/", "/{periodo}/", base), True)
+    return (API_SIRE + _PROPUESTA_RVIE, False)
 
 
 def _abrir_menu(page, code: str, label: str) -> bool:
