@@ -20,13 +20,15 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from db import get_session
 from models import (
     Contribuyente, CredencialSol, EstudioContable, Pago, EstadoSuscripcion,
+    EstadoContribuyente, SolicitudValidacionCredencial, EstadoValidacion,
     ahora_lima,
 )
+from cifrado import cifrar_clave_sol
 from ..core import templates, fecha_lima, WHATSAPP_SOPORTE
 from ..deps import UsuarioActual, usuario_actual, contribuyente_accesible
 from ..estados import estado_conexion
@@ -164,6 +166,101 @@ async def mi_cuenta(request: Request,
         "anio_actual": ahora_lima().year,
         "anio_min": 2010,   # SUNAT rara vez tiene deuda vía buzón más antigua
     })
+
+
+def _cond_tenant(user: UsuarioActual):
+    """Alcance multi-tenant del contribuyente para ESTE usuario (igual que
+    mi_cuenta): el empresario se vigila a sí mismo (cuenta_empresario_id); el
+    resto opera su cartera (estudio_id)."""
+    if user.es_empresario:
+        return Contribuyente.cuenta_empresario_id == user.estudio_id
+    return Contribuyente.estudio_id == user.estudio_id
+
+
+@router.post("/mi-cuenta/conectar")
+async def mi_cuenta_conectar(
+    request: Request,
+    ruc: str = Form(""),
+    usuario_sol: str = Form(""),
+    clave_sol: str = Form(""),
+    tipo_usuario: str = Form("2"),   # 2 = secundario (recomendado) · 1 = principal
+    user: UsuarioActual = Depends(usuario_actual),
+):
+    """Conectar el buzón de una persona que AÚN NO tiene contribuyente: teclea su
+    RUC + Usuario y Clave SOL (principal o secundario). Crea el Contribuyente
+    (con el tenant correcto), guarda la credencial cifrada (valida=True, sin sello
+    de login → queda 'Verificando') y encola la 1ª lectura; el worker la toma en
+    el siguiente ciclo y confirma la conexión. NO presenta ni modifica nada en
+    SUNAT. Idempotente: si el RUC ya existe para este usuario, actualiza su
+    credencial en vez de duplicar."""
+    ruc = (ruc or "").strip()
+    usuario_sol = (usuario_sol or "").strip()
+    clave_sol = clave_sol or ""
+    if not (ruc.isdigit() and len(ruc) == 11):
+        return RedirectResponse("/mi-cuenta?err=ruc#conectar", status_code=303)
+    if not usuario_sol or not clave_sol:
+        return RedirectResponse("/mi-cuenta?err=cred#conectar", status_code=303)
+    try:
+        tu = int(tipo_usuario)
+    except (TypeError, ValueError):
+        tu = 2
+    if tu not in (1, 2):
+        tu = 2
+
+    cond = _cond_tenant(user)
+    async with get_session() as session:
+        estudio = await session.get(EstudioContable, user.estudio_id)
+        contrib = await session.scalar(
+            select(Contribuyente).where(cond, Contribuyente.ruc == ruc))
+        if contrib is None:
+            # Respeta el máximo de RUCs del plan.
+            n = await session.scalar(
+                select(func.count()).select_from(Contribuyente).where(cond))
+            if estudio and estudio.max_contribuyentes and n >= estudio.max_contribuyentes:
+                return RedirectResponse("/mi-cuenta?err=limite#conectar",
+                                        status_code=303)
+            contrib = Contribuyente(
+                estudio_id=user.estudio_id, ruc=ruc, razon_social=None,
+                cuenta_empresario_id=(user.estudio_id if user.es_empresario else None),
+                estado=EstadoContribuyente.ACTIVO)
+            session.add(contrib)
+            await session.flush()
+
+        cred = await session.scalar(
+            select(CredencialSol).where(
+                CredencialSol.contribuyente_id == contrib.id))
+        if cred:
+            cred.usuario_sol = usuario_sol
+            cred.clave_sol_cifrada = cifrar_clave_sol(clave_sol)
+            cred.tipo_usuario = tu
+            cred.valida = True
+            cred.ultimo_login_ok_at = None   # vuelve a "verificando" hasta confirmar
+        else:
+            session.add(CredencialSol(
+                contribuyente_id=contrib.id, estudio_id=user.estudio_id,
+                usuario_sol=usuario_sol,
+                clave_sol_cifrada=cifrar_clave_sol(clave_sol),
+                tipo_usuario=tu, valida=True, **user.cargo_trazabilidad()))
+
+        # Guardar credencial válida REACTIVA el RUC (zAlerta-51) y encola la 1ª
+        # lectura en la cola diurna (one-shot) para que el worker lo tome ya.
+        if contrib.estado in (EstadoContribuyente.ERROR_CREDENCIAL,
+                              EstadoContribuyente.INACTIVO):
+            contrib.estado = EstadoContribuyente.ACTIVO
+        if contrib.anio_deuda_desde is None:
+            contrib.anio_deuda_desde = anio_deuda_desde_default()
+            contrib.anio_deuda_cubierto_desde = contrib.anio_deuda_desde
+        contrib.actualizar_solicitado = True
+        contrib.actualizar_solicitado_at = ahora_lima()
+
+        # Encolar la validación con tenant (feedback de "verificando" en la UI).
+        session.add(SolicitudValidacionCredencial(
+            estudio_id=user.estudio_id, ruc=ruc, usuario_sol=usuario_sol,
+            clave_sol_cifrada=cifrar_clave_sol(clave_sol),
+            estado=EstadoValidacion.PENDIENTE))
+        await session.commit()
+
+    return RedirectResponse("/mi-cuenta?conectado=1#conectar", status_code=303)
 
 
 @router.post("/api/buzon/{contribuyente_id}/anio-deuda")

@@ -11,6 +11,14 @@
     <!-- ════ Columna izquierda: ESTADO + ACCIÓN ════ -->
     <div class="mc-col mc-col--main">
 
+      {% if request.query_params.get('conectado') %}
+      <div class="mc-ok">
+        <span class="material-symbols-outlined">check_circle</span>
+        <div>Recibimos tu RUC y tu Clave SOL. Estamos verificando la conexión;
+          en cuanto tu buzón quede activo te avisamos.</div>
+      </div>
+      {% endif %}
+
       {% if not rucs %}
       <div class="mc-estado conx--ambar">
         <span class="mc-estado-badge conx-badge--ambar">Pendiente</span>
@@ -118,6 +126,55 @@
           <button class="btn btn--whatsapp btn--bloque" id="mc-enviar-cont" style="margin-top:12px">
             <span class="material-symbols-outlined">chat</span> Enviar a mi contador</button>
         </div>
+      </section>
+      {% else %}
+      <!-- 3b · PRIMERA CONEXIÓN: aún no hay contribuyente. Formulario para teclear
+           el RUC + Clave SOL y crear el buzón. POST server-side (sin depender del
+           JS por-RUC, que necesita un contribuyente existente). -->
+      <section class="mc-bloque" id="conectar">
+        <h2 class="mc-h2"><span class="material-symbols-outlined">vpn_key</span>
+          Conecta tu buzón</h2>
+
+        {% if request.query_params.get('err') == 'ruc' %}
+        <div class="mc-err">Ingresa un RUC válido de 11 dígitos.</div>
+        {% elif request.query_params.get('err') == 'cred' %}
+        <div class="mc-err">Ingresa tu Usuario y tu Clave SOL.</div>
+        {% elif request.query_params.get('err') == 'limite' %}
+        <div class="mc-err">Alcanzaste el máximo de RUCs de tu plan. Escríbenos y
+          lo ampliamos.</div>
+        {% endif %}
+
+        <div class="act-confianza">
+          <span class="material-symbols-outlined">verified_user</span>
+          <div><strong>Tus credenciales están seguras</strong>
+            <ul><li>Solo <b>leemos</b> si tienes notificaciones nuevas.</li>
+              <li><b>No</b> presentamos ni modificamos nada.</li>
+              <li>Tu clave viaja cifrada y la desconectas cuando quieras.</li></ul></div>
+        </div>
+
+        <form method="post" action="/mi-cuenta/conectar" class="mc-form-conectar"
+              autocomplete="off">
+          <div class="campo"><label for="mcn-ruc">RUC</label>
+            <input id="mcn-ruc" name="ruc" inputmode="numeric" maxlength="11"
+                   pattern="\d{11}" placeholder="11 dígitos" required></div>
+          <div class="campo"><label for="mcn-user">Usuario SOL</label>
+            <input id="mcn-user" name="usuario_sol" autocomplete="off" required></div>
+          <div class="campo"><label for="mcn-clave">Clave SOL</label>
+            <input id="mcn-clave" name="clave_sol" type="password"
+                   autocomplete="new-password" required></div>
+          <fieldset class="mc-tipo">
+            <legend>Tipo de usuario SOL</legend>
+            <label><input type="radio" name="tipo_usuario" value="2" checked>
+              Usuario secundario <span class="muted">(recomendado)</span></label>
+            <label><input type="radio" name="tipo_usuario" value="1">
+              Usuario principal</label>
+          </fieldset>
+          <p class="muted" style="font-size:.82rem">Validamos tu conexión sola, en
+            segundo plano. Cuando conecte, tu buzón queda vigilado.</p>
+          <button type="submit" class="lp-cta mc-cta mc-cta--ambar">
+            <span class="material-symbols-outlined">link</span>
+            <span class="lp-cta-resp">Conectar mi buzón</span></button>
+        </form>
       </section>
       {% endif %}
 

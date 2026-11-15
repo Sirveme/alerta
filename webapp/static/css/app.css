@@ -1921,6 +1921,23 @@ a.tarjeta-link { display:block; color:inherit; }
 /* 3 · CONECTAR / ACTUALIZAR BUZÓN */
 .mc-bloque { background:var(--superficie); border:1.5px solid var(--borde);
   border-radius:16px; padding:18px; margin-bottom:16px; }
+/* 3b · Primera conexión (RUC nuevo, sin contribuyente aún) */
+.mc-form-conectar { margin-top:4px; }
+.mc-err { padding:10px 12px; border-radius:12px; margin-bottom:12px;
+  background:color-mix(in srgb,#F0526E 12%,transparent);
+  border:1.5px solid color-mix(in srgb,#F0526E 40%,transparent);
+  color:var(--texto); font-size:.9rem; }
+.mc-tipo { border:1.5px solid var(--borde); border-radius:12px; padding:10px 12px;
+  margin:4px 0 12px; }
+.mc-tipo legend { font-weight:500; font-size:.85rem; padding:0 6px; color:var(--texto-suave); }
+.mc-tipo label { display:flex; align-items:center; gap:8px; padding:4px 0;
+  font-size:.92rem; cursor:pointer; }
+.mc-tipo .muted { font-size:.82rem; }
+.mc-ok { display:flex; gap:10px; align-items:flex-start; padding:12px 14px;
+  border-radius:12px; margin-bottom:14px; font-size:.92rem;
+  background:color-mix(in srgb,var(--u-aldia) 14%,transparent);
+  border:1.5px solid color-mix(in srgb,var(--u-aldia) 42%,transparent); }
+.mc-ok .material-symbols-outlined { color:var(--u-aldia); flex:0 0 auto; }
 .mc-h2 { display:flex; align-items:center; gap:8px; font-size:1.1rem; margin:0 0 14px; }
 .mc-h2 .material-symbols-outlined { color:var(--marca); }
 .mc-tabs { display:flex; gap:8px; margin-bottom:14px; }
