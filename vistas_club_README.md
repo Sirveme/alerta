@@ -53,8 +53,21 @@ Variables de entorno (ingesta/recolección, heredadas de comp-diag):
 - `COMP_CODE_CPE` (`11.38.1.1.1`), `COMP_CODE_RCE` (`60.2.2.1.1`),
   `COMP_PERPAGE` (20), `COMP_MAX_PAGINAS` (500), `COMP_CODTIPOOPE` (1).
 
+### ✅ Vista Compras (`/club/compras/{id}`)
+- `webapp/routers/club.py` + `webapp/templates/club_compras.html`: **una fila por ítem**,
+  filtros por **período**, **proveedor** y **texto** (descripción), **total** del filtro,
+  botón **Descargar Excel**. Tema oscuro (tokens `var(--…)`, nunca `#fff`), marca
+  **Club de Contadores** protagonista + "con alerta.pe" en pequeño.
+- **Excel** `libro_compras` (en `excel_export.py` y su copia `webapp/excel_export.py`),
+  mismo scope y filtros que la pantalla.
+- **Modo demostración (2A)** integrado: botón arriba (cookie), casilla aparte para
+  montos; enmascara igual en pantalla y en el Excel descargado.
+- Scope multi-tenant: reusa `_puede_ver` de la vista de cliente. Registrada en
+  `webapp/main.py`. Probado offline: router importa, Excel genera, plantilla compila.
+
 ### ⏳ Pendiente
-- Vista A: rejilla 12 meses por cliente (declaró/pagó/pagó fuera de plazo/sin DJ).
+- Vista A: rejilla 12 meses por cliente (declaró/pagó/pagó fuera de plazo/sin DJ) —
+  decl-carga OK para los 3 RUCs, así que puede leer datos reales.
 - Vista B: Compras del período (una fila por ítem, filtros proveedor+texto, total,
   botón "Descargar Excel").
 - "Modo demostración" (enmascara RUC/nombre cliente, RUC/razón proveedores, montos

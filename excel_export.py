@@ -297,6 +297,49 @@ def libro_cartera(estudio_nombre: str, clientes: list[dict],
     return wb
 
 
+# ═════════════════════════ C. COMPRAS DEL PERÍODO ═════════════════════════
+# Una fila por ÍTEM de comprobante de compra (RCE). Scope = el de la vista
+# /club/compras (mismo filtrado). Si el modo demostración está activo, las columnas
+# de identidad/monto llegan YA enmascaradas (server-side, igual que la pantalla).
+COLS_COMPRAS = [
+    {"clave": "fecha",          "titulo": "Fecha",          "ancho": 12, "tipo": "fecha"},
+    {"clave": "proveedor_ruc",  "titulo": "RUC proveedor",  "ancho": 14, "tipo": "texto"},
+    {"clave": "proveedor",      "titulo": "Proveedor",      "ancho": 34, "tipo": "texto"},
+    {"clave": "comprobante",    "titulo": "Comprobante",    "ancho": 18, "tipo": "texto"},
+    {"clave": "descripcion",    "titulo": "Descripción",    "ancho": 44, "tipo": "texto"},
+    {"clave": "unidad",         "titulo": "Unidad",         "ancho": 10, "tipo": "texto"},
+    {"clave": "cantidad",       "titulo": "Cantidad",       "ancho": 11, "tipo": "entero"},
+    {"clave": "valor_unitario", "titulo": "V. unit. (S/)",  "ancho": 13, "tipo": "moneda"},
+    {"clave": "importe",        "titulo": "Importe (S/)",   "ancho": 14, "tipo": "moneda"},
+]
+
+
+def libro_compras(razon_social: str, ruc: str, periodo: str, filas: list[dict],
+                  generado_por: str = "", alcance: str = "",
+                  demo: bool = False) -> Workbook:
+    """Una hoja, una fila por ítem. `filas` ya viene filtrada y (si aplica)
+    enmascarada por la vista. `periodo` = AAAAMM."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Compras"
+    ws.sheet_view.showGridLines = False
+    per = f"{periodo[4:6]}/{periodo[:4]}" if periodo and len(periodo) == 6 else (periodo or "")
+    metas = [
+        f"RUC {ruc}  ·  Período {per}",
+        f"{len(filas)} ítem(s)  ·  Generado {hoy_lima():%d/%m/%Y %H:%M} (hora Lima)",
+    ]
+    if demo:
+        metas.append("MODO DEMOSTRACIÓN: datos enmascarados.")
+    if generado_por:
+        metas.append(f"Exportado por: {generado_por}")
+    if alcance:
+        metas.append(f"Alcance: {alcance}")
+    titulo = f"Compras — {razon_social}"
+    fila_head = _bloque_titulo(ws, titulo, metas, len(COLS_COMPRAS))
+    _escribir_tabla(ws, COLS_COMPRAS, filas, fila_head, total_footer=True)
+    return wb
+
+
 def libro_a_bytes(wb: Workbook) -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
