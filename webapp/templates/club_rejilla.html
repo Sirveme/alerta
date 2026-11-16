@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titulo %}Rejilla 12 meses — Club de Contadores{% endblock %}
+
+{% block contenido %}
+<div class="xlpro">
+  {% include "_club_head.html" %}
+
+  <div class="xl-bar">
+    <span class="xl-dim" style="font-size:12px">Leyenda:</span>
+    <span class="chip chip--ok" title="Declaró y pagó dentro del plazo.">Al día</span>
+    <span class="chip chip--tarde" title="Pagó después del vencimiento.">Pagó tarde</span>
+    <span class="chip chip--decl" title="Declaró; sin pago o sin cronograma para evaluar.">Declaró</span>
+    <span class="chip chip--sindj" title="No hay declaración jurada vigente.">Sin DJ</span>
+  </div>
+
+  <div class="xl-table-wrap">
+    <table class="xl-table">
+      <thead>
+        <tr>
+          <th>Período</th><th>Declaró</th><th>Presentación</th>
+          <th>Pagó</th><th>Fecha pago</th><th>Vence</th>
+          <th class="num">Importe</th><th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in filas %}
+        <tr>
+          <td class="mono">{{ f.periodo_label }}</td>
+          <td>{% if f.declaro %}<span class="material-symbols-outlined"
+                title="Declaró" style="font-size:18px;color:#5FD98C">check_circle</span>
+              {% else %}<span class="material-symbols-outlined" title="No declaró"
+                style="font-size:18px;color:#FF7A7A">cancel</span>{% endif %}</td>
+          <td class="mono">{{ f.fecha_pres_txt }}</td>
+          <td>{% if f.pago %}<span class="material-symbols-outlined" title="Pagó"
+                style="font-size:18px;color:#5FD98C">check_circle</span>
+              {% else %}<span class="xl-dim">—</span>{% endif %}</td>
+          <td class="mono">{{ f.fecha_pago_txt }}</td>
+          <td class="mono">{{ f.venc_txt }}</td>
+          <td class="num mono">{% if f.importe is number %}S/ {{ '%.2f'|format(f.importe) }}{% elif f.importe %}{{ f.importe }}{% endif %}</td>
+          <td><span class="chip {{ f.chip }}" title="{{ f.estado_tip }}">{{ f.estado_label }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="xl-vacio">
+          Aún no hay Declaraciones cargadas para este cliente. Corré
+          <code>decl-carga &lt;RUC&gt;</code> y vuelve.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

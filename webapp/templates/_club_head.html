@@ -1,0 +1,35 @@
+<link rel="stylesheet" href="/static/css/club.css">
+<div class="xl-brand">
+  <span class="marca">Club de Contadores</span>
+  <span class="con">con alerta.pe</span>
+  <span class="sep"></span>
+  <div class="xl-reserva">
+    <a class="xl-chkbox {% if not oculto %}on{% endif %}"
+       href="/club/reservado/mostrar" title="{{ tooltip_reserva }}">
+      <span class="box">{% if not oculto %}✓{% endif %}</span> Mostrar datos reservados</a>
+    <a class="xl-chkbox {% if not montos_ocultos %}on{% endif %}"
+       href="/club/reservado/montos"
+       title="Muestra u oculta los montos (S/). Casilla aparte.">
+      <span class="box">{% if not montos_ocultos %}✓{% endif %}</span> Mostrar montos</a>
+  </div>
+</div>
+
+<div class="xl-cli">{{ cliente_nombre }}<span class="ruc">RUC {{ cliente_ruc }}</span>
+  &nbsp;·&nbsp;<a href="/cliente/{{ contrib_id }}" class="mono"
+    style="color:var(--xl-green-l);text-decoration:none"
+    title="Volver a la ficha del cliente">← Cliente</a>
+  &nbsp;·&nbsp;<a href="/club/compras/{{ contrib_id }}" class="mono"
+    style="color:var(--xl-dim);text-decoration:none">Compras</a>
+  &nbsp;·&nbsp;<a href="/club/rejilla/{{ contrib_id }}" class="mono"
+    style="color:var(--xl-dim);text-decoration:none">Rejilla 12 meses</a>
+</div>
+
+{% if nota %}<div class="xl-note">{{ nota }}</div>{% endif %}
+
+<div class="xl-banner">
+  <span class="dot"></span>
+  <span><b>Club de Contadores</b> — capacitaciones, plantillas y herramientas para
+    tu estudio.</span>
+  <span class="sep" style="flex:1 1 auto"></span>
+  <a href="/" title="Conoce las herramientas del Club">Conócelas →</a>
+</div>

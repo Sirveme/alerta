@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block titulo %}Compras — Club de Contadores{% endblock %}
+
+{% block contenido %}
+<div class="xlpro">
+  {% include "_club_head.html" %}
+
+  <form class="xl-bar" method="get" action="/club/compras/{{ contrib_id }}" id="filtros">
+    <label>Período</label>
+    <select class="xl-select" name="periodo"
+            onchange="document.getElementById('filtros').submit()">
+      {% for p in periodos %}
+        <option value="{{ p }}" {% if p == periodo %}selected{% endif %}>{{ p[4:6] }}/{{ p[:4] }}</option>
+      {% else %}
+        <option value="">(sin datos)</option>
+      {% endfor %}
+    </select>
+    <label>Proveedor</label>
+    <select class="xl-select" name="proveedor"
+            onchange="document.getElementById('filtros').submit()">
+      <option value="">Todos</option>
+      {% for pr in proveedores %}
+        <option value="{{ pr.ruc }}" {% if pr.ruc == proveedor %}selected{% endif %}>{{ pr.razon }}</option>
+      {% endfor %}
+    </select>
+    <input class="xl-input" type="text" name="q" value="{{ q }}"
+           placeholder="Buscar en descripción…">
+    <button class="xl-btn xl-btn--ghost" type="submit"
+            title="Aplicar los filtros">
+      <span class="material-symbols-outlined">filter_alt</span> Filtrar</button>
+    <span class="xl-sep"></span>
+    <a class="xl-btn xl-btn--gold" title="Descargar estas compras en Excel"
+       href="/club/compras/{{ contrib_id }}/export.xlsx?periodo={{ periodo }}&proveedor={{ proveedor }}&q={{ q|urlencode }}">
+      <span class="material-symbols-outlined">download</span> Descargar Excel</a>
+  </form>
+
+  <div class="xl-bar">
+    <span class="xl-total">{{ n_comprobantes }} comprob. · {{ n_items }} ítem(s) ·
+      Total del período:
+      <b>{% if total is number %}S/ {{ '%.2f'|format(total) }}{% else %}{{ total }}{% endif %}</b></span>
+  </div>
+
+  <div class="xl-table-wrap">
+    <table class="xl-table">
+      <thead>
+        <tr>
+          <th>Fecha</th><th>RUC proveedor</th><th>Proveedor</th>
+          <th>Comprobante</th><th>Descripción</th><th>Unidad</th>
+          <th class="num">Cant.</th><th class="num">V. unit.</th>
+          <th class="num">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in filas %}
+        <tr>
+          <td class="mono">{{ f.fecha_txt }}</td>
+          <td class="mono">{{ f.proveedor_ruc }}</td>
+          <td>{{ f.proveedor }}</td>
+          <td class="mono">{{ f.comprobante }}</td>
+          <td>{{ f.descripcion }}</td>
+          <td>{{ f.unidad }}</td>
+          <td class="num mono">{% if f.cantidad is number %}{{ '%g'|format(f.cantidad) }}{% endif %}</td>
+          <td class="num mono">{% if f.valor_unitario is number %}{{ '%.2f'|format(f.valor_unitario) }}{% else %}{{ f.valor_unitario }}{% endif %}</td>
+          <td class="num mono">{% if f.importe is number %}{{ '%.2f'|format(f.importe) }}{% else %}{{ f.importe }}{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="xl-vacio">
+          {% if periodos %}No hay ítems para este filtro.{% else %}
+          Aún no hay compras cargadas para este cliente. Corré
+          <code>compras-carga &lt;RUC&gt; &lt;AAAAMM&gt;</code> y vuelve.{% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
