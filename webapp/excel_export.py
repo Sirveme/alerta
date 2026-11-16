@@ -316,9 +316,10 @@ COLS_COMPRAS = [
 
 def libro_compras(razon_social: str, ruc: str, periodo: str, filas: list[dict],
                   generado_por: str = "", alcance: str = "",
-                  demo: bool = False) -> Workbook:
+                  demo: bool = False, total_txt: str = "") -> Workbook:
     """Una hoja, una fila por ítem. `filas` ya viene filtrada y (si aplica)
-    enmascarada por la vista. `periodo` = AAAAMM."""
+    enmascarada por la vista. `periodo` = AAAAMM. `total_txt` = total OFICIAL del
+    período (por comprobantes), ya formateado (p.ej. 'S/ 6381.33')."""
     wb = Workbook()
     ws = wb.active
     ws.title = "Compras"
@@ -326,7 +327,9 @@ def libro_compras(razon_social: str, ruc: str, periodo: str, filas: list[dict],
     per = f"{periodo[4:6]}/{periodo[:4]}" if periodo and len(periodo) == 6 else (periodo or "")
     metas = [
         f"RUC {ruc}  ·  Período {per}",
-        f"{len(filas)} ítem(s)  ·  Generado {hoy_lima():%d/%m/%Y %H:%M} (hora Lima)",
+        f"{len(filas)} ítem(s)"
+        + (f"  ·  Total del período: {total_txt}" if total_txt else "")
+        + f"  ·  Generado {hoy_lima():%d/%m/%Y %H:%M} (hora Lima)",
     ]
     if demo:
         metas.append("MODO DEMOSTRACIÓN: datos enmascarados.")
@@ -336,7 +339,9 @@ def libro_compras(razon_social: str, ruc: str, periodo: str, filas: list[dict],
         metas.append(f"Alcance: {alcance}")
     titulo = f"Compras — {razon_social}"
     fila_head = _bloque_titulo(ws, titulo, metas, len(COLS_COMPRAS))
-    _escribir_tabla(ws, COLS_COMPRAS, filas, fila_head, total_footer=True)
+    # El footer NO suma la columna de importes de ÍTEMS (no equivale al total del
+    # período por comprobantes); el total autoritativo va arriba, en metadatos.
+    _escribir_tabla(ws, COLS_COMPRAS, filas, fila_head, total_footer=False)
     return wb
 
 

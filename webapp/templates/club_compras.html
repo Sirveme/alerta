@@ -60,6 +60,7 @@
     <span class="club-sub">con alerta.pe</span>
     <div class="club-sep"></div>
     {% if demo %}<span class="demo-flag">MODO DEMOSTRACIÓN</span>{% endif %}
+    <a class="btn-demo" href="/cliente/{{ contrib_id }}">← Cliente</a>
   </div>
   <div class="club-cli">{{ cliente_nombre }}<span class="ruc">RUC {{ cliente_ruc }}</span></div>
 
@@ -96,7 +97,8 @@
         {% if demo_montos %}☑{% else %}☐{% endif %} Enmascarar montos</a>
     {% endif %}
     <div class="club-sep"></div>
-    <div class="club-total">{{ n_items }} ítem(s) · Total:
+    <div class="club-total">{{ n_comprobantes }} comprob. · {{ n_items }} ítem(s) ·
+      Total del período:
       <span>{% if total is number %}S/ {{ '%.2f'|format(total) }}{% else %}{{ total }}{% endif %}</span></div>
   </div>
 

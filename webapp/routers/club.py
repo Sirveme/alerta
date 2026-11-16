@@ -73,6 +73,29 @@ async def _proveedores_de(session, contrib_id, periodo) -> list[dict]:
     return [{"ruc": r[0], "razon": r[1] or r[0]} for r in rows.all()]
 
 
+async def _total_periodo(session, contrib_id, periodo, proveedor) -> float:
+    """Total OFICIAL del período = suma de los importes de los COMPROBANTES
+    (mtoTotalCp), no de los ítems (los ítems traen impuestos/descuentos distintos y
+    no siempre suman el total del CPE). Respeta el filtro de proveedor; el filtro de
+    texto solo acota las filas de detalle, no este total."""
+    stmt = select(func.coalesce(func.sum(ComprobanteCompra.importe_total), 0)).where(
+        ComprobanteCompra.contribuyente_id == contrib_id,
+        ComprobanteCompra.periodo == periodo)
+    if proveedor:
+        stmt = stmt.where(ComprobanteCompra.ruc_proveedor == proveedor)
+    val = await session.scalar(stmt)
+    return round(float(val or 0), 2)
+
+
+async def _conteo_comprobantes(session, contrib_id, periodo, proveedor) -> int:
+    stmt = select(func.count()).select_from(ComprobanteCompra).where(
+        ComprobanteCompra.contribuyente_id == contrib_id,
+        ComprobanteCompra.periodo == periodo)
+    if proveedor:
+        stmt = stmt.where(ComprobanteCompra.ruc_proveedor == proveedor)
+    return int(await session.scalar(stmt) or 0)
+
+
 async def _filas_raw(session, contrib_id, periodo, proveedor, q) -> list[dict]:
     """Una fila por ítem (sin enmascarar). Join item↔comprobante + filtros."""
     stmt = (
@@ -141,7 +164,10 @@ async def vista_compras(contribuyente_id: uuid.UUID, request: Request,
 
         filas_raw = (await _filas_raw(session, contribuyente_id, periodo,
                                       proveedor, q)) if periodo else []
-        total = round(sum(f["importe"] or 0 for f in filas_raw), 2)
+        total = (await _total_periodo(session, contribuyente_id, periodo,
+                                      proveedor)) if periodo else 0.0
+        n_comprobantes = (await _conteo_comprobantes(
+            session, contribuyente_id, periodo, proveedor)) if periodo else 0
         proveedores = (await _proveedores_de(session, contribuyente_id, periodo)) \
             if periodo else []
         filas = _enmascarar(filas_raw, demo, montos)
@@ -158,6 +184,7 @@ async def vista_compras(contribuyente_id: uuid.UUID, request: Request,
                               if len(periodo) == 6 else periodo),
             "proveedor": proveedor, "proveedores": proveedores, "q": q,
             "filas": filas, "n_items": len(filas),
+            "n_comprobantes": n_comprobantes,
             "total": (dm._MASK_MONTO if montos else total),
             "demo": demo, "demo_montos": montos,
             "volver_url": request.url.path + ("?" + request.url.query
@@ -183,13 +210,17 @@ async def exportar_compras(contribuyente_id: uuid.UUID, request: Request,
         filas_raw = (await _filas_raw(session, contribuyente_id, periodo,
                                       proveedor, q)) if periodo else []
         filas = _enmascarar(filas_raw, demo, montos)
+        total = (await _total_periodo(session, contribuyente_id, periodo,
+                                      proveedor)) if periodo else 0.0
+        total_txt = dm._MASK_MONTO if montos else f"S/ {total:,.2f}"
 
         razon = dm.mask_nombre(contrib.razon_social or contrib.ruc, demo,
                                etiqueta="Cliente demostración")
         ruc = dm.mask_ruc(contrib.ruc, demo)
         wb = libro_compras(razon, ruc, periodo, filas,
                            generado_por=(getattr(user, "nombre", "") or ""),
-                           alcance="Club de Contadores", demo=demo)
+                           alcance="Club de Contadores", demo=demo,
+                           total_txt=total_txt)
         datos = libro_a_bytes(wb)
     nombre = nombre_archivo("compras", f"{ruc}_{periodo}")
     return Response(content=datos, media_type=_MEDIA_XLSX,
