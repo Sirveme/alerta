@@ -27,6 +27,25 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select, update, or_, and_, exists, cast, Text, func
 from sqlalchemy.orm import selectinload
 
+# ── DECL-DIAG en LOCAL: usar la URL PÚBLICA del Postgres ─────────────────────
+# La DATABASE_URL del worker apunta al host INTERNO de Railway (*.railway.internal),
+# que NO resuelve desde tu PC (socket.gaierror: getaddrinfo failed). SOLO para el
+# modo `decl-diag`, y SOLO si existe, usamos DATABASE_PUBLIC_URL ANTES de importar
+# db (el engine se arma al importar db.py). No afecta a ningún otro modo ni al
+# worker en prod (que corre worker.py, no este __main__, y nunca pasa 'decl-diag').
+if any(a.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag",
+                     "decl-diag2", "--decl-diag2")
+       for a in sys.argv[1:]):
+    _pub = os.getenv("DATABASE_PUBLIC_URL")
+    if _pub:
+        os.environ["DATABASE_URL"] = _pub
+        print("[decl-diag] Conectando por DATABASE_PUBLIC_URL (host público de "
+              "Railway), no por la interna.", flush=True)
+    else:
+        print("[decl-diag] AVISO: no hay DATABASE_PUBLIC_URL en el entorno; usaré "
+              "DATABASE_URL (fallará si es la interna). Ver instrucciones.",
+              flush=True)
+
 from db import get_session
 from models import (Contribuyente, CredencialSol, EstadoContribuyente,
                     Notificacion, Adjunto, DocumentoValorado, BarridoMetrica,
@@ -38,6 +57,7 @@ import gcs
 # El scraper validado (Playwright puro). Ajustar al nombre real del archivo.
 import scraper_sunat_playwgth as scraper
 import scraper_sunafil   # lector de la casilla SUNAFIL (SUNAFIL-1)
+import scraper_sunat_declaraciones as scraper_decl  # diag Declaraciones y Pagos
 
 TZ_LIMA = ZoneInfo("America/Lima")
 
@@ -764,6 +784,127 @@ def _sunafil_sync(ruc: str, usuario_sol: str, clave_sol: str,
     return scraper_sunafil.leer_casilla_sunafil(cfg, conocidos=conocidos, diag=diag)
 
 
+def _decl_diag_sync(ruc: str, usuario_sol: str, clave_sol: str) -> dict:
+    """Diag de Declaraciones y Pagos (sync, Playwright). SOLO vuelca estructura."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper_decl.diag_declaraciones(cfg)
+
+
+def _decl_diag2_sync(ruc: str, usuario_sol: str, clave_sol: str,
+                     periodo_desde: str | None = None) -> dict:
+    """Diag FASE 2: navega por código, envía rango en la 02 y captura la
+    constancia 0621 (sync, Playwright). NO BD, NO descarga PDFs.
+    `periodo_desde` (AAAAMM) fuerza el 'desde' de la pantalla 01."""
+    cfg = scraper.SunatConfig(ruc=ruc, usuario_sol=usuario_sol,
+                              clave_sol=clave_sol, headless=True)
+    return scraper_decl.diag_declaraciones_fase2(cfg, periodo_desde=periodo_desde)
+
+
+async def _contrib_para_diag(session, ruc_filtro: str | None):
+    """Como _contribuyentes_a_scrapear pero SIN filtrar por estado: así el diag
+    encuentra tu RUC aunque lo hayas puesto 'inactivo' para sacarlo del worker
+    mientras corres el diag (ver forma segura de correrlo)."""
+    q = (select(Contribuyente)
+         .options(selectinload(Contribuyente.credencial)))
+    if ruc_filtro:
+        q = q.where(Contribuyente.ruc == ruc_filtro)
+    return list(await session.scalars(q))
+
+
+async def procesar_decl_diag(session, contrib: Contribuyente) -> int:
+    """DIAGNÓSTICO de Declaraciones y Pagos: login + vuelca estructura. NO escribe
+    en la BD (solo LEE la credencial para loguear). Pensado para correr LOCAL con
+    `railway run`, nunca dentro del worker."""
+    cred = contrib.credencial
+    if not cred:
+        log(f"  {contrib.ruc}: sin credencial registrada, no puedo loguear.", "WARN")
+        return 0
+    if not cred.valida:
+        log(f"  {contrib.ruc}: la credencial figura como NO válida; intento el "
+            f"diag igual (login dirá si es la clave).", "WARN")
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    log(f"  {contrib.ruc}: DECL-DIAG — login + vuelco de estructura (NO persiste)...")
+    res = await asyncio.to_thread(
+        _decl_diag_sync, contrib.ruc, cred.usuario_sol, clave)
+    if not res.get("exito"):
+        log(f"  {contrib.ruc}: DECL-DIAG no completó (motivo={res.get('motivo')}). "
+            f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")
+        return 0
+    # Resumen por pantalla (los 3 estados), sin datos sensibles.
+    for pant in res.get("pantallas", []):
+        estado = pant.get("estado", "—")
+        tablas = pant.get("tablas", [])
+        cols = sum(len(t.get("encabezados", [])) for t in tablas)
+        log(f"    · {pant.get('slug')}: {estado} "
+            f"({len(tablas)} tabla(s), {cols} encabezado(s), "
+            f"{len(pant.get('formularios', []))} formulario(s))")
+    log(f"  {contrib.ruc}: DECL-DIAG OK — {len(res.get('menu', []))} opción(es) de "
+        f"menú, {len(res.get('red', []))} petición(es) de red. Volcado en "
+        f"{res.get('carpeta')} (HTML enmascarado + 00_menu_catalogo.txt). "
+        f"NO se escribió nada en la BD.", "OK")
+    return len(res.get("pantallas", []))
+
+
+async def procesar_decl_diag2(session, contrib: Contribuyente,
+                              periodo_desde: str | None = None) -> int:
+    """DIAGNÓSTICO FASE 2 de Declaraciones y Pagos: navega por código, envía un
+    rango corto en la Consulta DDJJ y pagos y captura la constancia 0621. NO
+    escribe en la BD, NO descarga PDFs. Correr LOCAL con railway run.
+    `periodo_desde` (AAAAMM) fuerza el 'desde' de la pantalla 01."""
+    cred = contrib.credencial
+    if not cred:
+        log(f"  {contrib.ruc}: sin credencial registrada, no puedo loguear.", "WARN")
+        return 0
+    try:
+        clave = descifrar_clave_sol(cred.clave_sol_cifrada)
+    except Exception as e:
+        log(f"  {contrib.ruc}: error descifrando clave: {e}", "ERROR")
+        return 0
+    log(f"  {contrib.ruc}: DECL-DIAG2 — navego por código + rango + constancia "
+        f"(NO persiste, NO descarga)...")
+    res = await asyncio.to_thread(
+        _decl_diag2_sync, contrib.ruc, cred.usuario_sol, clave, periodo_desde)
+    if not res.get("exito"):
+        log(f"  {contrib.ruc}: DECL-DIAG2 no completó (motivo={res.get('motivo')}). "
+            f"Revisa el volcado en {res.get('carpeta')}.", "ERROR")
+        return 0
+    for pant in res.get("pantallas", []):
+        tablas = pant.get("tablas", [])
+        cols = sum(len(t.get("encabezados", [])) for t in tablas)
+        log(f"    · {pant.get('slug')}: {pant.get('estado', '—')} "
+            f"({len(tablas)} tabla(s), {cols} encabezado(s)) "
+            f"{pant.get('detalle', '')}".rstrip())
+    red_n = len(res.get("red", []))
+    carpeta = res.get("carpeta")
+    # SIN ACCESO: el usuario SOL (secundario) no tiene el perfil para esas opciones.
+    # Es acción del CONTADOR (asignar el perfil en SOL), no una falla del sistema.
+    sin_acc = res.get("pantallas_sin_acceso", [])
+    if sin_acc:
+        log(f"  {contrib.ruc}: DECL-DIAG2 SIN ACCESO — el contador debe asignar el "
+            f"perfil SOL para: {', '.join(sin_acc)}. Si lo acaba de asignar, puede "
+            f"tardar unos minutos en propagarse. Vuelve a correr luego. "
+            f"Volcado en {carpeta}.", "WARN")
+    # CON ERRORES: falla nuestra o de SUNAT (no es un permiso del contador).
+    errores = res.get("pantallas_error", [])
+    if errores:
+        detalle = "; ".join(
+            f"{e.get('slug')}={e.get('estado')}"
+            + (f" ({e.get('aviso')})" if e.get("aviso") else "")
+            for e in errores)
+        log(f"  {contrib.ruc}: DECL-DIAG2 CON ERRORES — {len(errores)} pantalla(s): "
+            f"{detalle}. {red_n} petición(es) de red. "
+            f"Volcado en {carpeta}. NO se escribió en la BD.", "ERROR")
+    if not errores and not sin_acc:
+        log(f"  {contrib.ruc}: DECL-DIAG2 OK — {red_n} petición(es) "
+            f"de red. Volcado en {carpeta}. NO se escribió en la BD.", "OK")
+    return len(res.get("pantallas", []))
+
+
 async def procesar_sunafil(session, contrib: Contribuyente,
                            diagnostico: bool = False) -> int:
     """Lee el buzón SUNAFIL del contribuyente y lo ingesta por el MISMO pipeline
@@ -879,8 +1020,20 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
                genhtml: bool = False, genhtml_diag: bool = False,
                pdf: bool = False, pdf_diag: bool = False,
                ceros: bool = False, ceros_diag: bool = False,
-               sunafil: bool = False, sunafil_diag: bool = False) -> None:
+               sunafil: bool = False, sunafil_diag: bool = False,
+               decl_diag: bool = False, decl_diag2: bool = False,
+               decl_diag2_periodo: str | None = None) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
+    if decl_diag or decl_diag2:
+        log(f"modo DECL-DIAG{'2' if decl_diag2 else ''}: "
+            + ("navega por código + rango + constancia 0621"
+               if decl_diag2 else "login + vuelca la ESTRUCTURA")
+            + " (NO escribe en BD, NO descarga). Correr LOCAL, no en el worker.",
+            "WARN")
+        if not ruc_filtro:
+            log("DECL-DIAG requiere un RUC explícito. Uso: "
+                "run_scraper.py <RUC> decl-diag[2]", "ERROR")
+            return
     if sunafil_diag:
         log("modo SUNAFIL-DIAG: login + vuelca el DOM de la casilla (NO ingesta).", "WARN")
     elif sunafil:
@@ -905,11 +1058,18 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
     elif forzar:
         log("modo FORZAR: se scrapea aunque esté fresco.", "WARN")
     async with get_session() as session:
-        contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
+        if decl_diag or decl_diag2:
+            contribs = await _contrib_para_diag(session, ruc_filtro)
+        else:
+            contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if sunafil or sunafil_diag:
+                if decl_diag2:
+                    await procesar_decl_diag2(session, contrib, decl_diag2_periodo)
+                elif decl_diag:
+                    await procesar_decl_diag(session, contrib)
+                elif sunafil or sunafil_diag:
                     await procesar_sunafil(session, contrib, diagnostico=sunafil_diag)
                 elif ceros or ceros_diag:
                     await procesar_ceros(session, contrib, diagnostico=ceros_diag)
@@ -947,6 +1107,9 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> ceros    → captura adjuntos codArchivo=0 por nomArchivo
     #   python run_scraper.py <RUC> sunafil-diag → login + vuelca el DOM de la casilla SUNAFIL
     #   python run_scraper.py <RUC> sunafil  → lee la casilla SUNAFIL e ingesta (fuente=sunafil)
+    #   python run_scraper.py <RUC> decl-diag → login + vuelca ESTRUCTURA de Declaraciones y Pagos (NO BD, LOCAL)
+    #   python run_scraper.py <RUC> decl-diag2 → fase 2: navega por código + rango + constancia 0621 (NO BD, LOCAL)
+    #   python run_scraper.py <RUC> decl-diag2 --periodo-desde 202605 → fuerza el 'desde' de la pantalla 01 a ese período
     ruc = None
     forzar = False
     solo_censo = False
@@ -959,7 +1122,21 @@ if __name__ == "__main__":
     ceros_diag = False
     sunafil = False
     sunafil_diag = False
+    decl_diag = False
+    decl_diag2 = False
+    decl_diag2_periodo = None
+    _esperar_periodo = False
     for arg in sys.argv[1:]:
+        if _esperar_periodo:
+            decl_diag2_periodo = arg.strip()
+            _esperar_periodo = False
+            continue
+        if arg.lower().startswith("--periodo-desde="):
+            decl_diag2_periodo = arg.split("=", 1)[1].strip()
+            continue
+        if arg.lower() in ("--periodo-desde", "periodo-desde"):
+            _esperar_periodo = True
+            continue
         if arg.lower() in ("forzar", "--forzar", "-f"):
             forzar = True
         elif arg.lower() in ("censo", "--censo", "-c"):
@@ -982,9 +1159,15 @@ if __name__ == "__main__":
             sunafil_diag = True
         elif arg.lower() in ("sunafil", "--sunafil"):
             sunafil = True
+        elif arg.lower() in ("decl-diag2", "--decl-diag2"):
+            decl_diag2 = True
+        elif arg.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag"):
+            decl_diag = True
         else:
             ruc = arg
     asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill,
                      genhtml=genhtml, genhtml_diag=genhtml_diag,
                      pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag,
-                     sunafil=sunafil, sunafil_diag=sunafil_diag))
+                     sunafil=sunafil, sunafil_diag=sunafil_diag,
+                     decl_diag=decl_diag, decl_diag2=decl_diag2,
+                     decl_diag2_periodo=decl_diag2_periodo))

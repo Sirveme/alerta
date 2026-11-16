@@ -1680,3 +1680,241 @@ class WorkerEstado(Base):
     # Anti-spam del vigilante: cuándo avisó por última vez que está caído.
     ultima_alerta_caido_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     actualizado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+# ═════════════════════════════════════════════════════════════════════
+# Declaraciones y Pagos (proyecto decl-diag) — HTML-first.
+# Fuentes SOL (solo lectura):
+#   · 01 Consulta general  (consultaS01Alias?accion=consgeneral): rejilla por
+#     PERÍODO con banco, código-tributo e IMPORTE PAGADO en HTML.
+#   · 02 Consulta de DDJJ y pagos (cdpS01Alias): lista de presentaciones por
+#     FECHA DE PRESENTACIÓN + enlace a la constancia (PDF, fase posterior).
+# NO se escribe en prod hasta aprobar la migración (migrar_declaraciones.py).
+# ═════════════════════════════════════════════════════════════════════
+class DeclaracionJurada(Base, TimestampMixin):
+    """Una PRESENTACIÓN de declaración jurada (formulario tipo DJ: 0621, 0601,
+    PDT621, etc.). Una presentación = una fila. Las rectificatorias de un mismo
+    período+formulario conviven (se conservan todas); la de mayor fecha/num_orden
+    queda `es_vigente=True`. Se llena desde 01 (filas 0621) y 02."""
+    __tablename__ = "declaraciones_juradas"
+    __table_args__ = (
+        # num_orden identifica la presentación de forma única en SOL.
+        UniqueConstraint("contribuyente_id", "num_orden",
+                         name="uq_declaracion_numorden"),
+        Index("ix_declaracion_contrib_periodo", "contribuyente_id", "periodo"),
+        Index("ix_declaracion_vigente", "contribuyente_id", "periodo", "es_vigente"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    # Tenant directo (deriva del contribuyente). El filtro fuerte es contribuyente_id.
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        index=True)
+
+    periodo: Mapped[str] = mapped_column(String(6), nullable=False)   # AAAAMM
+    cod_formulario: Mapped[str] = mapped_column(String(10), nullable=False)  # 0621…
+    desc_formulario: Mapped[str | None] = mapped_column(String(120))
+    num_orden: Mapped[str] = mapped_column(String(20), nullable=False)
+    fecha_presentacion: Mapped[datetime | None] = mapped_column(Date)
+
+    # Rectificatorias: todas se conservan; la última por período+formulario vigente.
+    es_rectificatoria: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    es_vigente: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Importe pagado JUNTO con la declaración (de 01). Los pagos por boleta 1662
+    # van en PagoTributario. NULL = no informado / "-".
+    importe_pagado: Mapped[float | None] = mapped_column(Numeric(14, 2))
+
+    origen: Mapped[str | None] = mapped_column(String(2))    # '01' | '02'
+    fuente_hash: Mapped[str | None] = mapped_column(String(64))  # dedup/cambio
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+
+    tributos: Mapped[list["DeclaracionTributo"]] = relationship(
+        back_populates="declaracion", cascade="all, delete-orphan")
+
+
+class PagoTributario(Base, TimestampMixin):
+    """Un PAGO tributario (boleta 1662 "BOLETA DE PAGO - VIRTUAL", u otro pago
+    por período). Trae banco, código de tributo e importe, todo en HTML (01).
+    Se vincula al período; el enlace opcional a la DJ del mismo período es
+    informativo (no financiero)."""
+    __tablename__ = "pagos_tributarios"
+    __table_args__ = (
+        UniqueConstraint("contribuyente_id", "num_orden",
+                         name="uq_pago_numorden"),
+        Index("ix_pago_contrib_periodo", "contribuyente_id", "periodo"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"),
+        index=True)
+
+    periodo: Mapped[str] = mapped_column(String(6), nullable=False)   # AAAAMM
+    cod_formulario: Mapped[str | None] = mapped_column(String(10))    # 1662…
+    desc_formulario: Mapped[str | None] = mapped_column(String(120))
+    num_orden: Mapped[str] = mapped_column(String(20), nullable=False)
+    fecha_pago: Mapped[datetime | None] = mapped_column(Date)  # = fecha de presentación en 01
+
+    banco_receptor: Mapped[str | None] = mapped_column(String(60))
+    # Tributo FISCAL (IGV/Renta/RUS…). En una boleta 1662/1663 la 01 NO lo trae:
+    # queda NULL hasta resolverlo con el "Detalle de Tributos Pagados" (vpS01Alias),
+    # que puede devolver códigos que NO están en nuestro catálogo `tributos` (p.ej.
+    # 3121 Renta MYPE). Por eso SIN FK: se guarda el código tal cual lo da SUNAT (la
+    # descripción autoritativa va en DeclaracionTributo.desc_tributo). Si se quisiera
+    # la FK, el cargador tendría que upsertar antes el catálogo, y un código nuevo
+    # rompería la carga. Preferimos no romper la carga por un código no sembrado.
+    cod_tributo: Mapped[str | None] = mapped_column(String(10))
+    # Código CRUDO de la columna "Codigo-Tributo" de la boleta (p.ej. 0018). NO es
+    # el tributo fiscal ni está en el catálogo `tributos` → SIN FK. Solo trazabilidad.
+    cod_tributo_boleta: Mapped[str | None] = mapped_column(String(10))
+    importe: Mapped[float | None] = mapped_column(Numeric(14, 2))
+
+    # Vínculo informativo a la DJ del mismo período (puede quedar NULL).
+    declaracion_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("declaraciones_juradas.id", ondelete="SET NULL"),
+        index=True)
+
+    origen: Mapped[str | None] = mapped_column(String(2))
+    fuente_hash: Mapped[str | None] = mapped_column(String(64))
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+    # (sin relationship a Tributo: cod_tributo ya no es FK; ver nota arriba)
+
+
+class DeclaracionTributo(Base):
+    """Desglose POR TRIBUTO de una declaración/pago (período × tributo fino:
+    IGV, Renta, EsSalud, ONP…). FASE POSTERIOR: su fuente rica es la constancia
+    0621 (PDF, `obtener_constanciaNP`) o el 'Detalle de Tributos Pagados' del 1662
+    (HTML, `verDetalleTributos`→vpS01Alias). Se deja definida; se puebla cuando se
+    habilite esa fase. `periodo_tributo` se NORMALIZA a AAAAMM (el de los detalles
+    valorados suele venir como texto libre; ver [[DetalleValorado.periodo]])."""
+    __tablename__ = "declaraciones_tributos"
+    __table_args__ = (
+        Index("ix_decltrib_decl", "declaracion_id"),
+        Index("ix_decltrib_periodo_trib", "periodo_tributo", "cod_tributo"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    declaracion_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("declaraciones_juradas.id", ondelete="CASCADE"),
+        index=True)
+    pago_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("pagos_tributarios.id", ondelete="CASCADE"),
+        index=True)
+
+    periodo_tributo: Mapped[str | None] = mapped_column(String(6))   # AAAAMM normalizado
+    # Tributo real del "Detalle de Tributos Pagados" (p.ej. 3121). SIN FK: SUNAT puede
+    # devolver códigos fuera del catálogo `tributos`; la descripción va al lado.
+    cod_tributo: Mapped[str | None] = mapped_column(String(10))
+    desc_tributo: Mapped[str | None] = mapped_column(String(160))
+    # Del Detalle HTML: casilla (p.ej. 404) y sección/concepto ('Monto Pagado',
+    # 'Monto Imputado', 'Monto de la Deuda') para no mezclar pagado con imputado.
+    casilla: Mapped[str | None] = mapped_column(String(10))
+    concepto: Mapped[str | None] = mapped_column(String(40))
+
+    # Del PDF de la constancia 0621: "Total Deuda" vs "Monto Pago".
+    importe_declarado: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    importe_pagado: Mapped[float | None] = mapped_column(Numeric(14, 2))
+
+    origen: Mapped[str | None] = mapped_column(String(20))   # 'constancia_pdf'|'detalle_1662'
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+
+    declaracion: Mapped["DeclaracionJurada | None"] = relationship(back_populates="tributos")
+    # (sin relationship a Tributo: cod_tributo ya no es FK)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Cronograma de vencimientos SUNAT (proyecto decl-diag · estado "pagó fuera de
+# plazo"). Catálogo GLOBAL (no por contribuyente): por período y último dígito
+# del RUC, la fecha de vencimiento oficial. Se CARGA de la fuente oficial de SUNAT
+# cada año (NO hardcodeado). Ver decl_diag_PAGO_FUERA_DE_PLAZO.md.
+# alerta.pe INFORMA (declaró/pagó vs. venció); NUNCA dice "debe" ni calcula
+# intereses/multas.
+# ═════════════════════════════════════════════════════════════════════
+class CronogramaVencimiento(Base):
+    """Un vencimiento para (período, último dígito de RUC) bajo un `grupo`
+    (general / Buenos Contribuyentes / UESP), un `ambito` (a quién aplica) y una
+    RESOLUCIÓN. Soporta **prórrogas**: una resolución posterior NO borra la base,
+    agrega otra fila; se CONSERVAN todas y la `vigente` por celda es la de
+    `resolucion_fecha` más reciente. Si una prórroga aplica solo a ciertos
+    contribuyentes (zona/tamaño), su `ambito` lo acota; cuando no se puede
+    determinar para un RUC, el lookup usa la fecha MÁS TARDÍA (conservador). Ver
+    cronograma.py."""
+    __tablename__ = "cronograma_vencimientos"
+    __table_args__ = (
+        # Una fila por celda × ámbito × resolución (así conviven base + prórrogas
+        # + historial). La vigencia la marca `vigente`/`resolucion_fecha`.
+        UniqueConstraint("periodo", "digito_ruc", "grupo", "ambito",
+                         "num_resolucion", name="uq_cronograma_celda_resolucion"),
+        Index("ix_cronograma_periodo", "periodo"),
+        Index("ix_cronograma_vigente", "periodo", "digito_ruc", "vigente"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    anio: Mapped[int] = mapped_column(Integer, nullable=False)        # año del cronograma
+    periodo: Mapped[str] = mapped_column(String(6), nullable=False)   # AAAAMM (período tributario)
+    digito_ruc: Mapped[int] = mapped_column(Integer, nullable=False)  # 0..9 (último dígito del RUC)
+    # 'general' | 'buenos_contribuyentes' | 'uesp'. El general cubre al grueso.
+    grupo: Mapped[str] = mapped_column(String(24), default="general", nullable=False)
+    fecha_vencimiento: Mapped[datetime] = mapped_column(Date, nullable=False)
+
+    # ── Prórrogas / versiones ──
+    # 'base' = cronograma anual; 'prorroga' = resolución posterior que lo mueve.
+    tipo: Mapped[str] = mapped_column(String(12), default="base", nullable=False)
+    # A quién aplica. 'general' = todos. Otro código (p.ej. 'zona:xxx',
+    # 'tamano:hasta_1700uit') acota la prórroga; `ambito_detalle` lleva las
+    # condiciones estructuradas para evaluarlas por RUC cuando se pueda.
+    ambito: Mapped[str] = mapped_column(String(40), default="general", nullable=False)
+    ambito_detalle: Mapped[dict | None] = mapped_column(JSONB)
+    # Fecha de la resolución (para ordenar vigencia: la más reciente gana).
+    resolucion_fecha: Mapped[datetime | None] = mapped_column(Date)
+    # ¿Es la vigente de su celda (período, dígito, grupo, ámbito)? Las resoluciones
+    # superadas quedan vigente=False (se conservan para auditoría).
+    vigente: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Trazabilidad legal: la fuente DE DERECHO es la Resolución de Superintendencia.
+    # Se carga de la tabla HTML (más fácil) pero cada fila guarda el N° de
+    # resolución y su URL, y se valida contra el PDF al menos 1 vez al año.
+    num_resolucion: Mapped[str | None] = mapped_column(String(60))    # p.ej. "000XXX-2025/SUNAT"
+    fuente: Mapped[str | None] = mapped_column(String(300))           # URL (tabla/Resolución)
+    validado_pdf_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cargado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Padrón de Buenos Contribuyentes (proyecto decl-diag). Lista de RUCs en el
+# Régimen de Buenos Contribuyentes (vencen en fecha más tardía). Se CARGA del
+# padrón oficial de SUNAT (diag-first; ver diag_publico.py + cargador pendiente).
+# Sirve para resolver `es_buen_contribuyente(ruc)` en cronograma.py; si un RUC no
+# está, se usa la regla CONSERVADORA (fecha más tardía), no se asume que no lo es.
+# ═════════════════════════════════════════════════════════════════════
+class PadronBuenContribuyente(Base):
+    """Un RUC del padrón de Buenos Contribuyentes, con su vigencia. `grupo`
+    distingue régimen general de BC vs UESP si el padrón lo separa."""
+    __tablename__ = "padron_buenos_contribuyentes"
+    __table_args__ = (
+        UniqueConstraint("ruc", name="uq_padron_bc_ruc"),
+        Index("ix_padron_bc_vigente", "vigente"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    ruc: Mapped[str] = mapped_column(String(11), nullable=False)
+    grupo: Mapped[str] = mapped_column(String(24), default="buenos_contribuyentes",
+                                       nullable=False)  # 'buenos_contribuyentes'|'uesp'
+    vigente: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    vigencia_desde: Mapped[datetime | None] = mapped_column(Date)
+    vigencia_hasta: Mapped[datetime | None] = mapped_column(Date)
+
+    # Trazabilidad de la carga (de qué padrón/fecha salió).
+    fuente: Mapped[str | None] = mapped_column(String(300))
+    cargado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

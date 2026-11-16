@@ -79,9 +79,13 @@ def ts_lima() -> str:
 
 try:
     from seguridad_logs import enmascarar as _mask
+    from seguridad_logs import enmascarar_usuario_sol as _mask_usr
 except Exception:  # nunca romper el motor por el enmascarado
     def _mask(x):
         return str(x) if x is not None else ""
+
+    def _mask_usr(x):
+        return "***"
 
 # Capturas de diagnóstico (diag_*.png/html): APAGADAS por defecto. Solo se
 # generan si SUNAT_DIAG=1. En prod esto evita (a) fugar HTML con datos y (b) el
@@ -277,7 +281,7 @@ def login_sol(page: Page, cfg: SunatConfig) -> bool:
             "intentos.", "ERROR")
         return False
 
-    log(f"Credenciales ingresadas (RUC {cfg.ruc}, usuario {cfg.usuario_sol})")
+    log(f"Credenciales ingresadas (RUC {cfg.ruc}, usuario {_mask_usr(cfg.usuario_sol)})")
 
     # Click en el botón de envío
     clicked = False

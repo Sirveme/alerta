@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import re
 
-# token=... / clave=... / claveSol=... / password=... en URLs o texto (hasta
-# separador &, espacio, comilla o fin). Case-insensitive.
+# token=... / clave=... / claveSol=... / password=... / state=... / code=... en
+# URLs o texto (hasta separador &, espacio, comilla o fin). Case-insensitive.
+# `state` y `code` son parámetros del OAuth de SOL: nunca deben loguearse enteros.
 _RE_PARAM = re.compile(
-    r"(?i)\b(token|jwt|clave|clavesol|claveSOL|password|passwd|pwd|pass|auth|secret|key)"
+    r"(?i)\b(token|jwt|clave|clavesol|claveSOL|password|passwd|pwd|pass|auth|secret|key|state|code)"
     r"(\s*[=:]\s*)([^\s&\"'}>]{2,})")
 # DNI = 8 dígitos exactos, NO embebidos en un número más largo (el RUC de 11
 # dígitos SÍ puede loguearse: es público e identifica al contribuyente).

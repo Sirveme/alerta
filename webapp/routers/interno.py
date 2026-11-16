@@ -14,14 +14,15 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Request, HTTPException, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select, func
 
 from db import get_session
 from models import (
     WorkerEstado, Contribuyente, PushSuscripcion, Notificacion,
-    EstadoContribuyente, ahora_lima,
+    EstadoContribuyente, CronogramaVencimiento, PadronBuenContribuyente,
+    ahora_lima,
 )
 from ..core import templates, TZ_LIMA
 from ..deps import UsuarioActual, usuario_actual
@@ -147,3 +148,134 @@ async def salud(request: Request,
     resp = templates.TemplateResponse(request, "salud.html", ctx)
     resp.headers["X-Robots-Tag"] = "noindex, nofollow"
     return resp
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# /interno/cronograma — cargar el cronograma de vencimientos + padrón BC
+# (estado "pagó fuera de plazo"). Flujo PREVIEW → CONFIRMAR: nunca guarda sin
+# que el soporte confirme. Solo SOPORTE_GLOBAL (404 al resto). Ver
+# decl_diag_PAGO_FUERA_DE_PLAZO.md y cronograma_loader.py.
+# ═══════════════════════════════════════════════════════════════════════
+def _guard_soporte(user: UsuarioActual):
+    if not user.es_soporte_global:
+        raise HTTPException(status_code=404)
+
+
+async def _estado_cronograma() -> dict:
+    """Resumen de lo cargado (tolera que la migración no esté aplicada)."""
+    out = {"anios": [], "padron": None, "sin_tablas": False}
+    try:
+        async with get_session() as session:
+            filas = (await session.execute(
+                select(CronogramaVencimiento.anio,
+                       func.count().label("n"))
+                .group_by(CronogramaVencimiento.anio)
+                .order_by(CronogramaVencimiento.anio.desc()))).all()
+            out["anios"] = [{"anio": a, "n": n} for a, n in filas]
+            out["padron"] = await session.scalar(
+                select(func.count()).select_from(PadronBuenContribuyente))
+    except Exception as e:  # tabla inexistente u otro
+        out["sin_tablas"] = True
+        out["error"] = str(e)[:140]
+    return out
+
+
+def _ctx_base(request, user, estado, **extra):
+    ctx = {"user": user, "estado": estado,
+           "generado": datetime.now(TZ_LIMA).strftime("%d/%m/%Y %H:%M")}
+    ctx.update(extra)
+    return ctx
+
+
+@router.get("/interno/cronograma", response_class=HTMLResponse)
+async def cronograma_panel(request: Request,
+                           user: UsuarioActual = Depends(usuario_actual)):
+    _guard_soporte(user)
+    estado = await _estado_cronograma()
+    resp = templates.TemplateResponse(
+        request, "interno_cronograma.html", _ctx_base(request, user, estado))
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
+@router.post("/interno/cronograma/preview", response_class=HTMLResponse)
+async def cronograma_preview(
+    request: Request,
+    fuente: str = Form(...),              # 'cronograma' | 'padron' | 'prorrogas'
+    url: str = Form(""),
+    anio: str = Form(""),
+    num_resolucion: str = Form(""),
+    user: UsuarioActual = Depends(usuario_actual),
+):
+    """Baja + parsea y MUESTRA lo que se guardaría. NO escribe nada."""
+    _guard_soporte(user)
+    import cronograma_loader as L
+    estado = await _estado_cronograma()
+    preview = {"fuente": fuente, "url": url, "anio": anio,
+               "num_resolucion": num_resolucion, "filas": [], "total": 0,
+               "bloques": [], "error": None}
+    try:
+        if fuente == "cronograma":
+            anio_i = int(anio) if anio.strip().isdigit() else 0
+            html = L.fetch_html(url)
+            filas = L.parse_cronograma(html, anio_i,
+                                       num_resolucion=num_resolucion or None,
+                                       fuente=url)
+            preview["total"] = len(filas)
+            preview["filas"] = filas[:60]
+        elif fuente == "padron":
+            txt = L.descargar_padron_bc_txt(url)
+            filas = L.parse_padron_bc_txt(txt, fuente=url)
+            preview["total"] = len(filas)
+            preview["filas"] = filas[:60]
+        elif fuente == "prorrogas":
+            html = L.fetch_html(url)
+            preview["bloques"] = L.parse_prorrogas(html)
+            preview["total"] = sum(len(b["filas"]) for b in preview["bloques"])
+        else:
+            preview["error"] = "Fuente no reconocida."
+    except Exception as e:
+        preview["error"] = f"{type(e).__name__}: {e}"[:200]
+    resp = templates.TemplateResponse(
+        request, "interno_cronograma.html",
+        _ctx_base(request, user, estado, preview=preview))
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
+@router.post("/interno/cronograma/guardar", response_class=HTMLResponse)
+async def cronograma_guardar(
+    request: Request,
+    fuente: str = Form(...),
+    url: str = Form(""),
+    anio: str = Form(""),
+    num_resolucion: str = Form(""),
+    user: UsuarioActual = Depends(usuario_actual),
+):
+    """CONFIRMADO: vuelve a parsear (determinista) y GUARDA (upsert). Prórrogas
+    NO se guardan aquí (necesitan mapeo manual de período/ámbito)."""
+    _guard_soporte(user)
+    import cronograma_loader as L
+    msg = None
+    try:
+        if fuente == "cronograma":
+            anio_i = int(anio) if anio.strip().isdigit() else 0
+            filas = L.parse_cronograma(L.fetch_html(url), anio_i,
+                                       num_resolucion=num_resolucion or None,
+                                       fuente=url)
+            n = await L.guardar_cronograma(filas)
+            msg = f"Cronograma {anio_i}: {n} fila(s) guardada(s)."
+        elif fuente == "padron":
+            filas = L.parse_padron_bc_txt(L.descargar_padron_bc_txt(url), fuente=url)
+            n = await L.guardar_padron_bc(filas)
+            msg = f"Padrón BC: {n} RUC(s) guardado(s)."
+        elif fuente == "prorrogas":
+            msg = ("Las prórrogas requieren mapeo manual de período/ámbito "
+                   "(pendiente de UI); no se guardaron.")
+        else:
+            msg = "Fuente no reconocida."
+    except Exception as e:
+        msg = f"Error al guardar: {type(e).__name__}: {e}"[:200]
+    from urllib.parse import quote
+    return RedirectResponse(f"/interno/cronograma?msg={quote(msg or '')}",
+                            status_code=303)
