@@ -1,0 +1,149 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   club.css — alerta.pe · Sistema "Excel Perú Sistemas Pro" (vistas del Club)
+   Todo celdas, esquinas rectas, bordes verde Excel, fondo verde muy oscuro.
+   Acentos: rojo #C41010, dorado #F4B400. Tipografía compacta tipo dato bancario.
+   Scopeado bajo .xlpro para NO afectar el resto de la app.
+   ═══════════════════════════════════════════════════════════════════════ */
+.xlpro {
+  --xl-bg:      #0A1410;   /* fondo verde muy oscuro (nunca #fff) */
+  --xl-panel:   #0E1C15;
+  --xl-panel-2: #12241B;
+  --xl-green:   #217346;   /* verde Excel: cabeceras, bordes fuertes */
+  --xl-green-d: #16432B;
+  --xl-green-l: #2E8B57;
+  --xl-grid:    #1C3A2A;   /* líneas de celda */
+  --xl-text:    #E7F0EA;
+  --xl-dim:     #8FA498;
+  --xl-red:     #C41010;
+  --xl-gold:    #F4B400;
+
+  background: var(--xl-bg);
+  color: var(--xl-text);
+  border: 1px solid var(--xl-grid);
+  padding: 14px;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.xlpro * { border-radius: 0 !important; box-sizing: border-box; }
+.xlpro .num, .xlpro .mono {
+  font-family: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Marca ── */
+.xlpro .xl-brand { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.xlpro .xl-brand .marca {
+  font-size: 20px; font-weight: 800; letter-spacing:.3px; color:#fff;
+  border-left: 4px solid var(--xl-red); padding-left: 9px;
+}
+.xlpro .xl-brand .con { font-size: 11px; color: var(--xl-gold); font-weight:600; }
+.xlpro .xl-brand .sep { flex:1 1 auto; }
+
+.xlpro .xl-cli { margin-top: 4px; color: var(--xl-text); font-weight:600; }
+.xlpro .xl-cli .ruc { color: var(--xl-dim); font-weight:400; margin-left:8px;
+  font-size:12px; }
+
+/* ── Nota auto-explicativa + banner del Club ── */
+.xlpro .xl-note {
+  margin: 10px 0; padding: 8px 11px; font-size: 12px; color: var(--xl-dim);
+  background: var(--xl-panel); border: 1px solid var(--xl-grid);
+  border-left: 3px solid var(--xl-green);
+}
+.xlpro .xl-banner {
+  display:flex; align-items:center; gap:10px; margin:10px 0; padding:8px 12px;
+  background: linear-gradient(90deg, #12241B, #0E1C15);
+  border: 1px solid var(--xl-green-d); border-left: 4px solid var(--xl-gold);
+  font-size: 12px; color: var(--xl-text);
+}
+.xlpro .xl-banner b { color: var(--xl-gold); }
+.xlpro .xl-banner a { color: var(--xl-green-l); text-decoration: none; font-weight:700; }
+.xlpro .xl-banner .dot { width:8px; height:8px; background: var(--xl-red);
+  display:inline-block; }
+
+/* ── Barra de herramientas (filtros + acciones), celdas planas ── */
+.xlpro .xl-bar {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  background: var(--xl-panel); border:1px solid var(--xl-grid); padding:8px 10px;
+  margin: 10px 0;
+}
+.xlpro .xl-bar label { font-size:11px; text-transform:uppercase; letter-spacing:.4px;
+  color: var(--xl-dim); }
+.xlpro .xl-input, .xlpro .xl-select {
+  background: #081009; color: var(--xl-text); border:1px solid var(--xl-green-d);
+  padding:6px 8px; font-size:12.5px; font-family:inherit;
+}
+.xlpro .xl-input { min-width: 190px; }
+.xlpro .xl-input:focus, .xlpro .xl-select:focus { outline:1px solid var(--xl-green-l); }
+.xlpro .xl-sep { flex:1 1 auto; }
+
+/* ── Botones con relieve (presionables), distintos de las cabeceras planas ── */
+.xlpro .xl-btn {
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  background: linear-gradient(#2E8B57, #217346); color:#fff;
+  border:1px solid var(--xl-green-d);
+  box-shadow: 0 1px 0 #3DA76A inset, 0 2px 3px rgba(0,0,0,.45);
+  padding:7px 13px; font-weight:700; font-size:12.5px; text-decoration:none;
+}
+.xlpro .xl-btn:active { box-shadow: 0 1px 2px rgba(0,0,0,.5) inset;
+  transform: translateY(1px); }
+.xlpro .xl-btn--ghost { background: linear-gradient(#17291F, #12201A); color:var(--xl-text); }
+.xlpro .xl-btn--gold { background: linear-gradient(#F6C133, #E0A500); color:#201700;
+  border-color:#9A7400; box-shadow:0 1px 0 #FBD873 inset, 0 2px 3px rgba(0,0,0,.45); }
+.xlpro .xl-btn .material-symbols-outlined { font-size:17px; }
+
+/* ── Modo reservado (casillas arriba a la derecha) ── */
+.xlpro .xl-reserva { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.xlpro .xl-chkbox {
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none;
+  font-size:12.5px; color:var(--xl-text);
+  background: var(--xl-panel-2); border:1px solid var(--xl-green-d); padding:6px 10px;
+  text-decoration:none;
+}
+.xlpro .xl-chkbox .box {
+  width:15px; height:15px; border:1px solid var(--xl-green-l); display:inline-flex;
+  align-items:center; justify-content:center; background:#081009; font-size:12px;
+  color: var(--xl-gold); line-height:1;
+}
+.xlpro .xl-chkbox.on { border-color: var(--xl-gold); }
+.xlpro .xl-chkbox.on .box { border-color: var(--xl-gold); }
+
+/* ── Tabla (celdas, bordes verde, cabecera verde sólido) ── */
+.xlpro .xl-table-wrap { overflow-x:auto; border:1px solid var(--xl-green); }
+.xlpro table.xl-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.xlpro table.xl-table th {
+  position:sticky; top:0; background: var(--xl-green); color:#F3FAF5;
+  text-align:left; padding:8px 9px; font-weight:700; white-space:nowrap;
+  border:1px solid var(--xl-green-d); text-transform:uppercase; letter-spacing:.3px;
+  font-size:11.5px;
+}
+.xlpro table.xl-table td {
+  padding:6px 9px; border:1px solid var(--xl-grid); vertical-align:top;
+  background: var(--xl-panel);
+}
+.xlpro table.xl-table tr:nth-child(even) td { background: var(--xl-panel-2); }
+.xlpro table.xl-table td.num, .xlpro table.xl-table th.num { text-align:right;
+  white-space:nowrap; }
+.xlpro .xl-vacio { padding:26px; text-align:center; color:var(--xl-dim);
+  background: var(--xl-panel); border:1px solid var(--xl-grid); }
+.xlpro code { background:#081009; border:1px solid var(--xl-green-d); padding:1px 5px;
+  color: var(--xl-gold); }
+
+/* ── Chips de estado ── */
+.xlpro .chip {
+  display:inline-block; padding:2px 9px; font-size:11.5px; font-weight:700;
+  border:1px solid transparent; white-space:nowrap; cursor:help;
+}
+.xlpro .chip--ok     { background:#113A24; color:#5FD98C; border-color:#217346; }
+.xlpro .chip--tarde  { background:#3A2E05; color:#F4B400; border-color:#9A7400; }
+.xlpro .chip--sindj  { background:#3A0E0E; color:#FF7A7A; border-color:#C41010; }
+.xlpro .chip--decl   { background:#102A33; color:#6FC7DE; border-color:#2E6E82; }
+.xlpro .chip--none   { background:#1A1F1C; color:var(--xl-dim); border-color:var(--xl-grid); }
+
+.xlpro .xl-total { font-size:14px; font-weight:800; color:#fff; }
+.xlpro .xl-total b { color: var(--xl-gold); }
+
+@media (max-width:700px){
+  .xlpro { padding:10px; }
+  .xlpro .xl-input { min-width:140px; }
+}

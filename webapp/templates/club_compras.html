@@ -2,108 +2,46 @@
 {% block titulo %}Compras — Club de Contadores{% endblock %}
 
 {% block contenido %}
-<style>
-  .club-wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
-  .club-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
-    margin: 6px 0 2px; }
-  .club-marca { font-size: 1.5rem; font-weight: 800; letter-spacing:.2px;
-    color: var(--texto); }
-  .club-sub { font-size:.8rem; color: var(--marca); opacity:.85; }
-  .club-cli { color: var(--texto); font-weight:600; }
-  .club-cli .ruc { color: var(--texto); opacity:.6; font-weight:400;
-    font-size:.85rem; margin-left:6px; }
-  .club-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-    background: var(--superficie); border:1px solid var(--borde);
-    border-radius:10px; padding:10px 12px; margin:12px 0; }
-  .club-bar label { font-size:.78rem; color: var(--texto); opacity:.7; }
-  .club-bar select, .club-bar input[type=text] {
-    background: var(--superficie-2); color: var(--texto);
-    border:1px solid var(--borde); border-radius:7px; padding:6px 9px;
-    font-size:.9rem; }
-  .club-bar input[type=text] { min-width: 200px; }
-  .club-sep { flex: 1 1 auto; }
-  .btn { background: var(--marca); color:#06101f; border:none; cursor:pointer;
-    border-radius:8px; padding:7px 13px; font-weight:700; font-size:.88rem;
-    text-decoration:none; display:inline-block; }
-  .btn-ghost { background: transparent; color: var(--texto);
-    border:1px solid var(--borde); }
-  .btn-demo { border:1px solid var(--borde); background: var(--superficie-2);
-    color: var(--texto); border-radius:8px; padding:7px 12px; font-size:.84rem;
-    text-decoration:none; }
-  .btn-demo.on { background: var(--marca); color:#06101f; border-color: var(--marca);
-    font-weight:700; }
-  .chk-montos { font-size:.8rem; color: var(--texto); opacity:.85;
-    text-decoration:none; border:1px dashed var(--borde); border-radius:7px;
-    padding:6px 10px; }
-  .chk-montos.on { border-style:solid; border-color: var(--marca);
-    color: var(--marca); }
-  .club-total { font-size:1.05rem; font-weight:800; color: var(--texto); }
-  .club-total span { color: var(--marca); }
-  .tabla-wrap { overflow-x:auto; border:1px solid var(--borde); border-radius:10px; }
-  table.compras { width:100%; border-collapse:collapse; font-size:.86rem;
-    background: var(--superficie); color: var(--texto); }
-  table.compras th { position:sticky; top:0; background: var(--superficie-2);
-    text-align:left; padding:9px 10px; font-weight:700; white-space:nowrap;
-    border-bottom:1px solid var(--borde); }
-  table.compras td { padding:8px 10px; border-bottom:1px solid var(--borde);
-    vertical-align:top; }
-  table.compras tr:nth-child(even) td { background: rgba(255,255,255,.02); }
-  td.num, th.num { text-align:right; white-space:nowrap; }
-  .vacio { padding:28px; text-align:center; color: var(--texto); opacity:.6; }
-  .demo-flag { font-size:.72rem; color: var(--u-importante, var(--marca));
-    border:1px solid var(--borde); border-radius:6px; padding:2px 7px; }
-</style>
+<div class="xlpro">
+  {% include "_club_head.html" %}
 
-<div class="club-wrap">
-  <div class="club-head">
-    <span class="club-marca">Club de Contadores</span>
-    <span class="club-sub">con alerta.pe</span>
-    <div class="club-sep"></div>
-    {% if demo %}<span class="demo-flag">MODO DEMOSTRACIÓN</span>{% endif %}
-    <a class="btn-demo" href="/cliente/{{ contrib_id }}">← Cliente</a>
-  </div>
-  <div class="club-cli">{{ cliente_nombre }}<span class="ruc">RUC {{ cliente_ruc }}</span></div>
-
-  <form class="club-bar" method="get"
-        action="/club/compras/{{ contrib_id }}" id="filtros">
+  <form class="xl-bar" method="get" action="/club/compras/{{ contrib_id }}" id="filtros">
     <label>Período</label>
-    <select name="periodo" onchange="document.getElementById('filtros').submit()">
+    <select class="xl-select" name="periodo"
+            onchange="document.getElementById('filtros').submit()">
       {% for p in periodos %}
-        <option value="{{ p }}" {% if p == periodo %}selected{% endif %}>
-          {{ p[4:6] }}/{{ p[:4] }}</option>
+        <option value="{{ p }}" {% if p == periodo %}selected{% endif %}>{{ p[4:6] }}/{{ p[:4] }}</option>
       {% else %}
         <option value="">(sin datos)</option>
       {% endfor %}
     </select>
     <label>Proveedor</label>
-    <select name="proveedor" onchange="document.getElementById('filtros').submit()">
+    <select class="xl-select" name="proveedor"
+            onchange="document.getElementById('filtros').submit()">
       <option value="">Todos</option>
       {% for pr in proveedores %}
-        <option value="{{ pr.ruc }}" {% if pr.ruc == proveedor %}selected{% endif %}>
-          {{ pr.razon }}</option>
+        <option value="{{ pr.ruc }}" {% if pr.ruc == proveedor %}selected{% endif %}>{{ pr.razon }}</option>
       {% endfor %}
     </select>
-    <input type="text" name="q" value="{{ q }}" placeholder="Buscar en descripción…">
-    <button class="btn btn-ghost" type="submit">Filtrar</button>
-    <div class="club-sep"></div>
-    <a class="btn" href="/club/compras/{{ contrib_id }}/export.xlsx?periodo={{ periodo }}&proveedor={{ proveedor }}&q={{ q|urlencode }}">Descargar Excel</a>
+    <input class="xl-input" type="text" name="q" value="{{ q }}"
+           placeholder="Buscar en descripción…">
+    <button class="xl-btn xl-btn--ghost" type="submit"
+            title="Aplicar los filtros">
+      <span class="material-symbols-outlined">filter_alt</span> Filtrar</button>
+    <span class="xl-sep"></span>
+    <a class="xl-btn xl-btn--gold" title="Descargar estas compras en Excel"
+       href="/club/compras/{{ contrib_id }}/export.xlsx?periodo={{ periodo }}&proveedor={{ proveedor }}&q={{ q|urlencode }}">
+      <span class="material-symbols-outlined">download</span> Descargar Excel</a>
   </form>
 
-  <div class="club-bar">
-    <a class="btn-demo {% if demo %}on{% endif %}" href="/club/demo/toggle">
-      {% if demo %}✓ Demostración activa{% else %}Activar demostración{% endif %}</a>
-    {% if demo %}
-      <a class="chk-montos {% if demo_montos %}on{% endif %}" href="/club/demo/montos">
-        {% if demo_montos %}☑{% else %}☐{% endif %} Enmascarar montos</a>
-    {% endif %}
-    <div class="club-sep"></div>
-    <div class="club-total">{{ n_comprobantes }} comprob. · {{ n_items }} ítem(s) ·
+  <div class="xl-bar">
+    <span class="xl-total">{{ n_comprobantes }} comprob. · {{ n_items }} ítem(s) ·
       Total del período:
-      <span>{% if total is number %}S/ {{ '%.2f'|format(total) }}{% else %}{{ total }}{% endif %}</span></div>
+      <b>{% if total is number %}S/ {{ '%.2f'|format(total) }}{% else %}{{ total }}{% endif %}</b></span>
   </div>
 
-  <div class="tabla-wrap">
-    <table class="compras">
+  <div class="xl-table-wrap">
+    <table class="xl-table">
       <thead>
         <tr>
           <th>Fecha</th><th>RUC proveedor</th><th>Proveedor</th>
@@ -115,21 +53,21 @@
       <tbody>
         {% for f in filas %}
         <tr>
-          <td>{{ f.fecha_txt }}</td>
-          <td>{{ f.proveedor_ruc }}</td>
+          <td class="mono">{{ f.fecha_txt }}</td>
+          <td class="mono">{{ f.proveedor_ruc }}</td>
           <td>{{ f.proveedor }}</td>
-          <td>{{ f.comprobante }}</td>
+          <td class="mono">{{ f.comprobante }}</td>
           <td>{{ f.descripcion }}</td>
           <td>{{ f.unidad }}</td>
-          <td class="num">{% if f.cantidad is number %}{{ '%g'|format(f.cantidad) }}{% endif %}</td>
-          <td class="num">{% if f.valor_unitario is number %}{{ '%.2f'|format(f.valor_unitario) }}{% else %}{{ f.valor_unitario }}{% endif %}</td>
-          <td class="num">{% if f.importe is number %}{{ '%.2f'|format(f.importe) }}{% else %}{{ f.importe }}{% endif %}</td>
+          <td class="num mono">{% if f.cantidad is number %}{{ '%g'|format(f.cantidad) }}{% endif %}</td>
+          <td class="num mono">{% if f.valor_unitario is number %}{{ '%.2f'|format(f.valor_unitario) }}{% else %}{{ f.valor_unitario }}{% endif %}</td>
+          <td class="num mono">{% if f.importe is number %}{{ '%.2f'|format(f.importe) }}{% else %}{{ f.importe }}{% endif %}</td>
         </tr>
         {% else %}
-        <tr><td colspan="9" class="vacio">
+        <tr><td colspan="9" class="xl-vacio">
           {% if periodos %}No hay ítems para este filtro.{% else %}
           Aún no hay compras cargadas para este cliente. Corré
-          <code>compras-carga</code> y vuelve.{% endif %}
+          <code>compras-carga &lt;RUC&gt; &lt;AAAAMM&gt;</code> y vuelve.{% endif %}
         </td></tr>
         {% endfor %}
       </tbody>

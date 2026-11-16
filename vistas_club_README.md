@@ -65,9 +65,25 @@ Variables de entorno (ingesta/recolección, heredadas de comp-diag):
 - Scope multi-tenant: reusa `_puede_ver` de la vista de cliente. Registrada en
   `webapp/main.py`. Probado offline: router importa, Excel genera, plantilla compila.
 
-### ⏳ Pendiente
-- Vista A: rejilla 12 meses por cliente (declaró/pagó/pagó fuera de plazo/sin DJ) —
-  decl-carga OK para los 3 RUCs, así que puede leer datos reales.
+### ✅ Rejilla 12 meses (`/club/rejilla/{id}`)
+- `webapp/routers/club.py::vista_rejilla` + `club_rejilla.html`: una fila por período
+  (últimos 12 meses), **declaró / presentación / pagó / vence / importe / estado**.
+  Estado vía `cronograma.clasificar_pago` (Al día / Pagó tarde / Declaró / Sin DJ),
+  con el padrón BC para `es_buen_contribuyente` (regla conservadora si no está).
+  Chips de color con tooltip. Probado la lógica (períodos + 5 estados).
+
+### ✅ Diseño "Excel Perú Sistemas Pro" + Modo reservado
+- `webapp/static/css/club.css` (scopeado en `.xlpro`): todo celdas, esquinas rectas,
+  bordes verde Excel `#217346`, cabeceras verde sólido, fondo verde muy oscuro
+  `#0A1410` (nunca `#fff`), acentos rojo `#C41010` y dorado `#F4B400`, tipografía
+  compacta tabular, botones con relieve, chips de estado, íconos de línea
+  (material-symbols-outlined, no emojis). Marca "Club de Contadores" + "con alerta.pe".
+  Nota auto-explicativa + banner del Club + tooltips. Parcial común `_club_head.html`.
+- **Modo reservado** (reemplaza el "demo"): `webapp/demo_mask.py` ahora oculta por
+  DEFECTO el RUC y la razón social (cliente y proveedores). Casillas arriba: "Mostrar
+  datos reservados" y "Mostrar montos" (aparte), con tooltip de privacidad. Estado en
+  **cookie de SESIÓN** → cada sesión nueva arranca enmascarada. El Excel respeta el
+  estado actual. Rutas `/club/reservado/mostrar` y `/club/reservado/montos`.
 - Vista B: Compras del período (una fila por ítem, filtros proveedor+texto, total,
   botón "Descargar Excel").
 - "Modo demostración" (enmascara RUC/nombre cliente, RUC/razón proveedores, montos
