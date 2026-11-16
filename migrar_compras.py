@@ -88,6 +88,7 @@ DDL = [
         linea           INTEGER NOT NULL,
         codigo          VARCHAR(40),
         descripcion     VARCHAR(300),
+        detalle_emisor  VARCHAR(200),
         unidad          VARCHAR(10),
         desc_unidad     VARCHAR(40),
         cantidad        NUMERIC(14,4),

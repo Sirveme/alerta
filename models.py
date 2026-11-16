@@ -2016,6 +2016,8 @@ class ComprobanteItem(Base):
     linea: Mapped[int] = mapped_column(Integer, nullable=False)   # orden del ítem (1..n)
     codigo: Mapped[str | None] = mapped_column(String(40))        # desCodigo del emisor
     descripcion: Mapped[str | None] = mapped_column(String(300))  # desItem, ya limpio
+    # Resto crudo del emisor empaquetado tras '@#@' (sin interpretar), por fidelidad.
+    detalle_emisor: Mapped[str | None] = mapped_column(String(200))
     unidad: Mapped[str | None] = mapped_column(String(10))        # codUnidadMedida
     desc_unidad: Mapped[str | None] = mapped_column(String(40))
     cantidad: Mapped[float | None] = mapped_column(Numeric(14, 4))
