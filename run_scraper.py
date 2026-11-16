@@ -34,7 +34,8 @@ from sqlalchemy.orm import selectinload
 # db (el engine se arma al importar db.py). No afecta a ningún otro modo ni al
 # worker en prod (que corre worker.py, no este __main__, y nunca pasa 'decl-diag').
 if any(a.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag",
-                     "decl-diag2", "--decl-diag2")
+                     "decl-diag2", "--decl-diag2",
+                     "compras-carga", "--compras-carga")
        for a in sys.argv[1:]):
     _pub = os.getenv("DATABASE_PUBLIC_URL")
     if _pub:
@@ -905,6 +906,33 @@ async def procesar_decl_diag2(session, contrib: Contribuyente,
     return len(res.get("pantallas", []))
 
 
+async def procesar_compras_carga(session, contrib: Contribuyente,
+                                 periodo: str) -> int:
+    """CARGA REAL de Compras (RCE/SIRE) de UN período: ESCRIBE en BD (idempotente).
+    Guardián activo; PARCIAL si algo faltó. Correr LOCAL con railway run (worker
+    pausado). Devuelve el nº de comprobantes escritos."""
+    import ingesta_compras as ing
+    cred = contrib.credencial
+    if not cred:
+        log(f"  {contrib.ruc}: sin credencial registrada, salteado.", "WARN")
+        return 0
+    log(f"  {contrib.ruc}: COMPRAS-CARGA período {periodo} — leo el RCE y escribo "
+        f"(idempotente, nunca borra)...")
+    r = await ing.cargar_compras(session, contrib, periodo)
+    for inc in r.get("incidencias", []):
+        log(f"    · {inc}", "WARN")
+    estado = r.get("estado")
+    tot = (r.get("totales") or {}).get("mtoTotalCp")
+    base = (f"{r.get('comprobantes', 0)} comprobante(s), {r.get('items', 0)} ítem(s)"
+            f" [estado={estado}" + (f", total período S/ {tot}" if tot else "") + "]")
+    if r.get("parcial"):
+        log(f"  {contrib.ruc}: COMPRAS-CARGA PARCIAL — {base}. "
+            f"Revisa las incidencias de arriba.", "ERROR")
+    else:
+        log(f"  {contrib.ruc}: COMPRAS-CARGA OK — {base}.", "OK")
+    return r.get("comprobantes", 0)
+
+
 async def procesar_sunafil(session, contrib: Contribuyente,
                            diagnostico: bool = False) -> int:
     """Lee el buzón SUNAFIL del contribuyente y lo ingesta por el MISMO pipeline
@@ -1022,8 +1050,17 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
                ceros: bool = False, ceros_diag: bool = False,
                sunafil: bool = False, sunafil_diag: bool = False,
                decl_diag: bool = False, decl_diag2: bool = False,
-               decl_diag2_periodo: str | None = None) -> None:
+               decl_diag2_periodo: str | None = None,
+               compras_carga: bool = False,
+               compras_periodo: str | None = None) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
+    if compras_carga:
+        log("modo COMPRAS-CARGA: lee el RCE/SIRE de un período y ESCRIBE en BD "
+            "(idempotente, guardián activo). Correr LOCAL, worker pausado.", "WARN")
+        if not ruc_filtro or not compras_periodo:
+            log("COMPRAS-CARGA requiere RUC y período. Uso: "
+                "run_scraper.py <RUC> compras-carga <AAAAMM>", "ERROR")
+            return
     if decl_diag or decl_diag2:
         log(f"modo DECL-DIAG{'2' if decl_diag2 else ''}: "
             + ("navega por código + rango + constancia 0621"
@@ -1058,14 +1095,16 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
     elif forzar:
         log("modo FORZAR: se scrapea aunque esté fresco.", "WARN")
     async with get_session() as session:
-        if decl_diag or decl_diag2:
+        if decl_diag or decl_diag2 or compras_carga:
             contribs = await _contrib_para_diag(session, ruc_filtro)
         else:
             contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if decl_diag2:
+                if compras_carga:
+                    await procesar_compras_carga(session, contrib, compras_periodo)
+                elif decl_diag2:
                     await procesar_decl_diag2(session, contrib, decl_diag2_periodo)
                 elif decl_diag:
                     await procesar_decl_diag(session, contrib)
@@ -1110,6 +1149,7 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> decl-diag → login + vuelca ESTRUCTURA de Declaraciones y Pagos (NO BD, LOCAL)
     #   python run_scraper.py <RUC> decl-diag2 → fase 2: navega por código + rango + constancia 0621 (NO BD, LOCAL)
     #   python run_scraper.py <RUC> decl-diag2 --periodo-desde 202605 → fuerza el 'desde' de la pantalla 01 a ese período
+    #   python run_scraper.py <RUC> compras-carga <AAAAMM> → CARGA REAL de Compras (RCE/SIRE) del período (ESCRIBE en BD, LOCAL)
     ruc = None
     forzar = False
     solo_censo = False
@@ -1125,6 +1165,8 @@ if __name__ == "__main__":
     decl_diag = False
     decl_diag2 = False
     decl_diag2_periodo = None
+    compras_carga = False
+    compras_periodo = None
     _esperar_periodo = False
     for arg in sys.argv[1:]:
         if _esperar_periodo:
@@ -1163,6 +1205,10 @@ if __name__ == "__main__":
             decl_diag2 = True
         elif arg.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag"):
             decl_diag = True
+        elif arg.lower() in ("compras-carga", "--compras-carga"):
+            compras_carga = True
+        elif arg.strip().isdigit() and len(arg.strip()) == 6:
+            compras_periodo = arg.strip()          # período AAAAMM (compras-carga)
         else:
             ruc = arg
     asyncio.run(main(ruc, forzar, solo_censo=solo_censo, backfill=backfill,
@@ -1170,4 +1216,5 @@ if __name__ == "__main__":
                      pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag,
                      sunafil=sunafil, sunafil_diag=sunafil_diag,
                      decl_diag=decl_diag, decl_diag2=decl_diag2,
-                     decl_diag2_periodo=decl_diag2_periodo))
+                     decl_diag2_periodo=decl_diag2_periodo,
+                     compras_carga=compras_carga, compras_periodo=compras_periodo))
