@@ -153,31 +153,41 @@ def _tabla_cronograma(s: BeautifulSoup):
 
 
 # ───────────────────────── 2) PADRÓN BC (TXT) ─────────────────────────
-_RE_BC = re.compile(
-    r"^\s*(\d{11})\t+(.+?)\t+(\d{2}/\d{2}/\d{4})\t+(\S+)\s*$")
-
-
 def parse_padron_bc_txt(texto: str, fuente: str | None = None) -> list[dict]:
-    """Parsea el TXT del padrón BC (BueCont_TXT): una línea por RUC,
-    'RUC\\tNombre\\tA partir del\\tNro.Resolución'. Tolera comillas en el nombre."""
+    r"""Parsea el TXT real del padrón BC (BueCont_TXT.txt de SUNAT).
+
+    Formato REAL del archivo (verificado contra la descarga oficial, no contra el
+    volcado HTML): separado por '|' (pipe), codificado latin-1, con línea de
+    cabecera y un '|' final en cada fila:
+
+        Ruc|Nombre/Razon|A partir del|Resolucion|
+        20552103816|AGROLIGHT PERU S.A.C.|01/02/2022|RS 0230050312833|
+
+    (El volcado del diag mostraba TABS porque leyó la TABLA HTML renderizada, donde
+    `get_text` intercala tabs entre celdas; el archivo del zip NO usa tabs.)
+
+    Tolera también el tab como separador (por si el volcado cambia) y comillas en el
+    nombre. Ignora la cabecera y toda línea cuyo 1.er campo no sea un RUC de 11
+    dígitos. Normaliza la resolución quitando el prefijo 'RS '."""
     out: list[dict] = []
     for linea in (texto or "").splitlines():
-        m = _RE_BC.match(linea)
-        if not m:
-            # Fallback: separa por tabs y valida RUC + fecha.
-            partes = [p.strip() for p in linea.split("\t") if p.strip()]
-            if len(partes) >= 4 and re.fullmatch(r"\d{11}", partes[0]) and \
-               re.fullmatch(r"\d{2}/\d{2}/\d{4}", partes[2]):
-                m = None
-                ruc, nombre, fdesde, resol = partes[0], partes[1], partes[2], partes[3]
-            else:
-                continue
-        else:
-            ruc, nombre, fdesde, resol = m.group(1), m.group(2), m.group(3), m.group(4)
+        # Separador real = '|'; respaldo = tab. Los nombres de SUNAT no traen '|'.
+        sep = "|" if "|" in linea else "\t"
+        partes = [p.strip() for p in linea.split(sep)]
+        while partes and partes[-1] == "":   # quita el campo vacío del '|' final
+            partes.pop()
+        if len(partes) < 3:
+            continue
+        ruc = partes[0]
+        if not re.fullmatch(r"\d{11}", ruc):  # salta la cabecera y la basura
+            continue
+        nombre = partes[1].strip().strip('"').strip()
+        fdesde = partes[2] if len(partes) > 2 else ""
+        resol = partes[3] if len(partes) > 3 else ""
+        resol = re.sub(r"^\s*RS\s+", "", resol).strip()  # 'RS 0230…' -> '0230…'
         out.append({"ruc": ruc, "grupo": "buenos_contribuyentes",
                     "vigente": True, "vigencia_desde": _fecha_dmy(fdesde),
-                    "nombre": nombre.strip().strip('"').strip(),
-                    "num_resolucion": resol, "fuente": fuente})
+                    "nombre": nombre, "num_resolucion": resol, "fuente": fuente})
     return out
 
 
