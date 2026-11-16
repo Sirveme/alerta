@@ -1918,3 +1918,111 @@ class PadronBuenContribuyente(Base):
     # Trazabilidad de la carga (de qué padrón/fecha salió).
     fuente: Mapped[str | None] = mapped_column(String(300))
     cargado_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# ═════════════════════════════════════════════════════════════════════
+# COMPRAS (proyecto vistas-club). Registro de Compras Electrónico (RCE/SIRE):
+# la "propuesta" que SUNAT arma con los CPE recibidos. alerta.pe SOLO CONSULTA
+# (REGLA DURA SOL): lee la propuesta, nunca la acepta/registra. Fuente:
+# api-sire .../rce/propuesta/web/propuesta/{periodo}/busqueda (ver parser_compras.py).
+# Dos niveles: ComprobanteCompra (una cabecera por CPE) y ComprobanteItem (una
+# fila por ítem del Detalle del CPE).
+# ═════════════════════════════════════════════════════════════════════
+class ComprobanteCompra(Base):
+    """Un comprobante de compra (CPE recibido) del RCE de un período, con su
+    proveedor, bases/impuestos y total. Idempotente por
+    (contribuyente, proveedor, tipo, serie, número)."""
+    __tablename__ = "comprobantes_compra"
+    __table_args__ = (
+        UniqueConstraint("contribuyente_id", "ruc_proveedor", "cod_tipo_cdp",
+                         "serie", "numero", name="uq_compra_cpe"),
+        Index("ix_compra_contrib_periodo", "contribuyente_id", "periodo"),
+        Index("ix_compra_estudio", "estudio_id"),
+        Index("ix_compra_proveedor", "ruc_proveedor"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    contribuyente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("contribuyentes.id", ondelete="CASCADE"),
+        nullable=False)
+    estudio_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("estudios_contables.id", ondelete="CASCADE"))
+
+    periodo: Mapped[str] = mapped_column(String(6), nullable=False)   # perTributario AAAAMM
+    # codCar: clave natural de SUNAT (ruc+tipo+serie+correlativo); se guarda para
+    # trazabilidad, pero la unicidad la damos por los campos descompuestos.
+    cod_car: Mapped[str | None] = mapped_column(String(40))
+    cod_tipo_cdp: Mapped[str] = mapped_column(String(2), nullable=False)   # 01 Factura, 07 NC…
+    desc_tipo_cdp: Mapped[str | None] = mapped_column(String(60))
+    serie: Mapped[str] = mapped_column(String(20), nullable=False)
+    numero: Mapped[str] = mapped_column(String(20), nullable=False)
+    numero_final: Mapped[str | None] = mapped_column(String(20))        # rangos (tickets)
+
+    fecha_emision: Mapped[date | None] = mapped_column(Date)
+    fecha_vencimiento: Mapped[date | None] = mapped_column(Date)
+
+    # Proveedor (emisor del CPE). Puede ser RUC(11) o DNI → 15 por holgura.
+    tipo_doc_proveedor: Mapped[str | None] = mapped_column(String(2))
+    ruc_proveedor: Mapped[str] = mapped_column(String(15), nullable=False)
+    razon_social_proveedor: Mapped[str | None] = mapped_column(String(250))
+
+    moneda: Mapped[str | None] = mapped_column(String(3), default="PEN")
+    tipo_cambio: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    cod_estado: Mapped[str | None] = mapped_column(String(4))
+    estado: Mapped[str | None] = mapped_column(String(40))   # desEstadoComprobante
+
+    # Montos (de `montos` en la propuesta). Sin FK ni cálculo propio: se guarda lo
+    # que SUNAT reporta. alerta.pe INFORMA, no recalcula impuestos.
+    base_gravada: Mapped[float | None] = mapped_column(Numeric(14, 2))   # mtoBIGravadaDG
+    igv: Mapped[float | None] = mapped_column(Numeric(14, 2))            # mtoIgvIpmDG
+    base_exon_inaf: Mapped[float | None] = mapped_column(Numeric(14, 2))  # exonerado/inafecto
+    valor_adq_ng: Mapped[float | None] = mapped_column(Numeric(14, 2))   # mtoValorAdqNG
+    isc: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    icbper: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    otros_tributos: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    importe_total: Mapped[float | None] = mapped_column(Numeric(14, 2))  # mtoTotalCp
+
+    ind_detraccion: Mapped[bool | None] = mapped_column(Boolean)
+    ind_oper_gratuita: Mapped[bool | None] = mapped_column(Boolean)
+    num_inconsistencias: Mapped[int | None] = mapped_column(Integer)
+
+    origen: Mapped[str | None] = mapped_column(String(10), default="rce")
+    fuente_hash: Mapped[str | None] = mapped_column(String(64))
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+    creado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False)
+    actualizado_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    items: Mapped[list["ComprobanteItem"]] = relationship(
+        back_populates="comprobante", cascade="all, delete-orphan")
+
+
+class ComprobanteItem(Base):
+    """Una línea/ítem del Detalle de un comprobante de compra. Idempotente por
+    (comprobante, línea)."""
+    __tablename__ = "comprobante_items"
+    __table_args__ = (
+        UniqueConstraint("comprobante_id", "linea", name="uq_compra_item_linea"),
+        Index("ix_compra_item_comprobante", "comprobante_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=nuevo_uuid)
+    comprobante_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("comprobantes_compra.id", ondelete="CASCADE"), nullable=False)
+    linea: Mapped[int] = mapped_column(Integer, nullable=False)   # orden del ítem (1..n)
+    codigo: Mapped[str | None] = mapped_column(String(40))        # desCodigo del emisor
+    descripcion: Mapped[str | None] = mapped_column(String(300))  # desItem, ya limpio
+    unidad: Mapped[str | None] = mapped_column(String(10))        # codUnidadMedida
+    desc_unidad: Mapped[str | None] = mapped_column(String(40))
+    cantidad: Mapped[float | None] = mapped_column(Numeric(14, 4))
+    valor_unitario: Mapped[float | None] = mapped_column(Numeric(14, 4))
+    descuento: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    icbper: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    importe_total: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    parser_version: Mapped[str | None] = mapped_column(String(20))
+
+    comprobante: Mapped["ComprobanteCompra"] = relationship(back_populates="items")
