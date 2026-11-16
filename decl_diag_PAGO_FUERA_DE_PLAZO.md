@@ -191,3 +191,40 @@ python diag_publico.py bc_padron       "<URL del padrón de Buenos Contribuyente
 ```
 (La página de prórrogas va aparte: el parser agrega filas `tipo='prorroga'` con su
 ámbito y resolución; la base y la prórroga conviven, vigente = la más reciente.)
+
+## Fix padrón BC — preview daba 0 filas (16/11/2026)
+
+**Causa raíz.** `parse_padron_bc_txt` esperaba TABS, pero el TXT real del zip
+`BueCont_TXT.zip` (`BueCont_TXT.txt`) viene **separado por `|` (pipe)**, en
+**latin-1**, con **cabecera** (`Ruc|Nombre/Razon|A partir del|Resolucion|`), un
+**`|` final** por fila y la resolución con prefijo **`RS `**. El diag había mostrado
+tabs porque leyó la TABLA HTML renderizada (ahí `get_text` intercala tabs), no el
+archivo. Descarga y decodificación ya estaban bien (latin-1).
+
+- **URL exacta del enlace (del volcado `bc_padron`):**
+  `https://ww3.sunat.gob.pe/descarga/BueCont/BueCont_TXT.zip`
+  (anchor `<a href="/descarga/BueCont/BueCont_TXT.zip">`, página base
+  `https://ww3.sunat.gob.pe/descarga/BueCont/BueCont0.html`).
+- **Fix.** `parse_padron_bc_txt` ahora parte por `|` (respaldo tab), salta la
+  cabecera (1.er campo debe ser RUC de 11 dígitos), ignora el campo vacío del `|`
+  final y limpia el prefijo `RS `. Probado contra el archivo oficial completo:
+  **50 710 RUC** (coincide con "20 de 50710" del volcado), 0 sin `vigencia_desde`.
+- `declaraciones_tributos` **vacía es lo esperado**: la ingesta `decl-carga` copia
+  el código real del Detalle de Tributos directo a `pagos_tributarios.cod_tributo`
+  (y el de la boleta a `cod_tributo_boleta`); el desglose por tributo
+  (`declaraciones_tributos`) es FASE POSTERIOR (constancia PDF), aún no poblada.
+
+### DECISIÓN — ¿dónde commiteo/despliego el fix del padrón? (copiar/pegar)
+
+**Resuelto (16/11/2026): opción B** — el fix va en `feat/decl-carga` y llega a prod al
+mergear ese PR (merge normal). El preview del padrón queda corregido con ese merge.
+
+
+Pregunta: El fix está en `cronograma_loader.py` (feature decl-diag) y la ruta
+`/interno/cronograma` ya corre en producción. ¿En qué rama lo llevo?
+
+- **A) Hotfix desde `main`** (rama `fix/padron-bc-pipe`): PR corto directo a prod;
+  es lo más rápido para que el preview deje de dar 0. (Recomendada.)
+- **B) En `feat/decl-carga`** (acá mismo): queda listo, pero recién llega a prod
+  cuando mergees decl-carga; el padrón sigue roto hasta entonces.
+- **C) No commitear aún**: te paso el diff y tú decides.
