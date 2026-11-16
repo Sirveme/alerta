@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -34,7 +35,8 @@ from sqlalchemy.orm import selectinload
 # db (el engine se arma al importar db.py). No afecta a ningún otro modo ni al
 # worker en prod (que corre worker.py, no este __main__, y nunca pasa 'decl-diag').
 if any(a.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag",
-                     "decl-diag2", "--decl-diag2")
+                     "decl-diag2", "--decl-diag2",
+                     "decl-carga", "--decl-carga", "declaraciones-carga")
        for a in sys.argv[1:]):
     _pub = os.getenv("DATABASE_PUBLIC_URL")
     if _pub:
@@ -58,6 +60,7 @@ import gcs
 import scraper_sunat_playwgth as scraper
 import scraper_sunafil   # lector de la casilla SUNAFIL (SUNAFIL-1)
 import scraper_sunat_declaraciones as scraper_decl  # diag Declaraciones y Pagos
+import ingesta_declaraciones as ingesta_decl        # CARGA (escribe en BD)
 
 TZ_LIMA = ZoneInfo("America/Lima")
 
@@ -905,6 +908,47 @@ async def procesar_decl_diag2(session, contrib: Contribuyente,
     return len(res.get("pantallas", []))
 
 
+async def procesar_decl_carga(session, contrib: Contribuyente,
+                              meses: int = 12) -> int:
+    """CARGA REAL de Declaraciones y Pagos (ESCRIBE en BD, idempotente por
+    (contribuyente, num_orden)). 01 por período + 02 por fecha, bloques ≤6 meses,
+    Detalle de Tributos → cod_tributo real. Atómico por bloque; nunca borra. Correr
+    LOCAL con railway run (NO en el worker). Guardián de aceptación ACTIVO."""
+    cred = contrib.credencial
+    if not cred:
+        log(f"  {contrib.ruc}: sin credencial registrada, no puedo loguear.", "WARN")
+        return 0
+    if not cred.valida:
+        log(f"  {contrib.ruc}: la credencial figura como NO válida; intento igual "
+            f"(login dirá si es la clave).", "WARN")
+    log(f"  {contrib.ruc}: DECL-CARGA — últimos {meses} meses, bloques ≤6 "
+        f"(ESCRIBE en BD, idempotente)...")
+    resumen = await ingesta_decl.cargar_declaraciones(session, contrib, meses)
+    if not resumen.get("exito"):
+        log(f"  {contrib.ruc}: DECL-CARGA no completó (motivo="
+            f"{resumen.get('motivo')}). NO se escribió nada.", "ERROR")
+        return 0
+    # Resumen por bloque (estados honestos; los que no son con/sin_datos NO escriben).
+    for bl in resumen.get("bloques", []):
+        notas = []
+        if bl.get("aviso_01"):
+            notas.append(f"01:{bl['aviso_01']}")
+        if bl.get("aviso_02"):
+            notas.append(f"02:{bl['aviso_02']}")
+        if bl.get("aceptacion"):
+            notas.append(f"ACEPTACIÓN({bl['aceptacion']}) — NO se tocó")
+        log(f"    · bloque {bl.get('periodo_desde')}: "
+            f"01={bl.get('estado_01')} 02={bl.get('estado_02')} "
+            f"→ {bl.get('decl', 0)} decl, {bl.get('pagos', 0)} pagos"
+            + (f"  [{'; '.join(notas)}]" if notas else ""))
+    log(f"  {contrib.ruc}: DECL-CARGA OK — {resumen.get('decl_escritas', 0)} "
+        f"declaración(es) + {resumen.get('pagos_escritos', 0)} pago(s) "
+        f"(01); {resumen.get('decl_tardias', 0)} decl + "
+        f"{resumen.get('pagos_tardios', 0)} pago(s) tardío(s) nuevos (02). "
+        f"Idempotente: correrlo de nuevo no duplica.", "OK")
+    return resumen.get("decl_escritas", 0) + resumen.get("pagos_escritos", 0)
+
+
 async def procesar_sunafil(session, contrib: Contribuyente,
                            diagnostico: bool = False) -> int:
     """Lee el buzón SUNAFIL del contribuyente y lo ingesta por el MISMO pipeline
@@ -1022,7 +1066,8 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
                ceros: bool = False, ceros_diag: bool = False,
                sunafil: bool = False, sunafil_diag: bool = False,
                decl_diag: bool = False, decl_diag2: bool = False,
-               decl_diag2_periodo: str | None = None) -> None:
+               decl_diag2_periodo: str | None = None,
+               decl_carga: bool = False, decl_carga_meses: int = 12) -> None:
     log("═══ alerta.pe — orquestador scraper → BD ═══")
     if decl_diag or decl_diag2:
         log(f"modo DECL-DIAG{'2' if decl_diag2 else ''}: "
@@ -1033,6 +1078,14 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
         if not ruc_filtro:
             log("DECL-DIAG requiere un RUC explícito. Uso: "
                 "run_scraper.py <RUC> decl-diag[2]", "ERROR")
+            return
+    if decl_carga:
+        log(f"modo DECL-CARGA: ESCRIBE en BD (declaraciones + pagos), últimos "
+            f"{decl_carga_meses} meses en bloques ≤6, idempotente por num_orden. "
+            f"Correr LOCAL, NUNCA en el worker. Guardián ACTIVO.", "WARN")
+        if not ruc_filtro:
+            log("DECL-CARGA requiere un RUC explícito. Uso: "
+                "run_scraper.py <RUC> decl-carga [--meses 12]", "ERROR")
             return
     if sunafil_diag:
         log("modo SUNAFIL-DIAG: login + vuelca el DOM de la casilla (NO ingesta).", "WARN")
@@ -1058,14 +1111,16 @@ async def main(ruc_filtro: str | None = None, forzar: bool = False,
     elif forzar:
         log("modo FORZAR: se scrapea aunque esté fresco.", "WARN")
     async with get_session() as session:
-        if decl_diag or decl_diag2:
+        if decl_diag or decl_diag2 or decl_carga:
             contribs = await _contrib_para_diag(session, ruc_filtro)
         else:
             contribs = await _contribuyentes_a_scrapear(session, ruc_filtro)
         log(f"{len(contribs)} contribuyente(s) candidato(s).")
         for contrib in contribs:
             try:
-                if decl_diag2:
+                if decl_carga:
+                    await procesar_decl_carga(session, contrib, decl_carga_meses)
+                elif decl_diag2:
                     await procesar_decl_diag2(session, contrib, decl_diag2_periodo)
                 elif decl_diag:
                     await procesar_decl_diag(session, contrib)
@@ -1110,6 +1165,7 @@ if __name__ == "__main__":
     #   python run_scraper.py <RUC> decl-diag → login + vuelca ESTRUCTURA de Declaraciones y Pagos (NO BD, LOCAL)
     #   python run_scraper.py <RUC> decl-diag2 → fase 2: navega por código + rango + constancia 0621 (NO BD, LOCAL)
     #   python run_scraper.py <RUC> decl-diag2 --periodo-desde 202605 → fuerza el 'desde' de la pantalla 01 a ese período
+    #   python run_scraper.py <RUC> decl-carga [--meses 12] → CARGA REAL (ESCRIBE en BD): 01+02 por bloques ≤6m, idempotente
     ruc = None
     forzar = False
     solo_censo = False
@@ -1125,11 +1181,24 @@ if __name__ == "__main__":
     decl_diag = False
     decl_diag2 = False
     decl_diag2_periodo = None
+    decl_carga = False
+    decl_carga_meses = 12
     _esperar_periodo = False
+    _esperar_meses = False
     for arg in sys.argv[1:]:
         if _esperar_periodo:
             decl_diag2_periodo = arg.strip()
             _esperar_periodo = False
+            continue
+        if _esperar_meses:
+            decl_carga_meses = int(re.sub(r"\D", "", arg) or "12")
+            _esperar_meses = False
+            continue
+        if arg.lower().startswith("--meses="):
+            decl_carga_meses = int(re.sub(r"\D", "", arg.split("=", 1)[1]) or "12")
+            continue
+        if arg.lower() in ("--meses", "meses"):
+            _esperar_meses = True
             continue
         if arg.lower().startswith("--periodo-desde="):
             decl_diag2_periodo = arg.split("=", 1)[1].strip()
@@ -1159,6 +1228,8 @@ if __name__ == "__main__":
             sunafil_diag = True
         elif arg.lower() in ("sunafil", "--sunafil"):
             sunafil = True
+        elif arg.lower() in ("decl-carga", "--decl-carga", "declaraciones-carga"):
+            decl_carga = True
         elif arg.lower() in ("decl-diag2", "--decl-diag2"):
             decl_diag2 = True
         elif arg.lower() in ("decl-diag", "--decl-diag", "declaraciones-diag"):
@@ -1170,4 +1241,5 @@ if __name__ == "__main__":
                      pdf=pdf, pdf_diag=pdf_diag, ceros=ceros, ceros_diag=ceros_diag,
                      sunafil=sunafil, sunafil_diag=sunafil_diag,
                      decl_diag=decl_diag, decl_diag2=decl_diag2,
-                     decl_diag2_periodo=decl_diag2_periodo))
+                     decl_diag2_periodo=decl_diag2_periodo,
+                     decl_carga=decl_carga, decl_carga_meses=decl_carga_meses))
