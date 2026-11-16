@@ -936,16 +936,24 @@ async def procesar_decl_carga(session, contrib: Contribuyente,
         if bl.get("aviso_02"):
             notas.append(f"02:{bl['aviso_02']}")
         if bl.get("aceptacion"):
-            notas.append(f"ACEPTACIÓN({bl['aceptacion']}) — NO se tocó")
-        log(f"    · bloque {bl.get('periodo_desde')}: "
+            notas.append(f"ACEPTACIÓN({bl['aceptacion']}) — NO se tocó"
+                         + (f"; HTML en {bl['dump']}" if bl.get("dump") else ""))
+        log(f"    · bloque {bl.get('periodo_desde')}..{bl.get('periodo_hasta')}: "
             f"01={bl.get('estado_01')} 02={bl.get('estado_02')} "
             f"→ {bl.get('decl', 0)} decl, {bl.get('pagos', 0)} pagos"
             + (f"  [{'; '.join(notas)}]" if notas else ""))
-    log(f"  {contrib.ruc}: DECL-CARGA OK — {resumen.get('decl_escritas', 0)} "
-        f"declaración(es) + {resumen.get('pagos_escritos', 0)} pago(s) "
-        f"(01); {resumen.get('decl_tardias', 0)} decl + "
-        f"{resumen.get('pagos_tardios', 0)} pago(s) tardío(s) nuevos (02). "
-        f"Idempotente: correrlo de nuevo no duplica.", "OK")
+    cuerpo = (f"{resumen.get('decl_escritas', 0)} declaración(es) + "
+              f"{resumen.get('pagos_escritos', 0)} pago(s) (01); "
+              f"{resumen.get('decl_tardias', 0)} decl + "
+              f"{resumen.get('pagos_tardios', 0)} pago(s) tardío(s) nuevos (02). "
+              f"Idempotente: correrlo de nuevo no duplica.")
+    # PARCIAL si algún bloque no se leyó/escribió bien (nunca "OK" en ese caso).
+    if resumen.get("parcial"):
+        inc = resumen.get("incidencias", [])
+        log(f"  {contrib.ruc}: DECL-CARGA PARCIAL — {cuerpo} "
+            f"PENDIENTE ({len(inc)}): " + " | ".join(inc), "ERROR")
+    else:
+        log(f"  {contrib.ruc}: DECL-CARGA OK — {cuerpo}", "OK")
     return resumen.get("decl_escritas", 0) + resumen.get("pagos_escritos", 0)
 
 

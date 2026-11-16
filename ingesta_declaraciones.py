@@ -32,6 +32,7 @@ import os
 import time
 import uuid
 from datetime import date, timedelta
+from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 from sqlalchemy import func
@@ -64,36 +65,50 @@ DESC_02 = "Consulta de declaraciones juradas y pagos"
 BLOQUE_MESES = 6
 TIMEOUT_BLOQUE_S = int(os.getenv("DECL_CARGA_TIMEOUT_BLOQUE", "180"))
 MAX_DETALLES_BLOQUE = int(os.getenv("DECL_CARGA_MAX_DETALLES", "80"))
+# Reserva de tiempo (s) que el detalle NUNCA consume: garantiza que la 02 del bloque
+# siempre tenga margen (antes la 02 del 2º bloque se quedaba en timeout).
+RESERVA_02_S = int(os.getenv("DECL_CARGA_RESERVA_02", "45"))
+
+DEST = Path("./descargas")
 
 # Estados de un sub-paso leídos "bien" (se puede escribir). Cualquier otro ⇒ el
 # bloque NO escribe nada de esa fuente.
 _OK = ("con_datos", "sin_datos")
+# Estados que hacen PARCIAL la corrida (algo no se pudo leer/escribir).
+_MALOS = ("sin_acceso", "error_filtro", "no_se_pudo_leer",
+          "pantalla_de_aceptacion", "timeout", "sin_conexion")
 
 
 # ───────────────────────── planificación de bloques ─────────────────────────
-def _bloques_periodo(meses: int) -> list[str]:
-    """Lista de `periodo_desde` (AAAAMM), uno por bloque de 6 meses, que tile los
-    últimos `meses` períodos. `_enviar_filtro_01` expande cada uno a desde..desde+5."""
+def _ultimo_dia_mes(d: date) -> date:
+    """Último día del mes de `d`."""
+    return _sumar_meses(date(d.year, d.month, 1), 1) - timedelta(days=1)
+
+
+def _planificar_bloques(meses: int) -> list[dict]:
+    """UN bloque = el MISMO tramo en 01 (períodos) y 02 (fechas). Devuelve, de más
+    antiguo a más reciente:
+        {periodo_desde, periodo_hasta (AAAAMM),
+         fecha_desde, fecha_hasta (date, para la 02)}
+    El bloque cubre `periodo_desde`..`periodo_desde`+5 (≤6 meses, tope en el mes
+    actual). La ventana de fechas de la 02 = 1er día del 1er período .. último día
+    del último período (tope hoy). Así 01 y 02 nunca quedan cruzados."""
     hoy = date.today()
     hoy_m1 = date(hoy.year, hoy.month, 1)
     inicio = _sumar_meses(hoy_m1, -(max(1, meses) - 1))
     out, desde = [], inicio
     while desde <= hoy_m1:
-        out.append(f"{desde.year}{desde.month:02d}")
+        hasta = _sumar_meses(desde, BLOQUE_MESES - 1)
+        if hasta > hoy_m1:
+            hasta = hoy_m1
+        f_desde = date(desde.year, desde.month, 1)
+        f_hasta = min(_ultimo_dia_mes(hasta), hoy)
+        out.append({
+            "periodo_desde": f"{desde.year}{desde.month:02d}",
+            "periodo_hasta": f"{hasta.year}{hasta.month:02d}",
+            "fecha_desde": f_desde, "fecha_hasta": f_hasta,
+        })
         desde = _sumar_meses(desde, BLOQUE_MESES)
-    return out
-
-
-def _ventanas_fecha(meses: int) -> list[tuple[date, date]]:
-    """Ventanas (desde, hasta) por FECHA DE PRESENTACIÓN para la 02, de ≤6 meses
-    cada una (30 d/mes para quedar bajo el límite SUNAT de 182 días)."""
-    hoy = date.today()
-    out, fin, restante = [], hoy, max(1, meses)
-    while restante > 0:
-        span = min(BLOQUE_MESES, restante)
-        desde = fin - timedelta(days=30 * span)
-        out.append((desde, fin))
-        fin, restante = desde, restante - span
     return out
 
 
@@ -125,18 +140,31 @@ def _enviar_rango_02_fechas(page, cfg: SunatConfig, desde: date, hasta: date,
 
 
 # ───────────────────────── detalle de tributos (todos) ─────────────────────────
+def _restaurar_grilla_01(page, cfg: SunatConfig, periodo_desde: str) -> bool:
+    """Vuelve a la grilla de la 01 tras ver un Detalle (abrir el detalle reemplaza
+    la grilla). UN solo intento: 1 reapertura + 1 filtro, SIN reintento anidado.
+    Devuelve True si la grilla volvió."""
+    try:
+        _ir_por_codigo(page, CODE_01, DESC_01)
+        _esperar_frame_url(page, URLF_01, 15, abortar_si=_sin_acceso_visible)
+        _enviar_filtro_01(page, cfg, BLOQUE_MESES, periodo_desde, reabrir=None)
+    except Exception:
+        return False
+    return _hay_resultados_01(page)
+
+
 def _capturar_detalles(page, cfg: SunatConfig, pagos: list[dict],
-                       vence_en: float, volver_a_grilla) -> list[dict]:
+                       periodo_desde: str, vence_en: float) -> list[dict]:
     """Para cada pago con puntero `detalle_tributos`, abre el 'Detalle de Tributos
     Pagados' y lo parsea → tributo fiscal real. Best-effort: un fallo NO aborta el
     bloque (el pago se guarda con cod_tributo NULL). Entre boletas re-filtra la 01
-    (abrir el detalle reemplaza la grilla)."""
+    con UN solo intento; si no vuelve la grilla, se corta (no se martilla)."""
     objetivo = [pg for pg in pagos if pg.get("detalle_tributos")]
     detalles: list[dict] = []
     for i, pg in enumerate(objetivo):
         if time.monotonic() > vence_en or i >= MAX_DETALLES_BLOQUE:
-            log("    04: corto el detalle (presupuesto de tiempo/n° del bloque).",
-                "WARN")
+            log("    04: corto el detalle (reserva de tiempo para la 02 / tope "
+                "de boletas del bloque).", "WARN")
             break
         sc = _frame_con(page, "a[href*='verDetalleTributos(']")
         if not sc:
@@ -152,20 +180,41 @@ def _capturar_detalles(page, cfg: SunatConfig, pagos: list[dict],
             continue
         _pausa()
         fr = (_esperar_frame_con(page, "table[id^='tblVeriPagoRpta']", 15)
-              or _frame_con(page, "table[id^='tblVeriPagoRpta']")
-              or (_esperar_frame_url(page, "vpS01Alias", 10) and
-                  _frame_con(page, "table[id^='tblVeriPagoRpta']")))
+              or _frame_con(page, "table[id^='tblVeriPagoRpta']"))
         if fr:
             try:
                 detalles.append(parse_detalle_tributos(fr.content()))
             except Exception:
                 pass
         if i + 1 < len(objetivo):          # volver a la grilla para la siguiente
-            try:
-                volver_a_grilla()
-            except Exception:
+            if not _restaurar_grilla_01(page, cfg, periodo_desde):
+                log("    04: no pude volver a la grilla tras el detalle; corto "
+                    "(los pagos restantes quedan con cod_tributo NULL).", "WARN")
                 break
     return detalles
+
+
+def _dump_pantalla(page, cfg: SunatConfig, etiqueta: str) -> str | None:
+    """Vuelca el HTML ENMASCARADO de la página + frames (para inspeccionar una
+    pantalla marcada como aceptación). No hace clic, no descarga."""
+    try:
+        carpeta = DEST / (f"decl_carga_{cfg.ruc}_"
+                          f"{time.strftime('%Y%m%d_%H%M%S')}_{etiqueta}")
+        carpeta.mkdir(parents=True, exist_ok=True)
+        scopes = [page]
+        try:
+            scopes += list(page.frames)
+        except Exception:
+            pass
+        for i, sc in enumerate(scopes):
+            try:
+                (carpeta / f"{i:02d}.html").write_text(
+                    _sanea(sc.content(), cfg), encoding="utf-8")
+            except Exception:
+                pass
+        return str(carpeta)
+    except Exception:
+        return None
 
 
 # ───────────────────────── recolección (sync, Playwright) ─────────────────────────
@@ -174,9 +223,7 @@ def recolectar(cfg: SunatConfig, meses: int) -> dict:
     los datos parseados por bloque para que la capa async los persista. Cada bloque
     trae su estado (para decidir si se escribe)."""
     res = {"exito": False, "motivo": None, "ruc": cfg.ruc, "bloques": []}
-    periodos = _bloques_periodo(meses)
-    ventanas = _ventanas_fecha(meses)
-    n = max(len(periodos), len(ventanas))
+    bloques = _planificar_bloques(meses)
 
     with sync_playwright() as p:
         nav = p.chromium.launch(
@@ -198,14 +245,11 @@ def recolectar(cfg: SunatConfig, meses: int) -> dict:
                 log("  decl-carga: login SOL rechazado "
                     "(¿clave? ¿sesión en uso por el worker?).", "ERROR")
                 return res
-            log(f"  decl-carga: login OK. {n} bloque(s) de ≤6 meses "
+            log(f"  decl-carga: login OK. {len(bloques)} bloque(s) de ≤6 meses "
                 f"(últimos {meses} meses).", "OK")
 
-            for k in range(n):
-                periodo_desde = periodos[k] if k < len(periodos) else periodos[-1]
-                ventana = ventanas[k] if k < len(ventanas) else ventanas[-1]
-                bl = _procesar_bloque(page, cfg, periodo_desde, ventana)
-                res["bloques"].append(bl)
+            for bloque in bloques:
+                res["bloques"].append(_procesar_bloque(page, cfg, bloque))
             res["exito"] = True
         except Exception as e:                       # red/navegador caído
             res["motivo"] = "sin_conexion"
@@ -218,18 +262,26 @@ def recolectar(cfg: SunatConfig, meses: int) -> dict:
     return res
 
 
-def _procesar_bloque(page, cfg: SunatConfig, periodo_desde: str,
-                     ventana: tuple[date, date]) -> dict:
-    """Un bloque: 01 (grilla + detalle) y 02 (rango por fecha). Devuelve datos +
-    estados; captura sus propias excepciones (nunca rompe la corrida)."""
-    bl = {"periodo_desde": periodo_desde,
-          "ventana_02": [ventana[0].isoformat(), ventana[1].isoformat()],
+def _procesar_bloque(page, cfg: SunatConfig, bloque: dict) -> dict:
+    """Un bloque: 01 (grilla + detalle) y 02 (rango por fecha), SOBRE EL MISMO TRAMO.
+    Devuelve datos + estados; captura sus propias excepciones (nunca rompe la
+    corrida)."""
+    periodo_desde = bloque["periodo_desde"]
+    f_desde, f_hasta = bloque["fecha_desde"], bloque["fecha_hasta"]
+    bl = {"periodo_desde": periodo_desde, "periodo_hasta": bloque["periodo_hasta"],
+          "ventana_02": [f_desde.isoformat(), f_hasta.isoformat()],
           "estado_01": "no_se_pudo_leer", "estado_02": "no_se_pudo_leer",
           "declaraciones": [], "pagos": [], "presentaciones": [],
-          "aviso_01": None, "aviso_02": None, "aceptacion": None, "at": ts_lima()}
+          "aviso_01": None, "aviso_02": None, "aceptacion": None,
+          "dump": None, "at": ts_lima()}
     vence_en = time.monotonic() + TIMEOUT_BLOQUE_S
-    log(f"  · bloque desde {periodo_desde} "
-        f"(02: {ventana[0]:%d/%m/%Y}–{ventana[1]:%d/%m/%Y})...", "INFO")
+    # Reserva de tiempo para la 02: el detalle de la 01 nunca pasa de aquí.
+    detalle_vence = vence_en - RESERVA_02_S
+    # AMBOS rangos del bloque, en el mismo tramo (lo pidió Duilio).
+    log(f"  · bloque {periodo_desde}..{bloque['periodo_hasta']} | "
+        f"01 períodos {periodo_desde[4:]}/{periodo_desde[:4]}–"
+        f"{bloque['periodo_hasta'][4:]}/{bloque['periodo_hasta'][:4]} | "
+        f"02 fechas {f_desde:%d/%m/%Y}–{f_hasta:%d/%m/%Y}", "INFO")
 
     # ── 01 Consulta general ────────────────────────────────────────────────
     try:
@@ -241,18 +293,18 @@ def _procesar_bloque(page, cfg: SunatConfig, periodo_desde: str,
             if acc:
                 bl["estado_01"] = "pantalla_de_aceptacion"
                 bl["aceptacion"] = acc
-                log(f"    01: pantalla de aceptación detectada ({acc}); NO se toca "
-                    f"nada, no se escribe el bloque.", "WARN")
+                bl["dump"] = _dump_pantalla(page, cfg, "acept01")
+                log(f"    01: pantalla de aceptación ({acc}); NO se toca nada, no "
+                    f"se escribe el bloque. HTML en {bl['dump']}.", "WARN")
             elif _sin_acceso_visible(page):
                 bl["estado_01"] = "sin_acceso"
             elif time.monotonic() > vence_en:
                 bl["estado_01"] = "timeout"
             else:
-                def _refiltrar():
-                    return _enviar_filtro_01(
-                        page, cfg, BLOQUE_MESES, periodo_desde,
-                        reabrir=lambda: _ir_por_codigo(page, CODE_01, DESC_01))
-                _sc, aviso = _refiltrar()
+                # 1 filtro, con 1 reintento interno máximo (reabrir).
+                _sc, aviso = _enviar_filtro_01(
+                    page, cfg, BLOQUE_MESES, periodo_desde,
+                    reabrir=lambda: _ir_por_codigo(page, CODE_01, DESC_01))
                 if _sin_acceso_visible(page):
                     bl["estado_01"] = "sin_acceso"
                 elif aviso or not _hay_resultados_01(page):
@@ -264,10 +316,11 @@ def _procesar_bloque(page, cfg: SunatConfig, periodo_desde: str,
                     cg = parse_consulta_general(grid.content() if grid else "")
                     bl["declaraciones"] = cg.get("declaraciones", [])
                     bl["pagos"] = cg.get("pagos", [])
-                    # Detalle de Tributos Pagados → cod_tributo real (best-effort).
-                    if bl["pagos"] and time.monotonic() <= vence_en:
+                    # Detalle de Tributos Pagados → cod_tributo real (best-effort),
+                    # con reserva de tiempo para que la 02 no quede en timeout.
+                    if bl["pagos"] and time.monotonic() < detalle_vence:
                         dets = _capturar_detalles(page, cfg, bl["pagos"],
-                                                  vence_en, _refiltrar)
+                                                  periodo_desde, detalle_vence)
                         if dets:
                             aplicar_detalle_a_pagos(bl["pagos"], dets)
                     bl["estado_01"] = ("con_datos"
@@ -277,7 +330,7 @@ def _procesar_bloque(page, cfg: SunatConfig, periodo_desde: str,
         bl["aviso_01"] = _sanea(f"{type(e).__name__}: {e}", cfg)
         bl["estado_01"] = "no_se_pudo_leer"
 
-    # ── 02 Consulta de DDJJ y pagos (por fecha de presentación) ─────────────
+    # ── 02 Consulta de DDJJ y pagos (MISMO tramo, por fecha de presentación) ─
     try:
         if time.monotonic() > vence_en:
             bl["estado_02"] = "timeout"
@@ -289,11 +342,12 @@ def _procesar_bloque(page, cfg: SunatConfig, periodo_desde: str,
             if acc:
                 bl["estado_02"] = "pantalla_de_aceptacion"
                 bl["aceptacion"] = bl["aceptacion"] or acc
+                bl["dump"] = bl["dump"] or _dump_pantalla(page, cfg, "acept02")
             elif _sin_acceso_visible(page):
                 bl["estado_02"] = "sin_acceso"
             else:
                 sc, aviso = _enviar_rango_02_fechas(
-                    page, cfg, ventana[0], ventana[1],
+                    page, cfg, f_desde, f_hasta,
                     reabrir=lambda: _ir_por_codigo(page, CODE_02, DESC_02))
                 if _sin_acceso_visible(page):
                     bl["estado_02"] = "sin_acceso"
@@ -456,8 +510,10 @@ async def cargar_declaraciones(session, contrib, meses: int = 12) -> dict:
     resumen = {"exito": rec.get("exito", False), "motivo": rec.get("motivo"),
                "ruc": contrib.ruc, "meses": meses, "bloques": [],
                "decl_escritas": 0, "pagos_escritos": 0,
-               "decl_tardias": 0, "pagos_tardios": 0}
+               "decl_tardias": 0, "pagos_tardios": 0,
+               "parcial": True, "incidencias": [], "dumps": []}
     if not rec.get("exito"):
+        resumen["incidencias"].append(f"la corrida no completó ({rec.get('motivo')})")
         return resumen
 
     # num_orden que la 01 cubrió (para no pisar con la 02).
@@ -466,10 +522,13 @@ async def cargar_declaraciones(session, contrib, meses: int = 12) -> dict:
     # ── Fase A: 01 por bloque (atómico) ────────────────────────────────────
     for bl in rec["bloques"]:
         estado = bl["estado_01"]
-        info = {"periodo_desde": bl["periodo_desde"], "estado_01": estado,
+        info = {"periodo_desde": bl["periodo_desde"],
+                "periodo_hasta": bl.get("periodo_hasta"), "estado_01": estado,
                 "estado_02": bl["estado_02"], "aviso_01": bl.get("aviso_01"),
                 "aviso_02": bl.get("aviso_02"), "aceptacion": bl.get("aceptacion"),
-                "decl": 0, "pagos": 0, "escrito_01": False}
+                "dump": bl.get("dump"), "decl": 0, "pagos": 0, "escrito_01": False}
+        if bl.get("dump"):
+            resumen["dumps"].append(bl["dump"])
         if estado in _OK:
             try:
                 filas_d = [_fila_decl(contrib, d) for d in bl["declaraciones"]
@@ -519,7 +578,21 @@ async def cargar_declaraciones(session, contrib, meses: int = 12) -> dict:
             resumen["decl_tardias"] = await _insertar_si_ausente_decl(session, tardias_d)
             resumen["pagos_tardios"] = await _insertar_si_ausente_pago(session, tardias_p)
             await session.commit()
-        except Exception:
+        except Exception as e:
             await session.rollback()
+            resumen["incidencias"].append(f"02 tardías no se escribieron: "
+                                          f"{type(e).__name__}")
 
+    # ── PARCIAL si algún bloque no se leyó/escribió bien (01 o 02) ──────────
+    for info in resumen["bloques"]:
+        tramo = f"{info['periodo_desde']}..{info.get('periodo_hasta')}"
+        if info["estado_01"] in _MALOS:
+            resumen["incidencias"].append(
+                f"bloque {tramo} 01={info['estado_01']}"
+                + (f" ({info['aviso_01']})" if info.get("aviso_01") else ""))
+        if info["estado_02"] in _MALOS:
+            resumen["incidencias"].append(
+                f"bloque {tramo} 02={info['estado_02']}"
+                + (f" ({info['aviso_02']})" if info.get("aviso_02") else ""))
+    resumen["parcial"] = bool(resumen["incidencias"])
     return resumen

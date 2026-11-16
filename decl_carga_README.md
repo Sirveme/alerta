@@ -61,6 +61,22 @@ esperabas pagos, o los pagos salen sin `cod_tributo`, pásame el log de la corri
 - `DECL_CARGA_MAX_DETALLES` (def. 80): tope de detalles de tributo por bloque.
 - `DECL_DIAG_PAUSA_SEG` (def. 4): pausa entre pantallas (compartida con el diag).
 
+## Correcciones tras la 1ª corrida de Shevalche (16/11/2026)
+
+1. **Bloques alineados:** cada bloque usa el MISMO tramo en 01 (períodos) y 02
+   (fechas). Antes quedaban cruzados y el 01 del bloque viejo no corría. Se loguean
+   AMBOS rangos por bloque.
+2. **Guardián preciso (no relajado):** ya NO dispara por una palabra suelta
+   ("afiliación"). Exige, en el mismo frame, **texto de aceptación + control**
+   (checkbox o botón de aceptar), salvo una frase FUERTE del Generador (dispara
+   sola). Si dispara, vuelca el HTML enmascarado de la pantalla a `descargas/` para
+   inspección.
+3. **Reintentos ≤1 por pantalla:** 01 y 02 reabren a lo sumo 1 vez; la restauración
+   de la grilla tras un Detalle es 1 intento (si no vuelve, se corta). El Detalle
+   reserva 45 s (`DECL_CARGA_RESERVA_02`) para que la 02 nunca quede en timeout.
+4. **Resumen honesto:** si algún bloque no se leyó/escribió o hubo timeout →
+   **"DECL-CARGA PARCIAL"** con el detalle de lo pendiente; nunca "OK".
+
 ## Nota de ingeniería (merge)
 
 Esta rama parte de `feat/decl-diag` porque la ingesta **depende** de su parser,
